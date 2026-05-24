@@ -1,0 +1,33 @@
+# Copy this file to terraform/engagements/<customer>.tfvars and fill in values.
+# NEVER commit the filled-in copy — it contains sensitive infrastructure details.
+
+# Unique name for this engagement's cluster and all related AWS resources.
+# Use something like "omb-<customer>-<YYYYMMDD>" to avoid name collisions.
+cluster_name = "omb-acme-20240101"
+
+# AWS region where the k8s cluster will be created.
+# This should be the same region (or a peered region) as the target Redpanda cluster.
+region = "us-east-1"
+
+# CIDR block for the new VPC.
+# Must not overlap with target_cidr or any other VPC in this AWS account.
+vpc_cidr = "10.0.0.0/16"
+
+# At least two AZs in the same region. EKS requires multi-AZ for the control plane.
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# VPC ID of the Redpanda/Kafka cluster you will benchmark.
+# For BYOC: copy this from the Redpanda Cloud BYOC UI (Networking tab).
+# For self-hosted: the VPC ID where your brokers run.
+# Leave empty ("") to provision the cluster without VPC peering.
+target_vpc_id = "vpc-0123456789abcdef0"
+
+# CIDR block of the target VPC above.
+target_cidr = "172.16.0.0/16"
+
+# Tags applied to every AWS resource in this module.
+tags = {
+  project    = "omb-benchmarking"
+  customer   = "acme"
+  managed_by = "terraform"
+}
