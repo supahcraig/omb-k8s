@@ -1,0 +1,26 @@
+# Copy to terraform/engagements/<customer>.tfvars. NEVER commit the filled-in copy.
+
+# GCP project where all resources will be created.
+project_id = "my-gcp-project-id"
+
+# GCP region. The cluster will be regional (nodes in all zones in this region).
+region = "us-central1"
+
+# Short descriptive name. Used as prefix for all resource names.
+cluster_name = "omb-acme-20240101"
+
+# CIDR for the new VPC subnet. Must not overlap with the target cluster.
+vpc_cidr = "10.1.0.0/16"
+
+# Network self_link of the Redpanda/Kafka cluster VPC to peer with.
+# Format: projects/PROJECT_ID/global/networks/NETWORK_NAME
+# For BYOC: obtain from the Redpanda Cloud BYOC UI (Networking tab).
+# Leave empty ("") to skip VPC peering.
+target_network = "projects/redpanda-project-id/global/networks/redpanda-vpc"
+target_cidr    = "172.16.0.0/16"
+
+labels = {
+  project    = "omb-benchmarking"
+  customer   = "acme"
+  managed-by = "terraform"
+}
