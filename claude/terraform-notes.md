@@ -139,28 +139,46 @@ The Cluster Autoscaler deployment needs:
 
 ## Peering module
 
-Standalone module in terraform/modules/peering/ that accepts:
+Standalone module — three sub-directories: terraform/modules/peering/aws|gcp|azure.
+Each sub-module accepts the VPC IDs and CIDRs for both sides; route table IDs are
+looked up via data source and do not need to be provided in tfvars.
+
+AWS sub-module variables:
 - source_vpc_id
 - source_vpc_cidr
-- source_route_table_ids (AWS) / source_network (GCP) / source_vnet_id (Azure)
 - target_vpc_id
 - target_vpc_cidr
-- cloud (aws | gcp | azure)
+- target_security_group_id (optional — adds inbound rule on 9092-9093 to Redpanda broker SG)
+- tags
+
+GCP sub-module variables:
+- source_network
+- target_network
+- tags
+
+Azure sub-module variables:
+- resource_group_name
+- source_vnet_name
+- target_vnet_id
+- tags
 
 Used when the k8s cluster already exists and you only need to set up peering
 to a new target cluster. Must be independently runnable without the cluster
 modules.
 
+Route tables are discovered automatically via `data "aws_route_tables"` keyed on
+the VPC ID — routes are added to all route tables on both sides. Do not reintroduce
+manual route table ID variables.
+
 ## Target cluster types and what peering means for each
 
-**BYOC:** Redpanda manages the cluster VPC. The BYOC UI provides the VPC ID and
-CIDR to peer with. The SE enters these as tfvars. The peering request is
-initiated from the OMB side; Redpanda must accept it from their side via the
-BYOC UI. Document this handshake clearly — it requires a step the SE cannot
-complete alone.
+**BYOC:** Redpanda deploys into the SE's own AWS account, so both the OMB VPC and
+the Redpanda VPC are in the same account. Peering uses `auto_accept = true` — no
+manual acceptance step required. The SE provides the target VPC ID and CIDR from
+the Redpanda Cloud BYOC UI (Networking tab).
 
-**Self-hosted:** SE owns both VPCs. Peering can be fully automated since both
-sides are in the same Terraform state or at least the same cloud account.
+**Self-hosted:** SE owns both VPCs. Peering is fully automated since both sides are
+in the same account.
 
 ## Per-engagement workflow
 

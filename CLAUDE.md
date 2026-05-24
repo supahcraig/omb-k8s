@@ -139,6 +139,23 @@ A single module with a `cloud` variable was considered but rejected because Terr
 cannot conditionally initialize providers — all configured providers must be present
 regardless of which cloud is active. Do not collapse these into a single module.
 
+**VPC peering uses `auto_accept = true`.** Both the OMB VPC and the Redpanda BYOC VPC
+live in the same AWS account (the SE's account), so the peering connection can be
+auto-accepted. Do not add a manual acceptance step or `aws_vpc_peering_connection_accepter`
+resource — they are not needed for this use case.
+
+**VPC peering route tables are discovered at plan time, not provided in tfvars.** The
+`data "aws_route_tables"` data source looks up all route table IDs for a given VPC ID.
+Routes are added to all route tables on both sides automatically. Do not reintroduce a
+`source_route_table_ids` or `target_route_table_ids` variable — requiring SEs to look up
+and manually enter route table IDs is unnecessary toil.
+
+**Redpanda broker security group ID cannot be auto-discovered.** The optional
+`target_security_group_id` variable (default "") accepts the SG ID attached to Redpanda
+broker nodes. When set, Terraform adds an inbound rule allowing the OMB VPC CIDR on
+ports 9092-9093. If omitted, routes work but broker connections will be refused at the SG
+layer. This is a known gap — see project memory for the revisit plan.
+
 **EKS Cluster Autoscaler uses IRSA.** The EKS module creates an OIDC provider and
 an IAM role for the Cluster Autoscaler via IAM Roles for Service Accounts (IRSA).
 The role ARN is exposed as the `cluster_autoscaler_iam_role_arn` output and must
