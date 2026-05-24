@@ -15,6 +15,8 @@ crash.*.log
 # must not be committed. Each SE manages their own state locally and is
 # responsible for running terraform destroy before deleting their state.
 terraform/engagements/
+!terraform/engagements/.gitkeep
+!terraform/engagements/README.md
 
 # ─── Helm ────────────────────────────────────────────────────────────────────
 *.tgz
