@@ -114,6 +114,7 @@ resource "aws_vpc_peering_connection" "target" {
 
   vpc_id      = aws_vpc.main.id
   peer_vpc_id = var.target_vpc_id
+  auto_accept = true
 
   tags = merge(var.tags, {
     Name = "${var.cluster_name}-to-target"
@@ -126,4 +127,29 @@ resource "aws_route" "to_target" {
   route_table_id            = aws_route_table.private[count.index].id
   destination_cidr_block    = var.target_cidr
   vpc_peering_connection_id = aws_vpc_peering_connection.target[0].id
+}
+
+data "aws_route_tables" "target" {
+  count  = var.target_vpc_id != "" ? 1 : 0
+  vpc_id = var.target_vpc_id
+}
+
+resource "aws_route" "from_target" {
+  count = var.target_vpc_id != "" ? length(data.aws_route_tables.target[0].ids) : 0
+
+  route_table_id            = tolist(data.aws_route_tables.target[0].ids)[count.index]
+  destination_cidr_block    = var.vpc_cidr
+  vpc_peering_connection_id = aws_vpc_peering_connection.target[0].id
+}
+
+resource "aws_security_group_rule" "target_inbound_kafka" {
+  count = var.target_vpc_id != "" && var.target_security_group_id != "" ? 1 : 0
+
+  type              = "ingress"
+  security_group_id = var.target_security_group_id
+  description       = "Allow OMB workers to reach Redpanda Kafka API"
+  from_port         = 9092
+  to_port           = 9093
+  protocol          = "tcp"
+  cidr_blocks       = [var.vpc_cidr]
 }

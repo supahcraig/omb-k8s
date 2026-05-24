@@ -9,19 +9,17 @@ source_vpc_id = "vpc-0aaa111bbb222ccc3"
 # From: terraform output vpc_cidr (in the EKS module)
 source_vpc_cidr = "10.0.0.0/16"
 
-# From: terraform output private_subnet_ids -> look up their route tables, OR
-# use the AWS console: VPC > Route Tables > filter by VPC ID > copy IDs of private RTs
-source_route_table_ids = [
-  "rtb-0aaa111bbb222ccc3",
-  "rtb-0ddd444eee555fff6",
-]
-
 # VPC ID of the Redpanda/Kafka cluster to benchmark.
 # For BYOC: from the Redpanda Cloud BYOC UI (Networking tab).
 target_vpc_id = "vpc-0123456789abcdef0"
 
 # CIDR of the target VPC.
 target_vpc_cidr = "172.16.0.0/16"
+
+# Security group ID on the Redpanda broker nodes.
+# Terraform will add an inbound rule allowing the OMB VPC CIDR on ports 9092-9093.
+# Leave empty ("") if the target SG is managed outside this module.
+target_security_group_id = "sg-0abc123def456gh78"
 
 tags = {
   project    = "omb-benchmarking"

@@ -25,6 +25,14 @@ target_vpc_id = "vpc-0123456789abcdef0"
 # CIDR block of the target VPC above.
 target_cidr = "172.16.0.0/16"
 
+# Security group ID attached to the Redpanda broker nodes.
+# When set, Terraform adds an inbound rule allowing the OMB VPC CIDR on ports 9092-9093
+# (Kafka plaintext and TLS). Without this, broker connections will be refused at the SG layer.
+# For BYOC: find this in the Redpanda Cloud BYOC UI (Networking → Security Groups), or
+# in the AWS console under the VPC security groups for the Redpanda cluster.
+# Leave empty ("") if the target SG is managed outside this module.
+target_security_group_id = "sg-0abc123def456gh78"
+
 # Tags applied to every AWS resource in this module.
 tags = {
   project    = "omb-benchmarking"

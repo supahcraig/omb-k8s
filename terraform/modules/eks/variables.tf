@@ -31,6 +31,12 @@ variable "target_cidr" {
   default     = ""
 }
 
+variable "target_security_group_id" {
+  description = "Security group ID attached to Redpanda broker nodes — when provided, Terraform adds an inbound rule allowing the OMB VPC CIDR on ports 9092-9093; omit if the target SG is managed outside this module"
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags applied to all resources"
   type        = map(string)
