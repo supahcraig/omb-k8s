@@ -1,0 +1,14 @@
+# Azure VNet peering requires BOTH sides to create a peering resource.
+# This module creates the OMB side. Redpanda must create the reverse peering.
+
+# Resource group of the OMB cluster VNet.
+resource_group_name = "omb-acme-20240101-rg"
+
+# From: the cluster_name variable used in the AKS module (VNet is named <cluster_name>-vnet)
+source_vnet_name = "omb-acme-20240101-vnet"
+
+# From: terraform output vpc_id (in the AKS module)
+source_vnet_id = "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/omb-acme-20240101-rg/providers/Microsoft.Network/virtualNetworks/omb-acme-20240101-vnet"
+
+# From the Redpanda Cloud BYOC UI (Networking tab).
+target_vnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/redpanda-rg/providers/Microsoft.Network/virtualNetworks/redpanda-vnet"

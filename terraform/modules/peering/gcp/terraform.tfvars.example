@@ -1,0 +1,12 @@
+# GCP peering requires BOTH sides to create a peering resource.
+# This module creates the OMB side. Redpanda must create the reverse peering.
+
+# GCP project ID of the OMB cluster.
+project_id = "my-gcp-project-id"
+
+# From: terraform output vpc_id (in the GKE module)
+source_network = "projects/my-gcp-project-id/global/networks/omb-acme-20240101-vpc"
+
+# From the Redpanda Cloud BYOC UI (Networking tab).
+# Format: projects/PROJECT_ID/global/networks/NETWORK_NAME
+target_network = "projects/redpanda-project-id/global/networks/redpanda-vpc"

@@ -1,0 +1,29 @@
+# Use this module when the OMB k8s cluster already exists and you need to set up
+# or re-establish peering to a new or changed target cluster.
+
+region = "us-east-1"
+
+# From: terraform output vpc_id (in the EKS module)
+source_vpc_id = "vpc-0aaa111bbb222ccc3"
+
+# From: terraform output vpc_cidr (in the EKS module)
+source_vpc_cidr = "10.0.0.0/16"
+
+# From: terraform output private_subnet_ids -> look up their route tables, OR
+# use the AWS console: VPC > Route Tables > filter by VPC ID > copy IDs of private RTs
+source_route_table_ids = [
+  "rtb-0aaa111bbb222ccc3",
+  "rtb-0ddd444eee555fff6",
+]
+
+# VPC ID of the Redpanda/Kafka cluster to benchmark.
+# For BYOC: from the Redpanda Cloud BYOC UI (Networking tab).
+target_vpc_id = "vpc-0123456789abcdef0"
+
+# CIDR of the target VPC.
+target_vpc_cidr = "172.16.0.0/16"
+
+tags = {
+  project    = "omb-benchmarking"
+  managed_by = "terraform"
+}
