@@ -1,0 +1,88 @@
+# ─── Terraform ───────────────────────────────────────────────────────────────
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.tfplan
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+
+# Per-engagement Terraform working directories are intentionally excluded from
+# version control. SEs create these for each customer engagement, and they
+# contain sensitive variables (broker addresses, credentials, account IDs) that
+# must not be committed. Each SE manages their own state locally and is
+# responsible for running terraform destroy before deleting their state.
+terraform/engagements/
+
+# ─── Helm ────────────────────────────────────────────────────────────────────
+*.tgz
+charts/*/charts/
+charts/*/tmpcharts/
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.env
+*.env
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# ─── Node / React ────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+dist/
+build/
+.next/
+.nuxt/
+.cache/
+*.local
+
+# ─── Docker ──────────────────────────────────────────────────────────────────
+.dockerignore
+
+# ─── OS / Editor ─────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.code-workspace
+
+# ─── Secrets / Local config ───────────────────────────────────────────────────
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+kubeconfig
+kubeconfig.*
+my-values.yaml
+*-values.local.yaml
