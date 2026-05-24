@@ -1,4 +1,4 @@
-# terraform/modules/eks — EKS Cluster for OMB Benchmarking
+# terraform/aws — EKS Cluster for OMB Benchmarking
 
 Provisions an EKS cluster with VPC, node group, IAM roles, and optional VPC peering
 to the target Redpanda/Kafka cluster. Terraform state is stored locally — **do not

@@ -53,13 +53,14 @@ provisions the target cluster.
   control-plane/           FastAPI + React control plane
   worker/                  OMB worker Dockerfile
   terraform/
-    modules/eks/
-    modules/gke/
-    modules/aks/
-    modules/peering/
-      aws/                 Standalone AWS VPC peering module
-      gcp/                 Standalone GCP VPC peering module
-      azure/               Standalone Azure VNet peering module
+    aws/
+    gcp/
+    azure/
+    modules/
+      peering/
+        aws/               Standalone AWS VPC peering module
+        gcp/               Standalone GCP VPC peering module
+        azure/             Standalone Azure VNet peering module
     engagements/           Per-engagement .tfvars files (gitignored)
   .github/
     workflows/
@@ -217,8 +218,8 @@ operations after initial deployment.
 ## Deployment workflow
 
 1. Clone repo to local machine
-2. Copy terraform/modules/<cloud>/terraform.tfvars.example to terraform/engagements/<customer>.tfvars and fill in values
-3. terraform init && terraform apply -var-file=../../engagements/<customer>.tfvars (provisions k8s cluster + VPC + peering)
+2. Copy terraform/<cloud>/terraform.tfvars.example to terraform/engagements/<customer>.tfvars and fill in values
+3. cd terraform/<cloud> && terraform init && terraform apply -var-file=../engagements/<customer>.tfvars (provisions k8s cluster + VPC + peering)
 4. aws/gcloud/az eks/gke/aks get-credentials (configure local kubectl)
 5. helm install omb charts/omb -f charts/omb/values-<cloud>.yaml -f my-values.yaml
 6. Open the UI at the LoadBalancer address

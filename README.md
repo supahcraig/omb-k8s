@@ -45,10 +45,10 @@ Cloud credentials configured for your target cloud.
 
 ```bash
 # 1. Provision the Kubernetes cluster
-cd terraform/modules/eks          # or gke / aks
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars for the engagement
-terraform init && terraform apply
+cd terraform/aws          # or gcp / azure
+cp terraform.tfvars.example ../engagements/<customer>.tfvars
+# Edit the tfvars file for the engagement
+terraform init && terraform apply -var-file=../engagements/<customer>.tfvars
 
 # 2. Configure kubectl
 aws eks update-kubeconfig --name <cluster-name> --region <region>
@@ -70,10 +70,10 @@ and Prometheus in Settings, then run benchmarks.
 ### AWS (EKS)
 
 ```bash
-cd terraform/modules/eks
-cp terraform.tfvars.example terraform.tfvars
-# Edit: cluster_name, region, vpc_cidr, node_count
-terraform init && terraform apply
+cd terraform/aws
+cp terraform.tfvars.example ../engagements/<customer>.tfvars
+# Edit: cluster_name, region, vpc_cidr, availability_zones, target_vpc_id, target_cidr
+terraform init && terraform apply -var-file=../engagements/<customer>.tfvars
 aws eks update-kubeconfig --name <cluster-name> --region <region>
 helm install omb charts/omb -f charts/omb/values-aws.yaml -f my-values.yaml
 ```
@@ -81,9 +81,10 @@ helm install omb charts/omb -f charts/omb/values-aws.yaml -f my-values.yaml
 ### GCP (GKE)
 
 ```bash
-cd terraform/modules/gke
-cp terraform.tfvars.example terraform.tfvars
-terraform init && terraform apply
+cd terraform/gcp
+cp terraform.tfvars.example ../engagements/<customer>.tfvars
+# Edit: project, region, cluster_name, target_network, target_cidr
+terraform init && terraform apply -var-file=../engagements/<customer>.tfvars
 gcloud container clusters get-credentials <cluster-name> --region <region>
 helm install omb charts/omb -f charts/omb/values-gcp.yaml -f my-values.yaml
 ```
@@ -91,9 +92,10 @@ helm install omb charts/omb -f charts/omb/values-gcp.yaml -f my-values.yaml
 ### Azure (AKS)
 
 ```bash
-cd terraform/modules/aks
-cp terraform.tfvars.example terraform.tfvars
-terraform init && terraform apply
+cd terraform/azure
+cp terraform.tfvars.example ../engagements/<customer>.tfvars
+# Edit: resource_group_name, location, cluster_name, target_vnet_id, target_address_space
+terraform init && terraform apply -var-file=../engagements/<customer>.tfvars
 az aks get-credentials --resource-group <rg> --name <cluster-name>
 helm install omb charts/omb -f charts/omb/values-azure.yaml -f my-values.yaml
 ```

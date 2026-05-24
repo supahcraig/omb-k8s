@@ -1,4 +1,4 @@
-# terraform/modules/aks — AKS Cluster for OMB Benchmarking
+# terraform/azure — AKS Cluster for OMB Benchmarking
 
 Provisions an AKS cluster with VNet, subnet, NSG rules, and optional VNet peering to
 the target Redpanda/Kafka cluster. Cluster Autoscaler is managed natively by AKS via

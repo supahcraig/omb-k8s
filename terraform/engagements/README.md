@@ -5,17 +5,17 @@ must never be committed.**
 
 ## Creating a new engagement
 
-Copy the example from the appropriate cloud module:
+Copy the example from the appropriate cloud directory:
 
 ```bash
 # AWS
-cp ../modules/eks/terraform.tfvars.example ./<customer>-aws.tfvars
+cp ../aws/terraform.tfvars.example ./<customer>-aws.tfvars
 
 # GCP
-cp ../modules/gke/terraform.tfvars.example ./<customer>-gcp.tfvars
+cp ../gcp/terraform.tfvars.example ./<customer>-gcp.tfvars
 
 # Azure
-cp ../modules/aks/terraform.tfvars.example ./<customer>-aks.tfvars
+cp ../azure/terraform.tfvars.example ./<customer>-azure.tfvars
 ```
 
 Then edit the file with your engagement-specific values: cluster name, region,
@@ -23,12 +23,12 @@ broker VPC ID, CIDR, and tags.
 
 ## Running an engagement
 
-From the appropriate cloud module directory:
+From the appropriate cloud directory:
 
 ```bash
-cd ../modules/eks/   # or gke/ or aks/
+cd ../aws/   # or gcp/ or azure/
 terraform init
-terraform apply -var-file=../../engagements/<customer>.tfvars
+terraform apply -var-file=../engagements/<customer>.tfvars
 ```
 
 ## Critical: keep your state until destroy completes
@@ -49,5 +49,5 @@ cloud console that all resources are gone.**
 - `<customer>.tfvars` — engagement-specific variable values
 - Nothing else — no state files, no lock files, no generated configs
 
-State files live in the module directory (`modules/eks/terraform.tfstate`, etc.)
+State files live in the cloud directory (`terraform/aws/terraform.tfstate`, etc.)
 because that is where you run `terraform apply` and `terraform destroy`.

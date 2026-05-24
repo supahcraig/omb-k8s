@@ -1,4 +1,4 @@
-# terraform/modules/gke — GKE Cluster for OMB Benchmarking
+# terraform/gcp — GKE Cluster for OMB Benchmarking
 
 Provisions a regional GKE cluster (Standard mode) with VPC, node pool, and optional
 VPC peering to the target Redpanda/Kafka cluster. Cluster Autoscaler is managed
