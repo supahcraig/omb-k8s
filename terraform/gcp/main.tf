@@ -12,7 +12,7 @@ resource "google_compute_subnetwork" "main" {
 
 resource "google_container_cluster" "main" {
   name     = var.cluster_name
-  location = var.region
+  location = var.zone
 
   # Remove default node pool immediately; manage nodes via google_container_node_pool
   remove_default_node_pool = true
@@ -27,7 +27,7 @@ resource "google_container_cluster" "main" {
 
 resource "google_container_node_pool" "workers" {
   name     = "${var.cluster_name}-workers"
-  location = var.region
+  location = var.zone
   cluster  = google_container_cluster.main.name
 
   initial_node_count = 3

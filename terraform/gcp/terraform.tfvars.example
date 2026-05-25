@@ -3,8 +3,12 @@
 # GCP project where all resources will be created.
 project_id = "my-gcp-project-id"
 
-# GCP region. The cluster will be regional (nodes in all zones in this region).
+# GCP region for the VPC subnet.
 region = "us-central1"
+
+# GCP zone for the cluster and node pool. Single-zone keeps node count exact —
+# a regional cluster multiplies node count by the number of zones (3x by default).
+zone = "us-central1-a"
 
 # Short descriptive name. Used as prefix for all resource names.
 cluster_name = "omb-acme-20240101"

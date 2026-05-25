@@ -20,5 +20,5 @@ output "vpc_cidr" {
 
 output "kubeconfig_command" {
   description = "Run this command to configure kubectl after apply"
-  value       = "gcloud container clusters get-credentials ${var.cluster_name} --region ${var.region} --project ${var.project_id}"
+  value       = "gcloud container clusters get-credentials ${var.cluster_name} --zone ${var.zone} --project ${var.project_id}"
 }

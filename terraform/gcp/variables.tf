@@ -4,7 +4,12 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "GCP region (cluster is regional, spanning all zones in the region)"
+  description = "GCP region — used for the VPC subnet"
+  type        = string
+}
+
+variable "zone" {
+  description = "GCP zone for the GKE cluster and node pool (e.g. us-central1-a) — single-zone keeps node count predictable and avoids 3x node multiplication of regional clusters"
   type        = string
 }
 
