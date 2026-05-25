@@ -56,11 +56,11 @@ for module_path, prefix, tags in _routers_to_mount:
             module_path,
         )
 
-# WebSocket router — paths are declared inline, so no prefix here
+# WebSocket router — prefix /ws so the path resolves to /ws/runs/{run_id}
 try:
     from routers.ws import router as ws_router
 
-    app.include_router(ws_router, tags=["websocket"])
+    app.include_router(ws_router, prefix="/ws", tags=["websocket"])
     logger.info("Mounted WebSocket router at /ws/runs/{run_id}")
 except ModuleNotFoundError:
     logger.warning("WebSocket router (routers.ws) not found — skipping.")
