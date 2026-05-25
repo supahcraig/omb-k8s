@@ -6,44 +6,21 @@ Each benchmark run maps to:
   - a k8s Job    omb-run-{run_id}  that mounts the ConfigMap and runs the
                                    OMB driver process
 
-The runner is a singleton (module-level ``runner`` instance).  Callers should
-import it directly:
+The runner is a singleton (module-level ``runner`` instance).  Callers import:
 
     from services.omb_runner import runner
 """
 import asyncio
-import functools
 import logging
 from typing import Optional
 
 from kubernetes import client as k8s_client
-from kubernetes import config as k8s_config
 from kubernetes import watch as k8s_watch
 
 from config import settings
+from services.k8s_client import load_incluster_once, run_sync
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-async def _run_sync(func, *args, **kwargs):
-    """Run a synchronous callable in a thread-pool executor."""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
-
-
-def _load_config() -> None:
-    """Load in-cluster service-account credentials."""
-    k8s_config.load_incluster_config()
-
-
-# ---------------------------------------------------------------------------
-# Runner
-# ---------------------------------------------------------------------------
 
 
 class OmbRunner:
@@ -77,7 +54,7 @@ class OmbRunner:
         if worker_image is None:
             worker_image = settings.worker_image
 
-        _load_config()
+        load_incluster_once()
 
         job_name = f"omb-run-{run_id}"
         configmap_name = f"omb-run-{run_id}"
@@ -95,12 +72,12 @@ class OmbRunner:
                 "workload.yaml": workload_content,
             },
         )
-        await _run_sync(core_api.create_namespaced_config_map, namespace, cm)
+        await run_sync(core_api.create_namespaced_config_map, namespace, cm)
         logger.info("Created ConfigMap %s in namespace %s", configmap_name, namespace)
 
         # 2. Query StatefulSet replica count
         apps_api = k8s_client.AppsV1Api()
-        sts = await _run_sync(
+        sts = await run_sync(
             apps_api.read_namespaced_stateful_set, "omb-worker", namespace
         )
         replica_count: int = sts.spec.replicas or 1
@@ -156,7 +133,7 @@ class OmbRunner:
             ),
         )
         batch_api = k8s_client.BatchV1Api()
-        await _run_sync(batch_api.create_namespaced_job, namespace, job)
+        await run_sync(batch_api.create_namespaced_job, namespace, job)
         logger.info("Created Job %s in namespace %s", job_name, namespace)
 
         # 5. Initialise state and kick off background log streaming
@@ -166,10 +143,10 @@ class OmbRunner:
     async def stop(self, run_id: int) -> None:
         """Delete the k8s Job (and its pods) for the given run."""
         job_name = f"omb-run-{run_id}"
-        _load_config()
+        load_incluster_once()
         batch_api = k8s_client.BatchV1Api()
         try:
-            await _run_sync(
+            await run_sync(
                 batch_api.delete_namespaced_job,
                 job_name,
                 settings.omb_namespace,
@@ -211,14 +188,15 @@ class OmbRunner:
 
     async def _stream_logs(self, run_id: int, job_name: str) -> None:
         """
-        Background task: wait for the Job pod, then stream its logs.
+        Background task: wait for the Job pod, then stream its logs incrementally.
 
-        All k8s API calls are dispatched via _run_sync to avoid blocking
-        the FastAPI event loop (the kubernetes client is synchronous).
+        Each log line is appended to state["lines"] as it arrives so callers
+        polling get_lines() see output in real time during the run.
+
+        All k8s API calls use run_sync() — the kubernetes client is synchronous.
         """
         state = self._active[run_id]
         namespace = settings.omb_namespace
-        _load_config()
         core_api = k8s_client.CoreV1Api()
         batch_api = k8s_client.BatchV1Api()
 
@@ -227,7 +205,7 @@ class OmbRunner:
         for _ in range(60):
             await asyncio.sleep(1)
             try:
-                pods = await _run_sync(
+                pods = await run_sync(
                     core_api.list_namespaced_pod,
                     namespace,
                     label_selector=f"job-name={job_name}",
@@ -251,7 +229,7 @@ class OmbRunner:
         for _ in range(120):
             await asyncio.sleep(2)
             try:
-                pod = await _run_sync(
+                pod = await run_sync(
                     core_api.read_namespaced_pod, pod_name, namespace
                 )
                 phase = pod.status.phase if pod.status else None
@@ -260,10 +238,11 @@ class OmbRunner:
             except Exception as exc:
                 logger.warning("Error reading pod %s: %s", pod_name, exc)
 
-        # --- Stream logs ---
-        def _do_stream() -> list:
-            """Synchronous log streaming — runs in executor thread."""
-            lines: list = []
+        # --- Stream logs incrementally ---
+        # _do_stream runs in an executor thread. It appends each line directly
+        # to state["lines"] as it arrives — thread-safe via CPython's GIL for
+        # list.append. This lets get_lines() return partial output in real time.
+        def _do_stream() -> None:
             w = k8s_watch.Watch()
             try:
                 for event in w.stream(
@@ -273,20 +252,18 @@ class OmbRunner:
                     follow=True,
                     _request_timeout=3600,
                 ):
-                    lines.append(event)
+                    state["lines"].append(event)
             except Exception as exc:
-                lines.append(f"[omb-runner] Log streaming error: {exc}")
-            return lines
+                state["lines"].append(f"[omb-runner] Log streaming error: {exc}")
 
         try:
-            log_lines = await _run_sync(_do_stream)
-            state["lines"].extend(log_lines)
+            await run_sync(_do_stream)
         except Exception as exc:
-            state["lines"].append(f"[omb-runner] Executor error during log stream: {exc}")
+            state["lines"].append(f"[omb-runner] Executor error: {exc}")
 
         # --- Determine success ---
         try:
-            job = await _run_sync(
+            job = await run_sync(
                 batch_api.read_namespaced_job, job_name, namespace
             )
             state["success"] = bool(
@@ -306,7 +283,7 @@ class OmbRunner:
 
         # --- Cleanup ConfigMap ---
         try:
-            await _run_sync(
+            await run_sync(
                 core_api.delete_namespaced_config_map,
                 f"omb-run-{run_id}",
                 namespace,

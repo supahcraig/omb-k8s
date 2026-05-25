@@ -7,18 +7,23 @@ POST /api/workers/scale    — patch spec.replicas on the StatefulSet
 import logging
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from config import settings
 from schemas import WorkerPod, WorkerStatus
-from services.omb_runner import _load_config, _run_sync
+from services.k8s_client import load_incluster_once, run_sync
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 _STATEFULSET_NAME = "omb-worker"
-_MAX_REPLICAS = 20
 _MIN_REPLICAS = 1
+_MAX_REPLICAS = 20
+
+
+class ScaleRequest(BaseModel):
+    replicas: int = Field(..., ge=_MIN_REPLICAS, le=_MAX_REPLICAS)
 
 
 @router.get("/status", response_model=WorkerStatus)
@@ -29,14 +34,13 @@ async def get_worker_status() -> WorkerStatus:
     """
     from kubernetes import client as k8s_client
 
-    _load_config()
+    load_incluster_once()
     apps_api = k8s_client.AppsV1Api()
     core_api = k8s_client.CoreV1Api()
     namespace = settings.omb_namespace
 
-    # Fetch StatefulSet
     try:
-        sts = await _run_sync(
+        sts = await run_sync(
             apps_api.read_namespaced_stateful_set,
             _STATEFULSET_NAME,
             namespace,
@@ -51,9 +55,8 @@ async def get_worker_status() -> WorkerStatus:
     desired: int = sts.spec.replicas or 0
     ready: int = sts.status.ready_replicas or 0
 
-    # Fetch pods for omb-worker
     try:
-        pod_list = await _run_sync(
+        pod_list = await run_sync(
             core_api.list_namespaced_pod,
             namespace,
             label_selector="app=omb-worker",
@@ -73,41 +76,28 @@ async def get_worker_status() -> WorkerStatus:
 
 
 @router.post("/scale")
-async def scale_workers(body: dict) -> dict:
+async def scale_workers(body: ScaleRequest) -> dict:
     """
     Scale the omb-worker StatefulSet.
 
-    Request body: ``{"replicas": int}``
+    Request body: ``{"replicas": int}``  (1–20 inclusive)
     Response:     ``{"desired": int}``
-
-    Replicas must be between 1 and 20 (inclusive).
     """
     from kubernetes import client as k8s_client
 
-    replicas = body.get("replicas")
-    if replicas is None:
-        raise HTTPException(status_code=422, detail="'replicas' field is required.")
-    if not isinstance(replicas, int):
-        raise HTTPException(status_code=422, detail="'replicas' must be an integer.")
-    if replicas < _MIN_REPLICAS or replicas > _MAX_REPLICAS:
-        raise HTTPException(
-            status_code=422,
-            detail=f"'replicas' must be between {_MIN_REPLICAS} and {_MAX_REPLICAS}.",
-        )
-
-    _load_config()
+    load_incluster_once()
     apps_api = k8s_client.AppsV1Api()
     namespace = settings.omb_namespace
 
-    patch_body = {"spec": {"replicas": replicas}}
+    patch_body = {"spec": {"replicas": body.replicas}}
     try:
-        await _run_sync(
+        await run_sync(
             apps_api.patch_namespaced_stateful_set,
             _STATEFULSET_NAME,
             namespace,
             patch_body,
         )
-        logger.info("Scaled %s to %d replicas", _STATEFULSET_NAME, replicas)
+        logger.info("Scaled %s to %d replicas", _STATEFULSET_NAME, body.replicas)
     except k8s_client.ApiException as exc:
         logger.error("Failed to scale StatefulSet: %s", exc)
         raise HTTPException(
@@ -115,4 +105,4 @@ async def scale_workers(body: dict) -> dict:
             detail=f"Could not scale StatefulSet: {exc.reason}",
         )
 
-    return {"desired": replicas}
+    return {"desired": body.replicas}
