@@ -192,6 +192,13 @@ correct way to use a separately managed node pool with Standard GKE clusters.
 **Cluster provisioning is out of scope.** If you find yourself writing code that
 creates Redpanda broker nodes or interacts with the Redpanda Cloud API, stop.
 
+**Worker pods require a hard pod anti-affinity rule (one per node).** Because
+`hostNetwork: true` puts all workers on the host network namespace, two workers on
+the same node would both try to bind port 8080 and the second would crash. The
+StatefulSet spec includes `requiredDuringSchedulingIgnoredDuringExecution` anti-affinity
+on `kubernetes.io/hostname`. Do not remove this — without it scaling beyond the current
+node count works by luck and will fail non-deterministically.
+
 **Fernet encryption key is mounted from a k8s Secret, never generated ephemerally
 in production.** The `controlPlane.encryptionKey` Helm value creates an
 `omb-control-plane-encryption` Secret; the deployment mounts it as the
