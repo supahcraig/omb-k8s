@@ -26,8 +26,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: OMB_WORKER_REPLICAS
-              value: "{{ .Values.worker.replicas }}"
+            - name: WORKER_IMAGE
+              value: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
             - name: OMB_DB_PATH
               value: /data/omb_ui.db
             - name: PORT

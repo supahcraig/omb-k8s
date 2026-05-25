@@ -113,8 +113,9 @@ both implement — it is not optional.
 results. The control plane does not use hostNetwork.
 
 **k8s API calls use in-cluster service account credentials.** The control plane
-pod has a ServiceAccount with a Role that permits: create/delete Jobs,
-create/delete ConfigMaps, get/update StatefulSets, get Pods. Do not mount or
+pod has a ServiceAccount with a Role that permits: create/delete/get/list/watch
+Jobs, create/delete/get/list ConfigMaps, create/get/update Secrets,
+get/patch/update StatefulSets, get/list/watch Pods and Pod logs. Do not mount or
 reference external kubeconfig files.
 
 **Cloud differences are isolated in per-cloud values files.** The Helm chart is
@@ -262,11 +263,17 @@ operations after initial deployment.
 2. cd terraform/<cloud> && cp terraform.tfvars.example terraform.tfvars and fill in values (terraform.tfvars is gitignored)
 3. terraform init && terraform apply (provisions k8s cluster + VPC + peering)
 4. aws/gcloud/az eks/gke/aks get-credentials (configure local kubectl)
-5. helm install omb charts/omb -f charts/omb/values-<cloud>.yaml -f my-values.yaml
+5. helm install omb charts/omb -n omb --create-namespace -f charts/omb/values-<cloud>.yaml -f my-values.yaml
 6. Open the UI at the LoadBalancer address
 7. Configure cluster connectivity and Prometheus in Settings
 8. Run benchmarks
 9. helm uninstall omb && terraform destroy when engagement is complete
+
+For upgrades, always supply both -f flags explicitly — do not rely on
+`--reuse-values` as a substitute for `-f my-values.yaml`. An explicit
+`-f file.yaml` argument takes precedence over `--reuse-values`, so any
+cloud values file with explicit entries will silently overwrite reused
+engagement-specific values (e.g., clusterAutoscaler.region).
 
 ## Worker memory and JVM settings
 
