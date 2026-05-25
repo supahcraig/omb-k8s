@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from database import init_db
+from services.seeder import seed_bundled_workloads
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +17,11 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan: initialise DB on startup."""
+    """Application lifespan: initialise DB and seed bundled workloads on startup."""
     logger.info("Starting up — initialising database …")
     await init_db()
     logger.info("Database initialised.")
+    await seed_bundled_workloads()
     yield
     logger.info("Shutting down.")
 
