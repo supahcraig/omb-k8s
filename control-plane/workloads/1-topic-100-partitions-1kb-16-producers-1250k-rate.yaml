@@ -1,0 +1,11 @@
+name: 100-partitions-1250K-rate-16-producer
+topics: 1
+partitionsPerTopic: 100
+messageSize: 1024
+payloadFile: "payload/payload-1Kb.data"
+subscriptionsPerTopic: 1
+consumerPerSubscription: 16
+producersPerTopic: 16
+producerRate: 1250000
+consumerBacklogSizeGB: 0
+testDurationMinutes: 60
