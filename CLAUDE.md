@@ -184,6 +184,30 @@ DNS instead of the cluster DNS, so `omb-worker-0.omb-worker.<ns>.svc.cluster.loc
 does not resolve. Setting `dnsPolicy: ClusterFirstWithHostNet` restores cluster DNS
 while keeping host networking. Do not remove this field.
 
+**The cluster is split into two node pools: control-plane and benchmark-worker.**
+The control-plane pool runs everything except omb-worker pods: control-plane app,
+Prometheus, Grafana, Cluster Autoscaler, and driver Jobs. The benchmark-worker pool
+runs only omb-worker pods. Pool sizes:
+
+| Cloud | Control-plane pool | Benchmark-worker pool |
+|-------|-------------------|----------------------|
+| AWS   | m5.xlarge, fixed 2 | m5.4xlarge, 0–20 |
+| GCP   | n2-standard-4, fixed 2 | n2-standard-16, 0–20 |
+| Azure | Standard_D4s_v3, fixed 2 | Standard_D16s_v3, 0–20 |
+
+Nodes are labeled `node-pool: control-plane` or `node-pool: worker`. Worker nodes
+carry a `dedicated=benchmark:NoSchedule` taint so non-worker pods cannot land on
+them without an explicit toleration. Every Helm workload has a matching `nodeSelector`.
+The worker StatefulSet also has a `tolerations` entry for the benchmark taint.
+node-exporter is a DaemonSet that runs on all nodes and carries a toleration for
+the worker taint so it can collect host metrics from benchmark nodes.
+Driver Jobs run on the control-plane pool — they orchestrate the benchmark but do
+not execute it. Resource requests for driver Jobs: 500m CPU / 512Mi memory.
+
+**Azure AKS note:** Renaming `default_node_pool` from `workers` to `controlplane`
+forces destruction and recreation of the entire AKS cluster. Re-deploy fresh;
+do not attempt in-place upgrade of an existing AKS engagement cluster.
+
 **GKE uses Standard mode, not Autopilot.** `hostNetwork: true` on worker pods
 requires Standard mode — Autopilot does not permit hostNetwork. Do not change
 `remove_default_node_pool = true` / `initial_node_count = 1` pattern; this is the

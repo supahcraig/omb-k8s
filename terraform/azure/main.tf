@@ -50,17 +50,19 @@ resource "azurerm_kubernetes_cluster" "main" {
   dns_prefix          = var.cluster_name
   tags                = var.tags
 
+  # ── Control-plane node pool ─────────────────────────────────────────────────
+  # Standard_D4s_v3 (4 vCPU / 16 GB), fixed at 2 nodes.
+  # Runs: control-plane, Prometheus, Grafana, driver Jobs.
+  # NOTE: renaming this pool from the previous value forces cluster replacement.
   default_node_pool {
-    name                = "workers"
-    vm_size             = "Standard_D16s_v3"
-    min_count           = 2
-    max_count           = 6
-    node_count          = 3
-    enable_auto_scaling = true
+    name                = "controlplane"
+    vm_size             = "Standard_D4s_v3"
+    node_count          = 2
+    enable_auto_scaling = false
     vnet_subnet_id      = azurerm_subnet.aks.id
 
     node_labels = {
-      role = "omb-worker"
+      "node-pool" = "control-plane"
     }
   }
 
@@ -72,6 +74,33 @@ resource "azurerm_kubernetes_cluster" "main" {
     network_plugin = "azure"
     service_cidr   = "10.100.0.0/16"
     dns_service_ip = "10.100.0.10"
+  }
+}
+
+# ── Benchmark-worker node pool ────────────────────────────────────────────────
+# Standard_D16s_v3 (16 vCPU / 64 GB), autoscales 0–20.
+# Tainted dedicated=benchmark:NoSchedule so only omb-worker pods land here.
+
+resource "azurerm_kubernetes_cluster_node_pool" "benchmark_workers" {
+  name                  = "workers"
+  kubernetes_cluster_id = azurerm_kubernetes_cluster.main.id
+  vm_size               = "Standard_D16s_v3"
+  min_count             = 0
+  max_count             = 20
+  node_count            = 2
+  enable_auto_scaling   = true
+  vnet_subnet_id        = azurerm_subnet.aks.id
+
+  node_labels = {
+    "node-pool" = "worker"
+  }
+
+  node_taints = ["dedicated=benchmark:NoSchedule"]
+
+  tags = var.tags
+
+  lifecycle {
+    ignore_changes = [node_count]
   }
 }
 

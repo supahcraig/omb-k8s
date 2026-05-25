@@ -25,29 +25,29 @@ resource "google_container_cluster" "main" {
   deletion_protection = false
 }
 
-resource "google_container_node_pool" "workers" {
-  name     = "${var.cluster_name}-workers"
-  location = var.zone
-  cluster  = google_container_cluster.main.name
+# ── Control-plane node pool ───────────────────────────────────────────────────
+# n2-standard-4 (4 vCPU / 16 GB), fixed at 2 nodes, no autoscaling.
+# Runs: control-plane, Prometheus, Grafana, driver Jobs.
 
-  initial_node_count = 3
+resource "google_container_node_pool" "control_plane" {
+  name       = "${var.cluster_name}-control-plane"
+  location   = var.zone
+  cluster    = google_container_cluster.main.name
 
-  autoscaling {
-    min_node_count = 2
-    max_node_count = 6
-  }
+  node_count = 2
 
   node_config {
-    machine_type = "n2-standard-16"
+    machine_type = "n2-standard-4"
     disk_size_gb = 100
     disk_type    = "pd-ssd"
 
-    # Cloud platform scope required for GKE to manage nodes
     oauth_scopes = [
       "https://www.googleapis.com/auth/cloud-platform",
     ]
 
-    labels = var.labels
+    labels = merge(var.labels, {
+      "node-pool" = "control-plane"
+    })
 
     metadata = {
       disable-legacy-endpoints = "true"
@@ -57,6 +57,58 @@ resource "google_container_node_pool" "workers" {
   management {
     auto_repair  = true
     auto_upgrade = true
+  }
+}
+
+# ── Benchmark-worker node pool ────────────────────────────────────────────────
+# n2-standard-16 (16 vCPU / 64 GB), autoscales 0–20.
+# Tainted dedicated=benchmark:NoSchedule — toleration must use NoSchedule (camelCase).
+
+resource "google_container_node_pool" "benchmark_workers" {
+  name     = "${var.cluster_name}-benchmark-workers"
+  location = var.zone
+  cluster  = google_container_cluster.main.name
+
+  initial_node_count = 2
+
+  autoscaling {
+    min_node_count = 0
+    max_node_count = 20
+  }
+
+  node_config {
+    machine_type = "n2-standard-16"
+    disk_size_gb = 100
+    disk_type    = "pd-ssd"
+
+    oauth_scopes = [
+      "https://www.googleapis.com/auth/cloud-platform",
+    ]
+
+    labels = merge(var.labels, {
+      "node-pool" = "worker"
+    })
+
+    taint {
+      key    = "dedicated"
+      value  = "benchmark"
+      effect = "NO_SCHEDULE"
+    }
+
+    metadata = {
+      disable-legacy-endpoints = "true"
+    }
+  }
+
+  management {
+    auto_repair  = true
+    auto_upgrade = true
+  }
+
+  depends_on = [google_container_node_pool.control_plane]
+
+  lifecycle {
+    ignore_changes = [initial_node_count]
   }
 }
 

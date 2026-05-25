@@ -10,26 +10,7 @@ existing clusters and never provisions them.
 
 ## Overview
 
-```
-┌─────────────────────────────────────────────┐
-│  OMB k8s Cluster (EKS/GKE/AKS)             │
-│                                             │
-│  control-plane pod                          │
-│    FastAPI + React UI                       │
-│    SQLite on PersistentVolume               │
-│                                             │
-│  omb-worker pods (StatefulSet, N replicas)  │
-│    OMB worker, port 8080                    │
-│    Scales non-destructively                 │
-│                                             │
-│  prometheus + grafana pods                  │
-└──────────────────┬──────────────────────────┘
-                   │ VPC Peering
-┌──────────────────▼──────────────────────────┐
-│  Target Cluster (BYOC or self-hosted)       │
-│  Redpanda or Kafka-compatible               │
-└─────────────────────────────────────────────┘
-```
+![Architecture](docs/architecture.svg)
 
 ## Prerequisites
 
@@ -51,15 +32,17 @@ cp terraform.tfvars.example terraform.tfvars
 terraform init && terraform apply
 
 # 2. Configure kubectl
-aws eks update-kubeconfig --name <cluster-name> --region <region>
+$(terraform output -raw kubeconfig_command)
 
 # 3. Install the Helm chart
-helm install omb charts/omb \
+helm install omb charts/omb -n omb --create-namespace \
   -f charts/omb/values-aws.yaml \
-  -f my-values.yaml
+  --set clusterAutoscaler.clusterName=$(terraform output -raw cluster_name) \
+  --set clusterAutoscaler.region=$(terraform output -raw region) \
+  --set clusterAutoscaler.roleArn=$(terraform output -raw cluster_autoscaler_iam_role_arn)
 
 # 4. Open the UI
-kubectl get svc omb-control-plane -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 ```
 
 Open the LoadBalancer address in your browser. Configure cluster connectivity
@@ -74,8 +57,14 @@ cd terraform/aws
 cp terraform.tfvars.example terraform.tfvars
 # Edit: cluster_name, region, vpc_cidr, availability_zones, target_vpc_id, target_cidr
 terraform init && terraform apply
-aws eks update-kubeconfig --name <cluster-name> --region <region>
-helm install omb charts/omb -f charts/omb/values-aws.yaml -f my-values.yaml
+
+$(terraform output -raw kubeconfig_command)
+
+helm install omb charts/omb -n omb --create-namespace \
+  -f charts/omb/values-aws.yaml \
+  --set clusterAutoscaler.clusterName=$(terraform output -raw cluster_name) \
+  --set clusterAutoscaler.region=$(terraform output -raw region) \
+  --set clusterAutoscaler.roleArn=$(terraform output -raw cluster_autoscaler_iam_role_arn)
 ```
 
 ### GCP (GKE)
@@ -85,8 +74,11 @@ cd terraform/gcp
 cp terraform.tfvars.example terraform.tfvars
 # Edit: project_id, region, zone, cluster_name, target_network, target_cidr
 terraform init && terraform apply
-gcloud container clusters get-credentials <cluster-name> --region <region>
-helm install omb charts/omb -f charts/omb/values-gcp.yaml -f my-values.yaml
+
+$(terraform output -raw kubeconfig_command)
+
+helm install omb charts/omb -n omb --create-namespace \
+  -f charts/omb/values-gcp.yaml
 ```
 
 ### Azure (AKS)
@@ -96,8 +88,32 @@ cd terraform/azure
 cp terraform.tfvars.example terraform.tfvars
 # Edit: resource_group_name, location, cluster_name, target_vnet_id
 terraform init && terraform apply
-az aks get-credentials --resource-group <rg> --name <cluster-name>
-helm install omb charts/omb -f charts/omb/values-azure.yaml -f my-values.yaml
+
+$(terraform output -raw kubeconfig_command)
+
+helm install omb charts/omb -n omb --create-namespace \
+  -f charts/omb/values-aks.yaml
+```
+
+### Upgrading
+
+Always supply both `-f` flags explicitly — do not use `--reuse-values`. When a
+cloud values file has an explicit entry (e.g. `clusterAutoscaler.region`), it
+silently overwrites reused values from the previous install.
+
+```bash
+# AWS
+helm upgrade omb charts/omb -n omb \
+  -f charts/omb/values-aws.yaml \
+  --set clusterAutoscaler.clusterName=$(terraform -chdir=terraform/aws output -raw cluster_name) \
+  --set clusterAutoscaler.region=$(terraform -chdir=terraform/aws output -raw region) \
+  --set clusterAutoscaler.roleArn=$(terraform -chdir=terraform/aws output -raw cluster_autoscaler_iam_role_arn)
+
+# GCP
+helm upgrade omb charts/omb -n omb -f charts/omb/values-gcp.yaml
+
+# Azure
+helm upgrade omb charts/omb -n omb -f charts/omb/values-aks.yaml
 ```
 
 ### Connecting to a target cluster
@@ -120,11 +136,18 @@ Workers are a StatefulSet. Scale them non-destructively through the UI or with
 Helm:
 
 ```bash
-helm upgrade omb charts/omb --reuse-values --set worker.replicas=8
+# AWS
+helm upgrade omb charts/omb -n omb \
+  -f charts/omb/values-aws.yaml \
+  --set clusterAutoscaler.clusterName=$(terraform -chdir=terraform/aws output -raw cluster_name) \
+  --set clusterAutoscaler.region=$(terraform -chdir=terraform/aws output -raw region) \
+  --set clusterAutoscaler.roleArn=$(terraform -chdir=terraform/aws output -raw cluster_autoscaler_iam_role_arn) \
+  --set worker.replicas=8
 ```
 
-Each node (m5.4xlarge / n2-standard-16 / Standard_D16s_v3) comfortably fits
-~8 worker pods. The Cluster Autoscaler adds nodes automatically when needed.
+Each benchmark-worker node (m5.4xlarge / n2-standard-16 / Standard_D16s_v3)
+comfortably fits ~8 worker pods. The Cluster Autoscaler adds nodes automatically
+when needed.
 
 Do not change worker instance types or JVM settings to increase throughput.
 The correct response to needing more throughput is more worker pods.
@@ -133,7 +156,7 @@ The correct response to needing more throughput is more worker pods.
 
 ```bash
 # Uninstall the Helm release
-helm uninstall omb
+helm uninstall omb -n omb
 
 # Destroy the Kubernetes cluster and VPC
 cd terraform/<cloud>

@@ -22,6 +22,8 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      nodeSelector:
+        node-pool: control-plane
       containers:
         - name: driver
           image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
@@ -35,6 +37,13 @@ spec:
             - /etc/omb/workload.yaml
             - --workers
             - __WORKERS_ARG__
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
           volumeMounts:
             - name: omb-config
               mountPath: /etc/omb

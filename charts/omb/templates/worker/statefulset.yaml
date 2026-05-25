@@ -17,6 +17,20 @@ spec:
     spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        node-pool: worker
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: benchmark
+          effect: NoSchedule
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: omb-worker
+              topologyKey: kubernetes.io/hostname
       containers:
         - name: worker
           image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
