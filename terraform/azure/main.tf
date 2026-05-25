@@ -98,6 +98,10 @@ resource "azurerm_kubernetes_cluster_node_pool" "benchmark_workers" {
   node_taints = ["dedicated=benchmark:NoSchedule"]
 
   tags = var.tags
+
+  lifecycle {
+    ignore_changes = [node_count]
+  }
 }
 
 resource "azurerm_virtual_network_peering" "to_target" {

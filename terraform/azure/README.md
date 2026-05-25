@@ -40,7 +40,7 @@ AKS provisions in ~5-10 minutes.
 
 ```bash
 az aks get-credentials --resource-group <resource_group_name> --name <cluster_name>
-kubectl get nodes  # should show 3 nodes in Ready state
+kubectl get nodes  # should show 4 nodes in Ready state (2 control-plane, 2 benchmark-workers)
 ```
 
 **4. If using BYOC: complete the peering handshake**
@@ -88,5 +88,5 @@ Destroying the resource group removes all resources. Verify in the Azure portal.
 
 ## Cost note
 
-3× Standard_D16s_v3 nodes costs roughly $2-4/hour while running. Always run
+2× Standard_D4s_v3 (control-plane) + 2× Standard_D16s_v3 (benchmark-workers) costs roughly $2-4/hour while running. Always run
 `terraform destroy` at engagement end. `helm uninstall` does not stop the VMs.
