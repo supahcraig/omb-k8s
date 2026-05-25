@@ -1,6 +1,7 @@
 """Settings router — GET/PUT /api/settings and POST /api/settings/test-connection."""
 import json
 import logging
+import re as _re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -24,8 +25,6 @@ PROMETHEUS_KEY = "prometheus"
 
 # Cluster fields that hold sensitive secrets and must be encrypted at rest.
 _CLUSTER_PASSWORD_FIELDS = {"sasl_password"}
-# Prometheus fields that hold sensitive secrets.
-_PROMETHEUS_PASSWORD_FIELDS = {"remote_write_password"}
 
 
 # ---------------------------------------------------------------------------
@@ -98,38 +97,87 @@ def _build_cluster_out(stored: Optional[dict]) -> Optional[ClusterConfig]:
     return ClusterConfig(**redacted)
 
 
-def _build_prometheus_out(stored: Optional[dict]) -> Optional[PrometheusConfig]:
-    """Build a PrometheusConfig with passwords redacted, or None if no stored config.
+def _extract_scrape_password(scrape_yaml_str: str) -> tuple:
+    """Extract basic_auth password from a scrape YAML string.
 
-    Handles the scrape_targets storage representation: stored as a
-    comma-separated string under the key ``scrape_targets_str`` to avoid
-    JSON-in-JSON nesting issues; the Pydantic schema exposes ``scrape_targets``
-    as ``Optional[List[str]]``.
+    Returns (redacted_yaml, plaintext_password).
+    If no password found, returns (original_yaml, None).
+    """
+    pattern = r'(password:\s*)([^\n]+)'
+    match = _re.search(pattern, scrape_yaml_str)
+    if not match:
+        return scrape_yaml_str, None
+    plaintext = match.group(2).strip()
+    redacted = _re.sub(pattern, r'\g<1>__REDACTED__', scrape_yaml_str, count=1)
+    return redacted, plaintext
+
+
+def _inject_scrape_password(scrape_yaml_str: str, plaintext_password: str) -> str:
+    """Replace __REDACTED__ sentinel with the actual password."""
+    return scrape_yaml_str.replace('__REDACTED__', plaintext_password, 1)
+
+
+def _build_prometheus_out(stored: Optional[dict]) -> Optional[PrometheusConfig]:
+    """Build a PrometheusConfig for the API response.
+
+    BYOC: re-injects the decrypted password into the scrape YAML so the
+    frontend can display the full (unredacted) YAML for editing.
+    Self-hosted: normalises scrape_targets from the stored comma-separated string.
     """
     if stored is None:
         return None
     d = dict(stored)
-    # Normalise scrape_targets from storage representation.
-    scrape_str = d.pop("scrape_targets_str", None)
-    if "scrape_targets" not in d or d.get("scrape_targets") is None:
-        if scrape_str:
-            d["scrape_targets"] = [t.strip() for t in scrape_str.split(",") if t.strip()]
-        else:
-            d["scrape_targets"] = None
-    d = _redact_passwords(d, _PROMETHEUS_PASSWORD_FIELDS)
-    return PrometheusConfig(**d)
+
+    if d.get('mode') == 'byoc':
+        raw_yaml = d.get('scrape_yaml') or ''
+        enc_password = d.get('scrape_yaml_password')
+        if enc_password and '__REDACTED__' in raw_yaml:
+            try:
+                plaintext = decrypt(enc_password)
+                d['scrape_yaml'] = _inject_scrape_password(raw_yaml, plaintext)
+            except Exception:
+                pass  # Return YAML with __REDACTED__ rather than crashing
+        d['scrape_targets'] = None
+    else:
+        scrape_str = d.pop('scrape_targets_str', None)
+        if 'scrape_targets' not in d or d.get('scrape_targets') is None:
+            if scrape_str:
+                d['scrape_targets'] = [t.strip() for t in scrape_str.split(',') if t.strip()]
+            else:
+                d['scrape_targets'] = None
+        d['scrape_yaml'] = None
+        d['scrape_yaml_password'] = None
+
+    return PrometheusConfig(**{k: v for k, v in d.items() if k in PrometheusConfig.model_fields})
 
 
-def _prometheus_to_storage(config: PrometheusConfig) -> dict:
-    """Convert a PrometheusConfig to the dict we persist in the DB.
+def _prometheus_to_storage(config: PrometheusConfig, existing_stored: Optional[dict]) -> dict:
+    """Convert a PrometheusConfig to the dict persisted in the DB.
 
-    scrape_targets (list) → scrape_targets_str (comma-separated string).
-    The password field is left in its raw form so the caller can decide
-    whether to encrypt / preserve the existing value.
+    BYOC: stores scrape_yaml (redacted) + scrape_yaml_password (encrypted).
+    Self-hosted: stores scrape_targets_str (comma-separated string).
     """
     d = config.model_dump()
-    targets: Optional[list] = d.pop("scrape_targets", None)
-    d["scrape_targets_str"] = ",".join(targets) if targets else ""
+
+    if config.mode == 'byoc':
+        raw_yaml = d.get('scrape_yaml') or ''
+        # If the client sent back a YAML that still contains __REDACTED__, the
+        # password was not changed — preserve the existing encrypted value.
+        if '__REDACTED__' in raw_yaml:
+            d['scrape_yaml'] = raw_yaml
+            d['scrape_yaml_password'] = (existing_stored or {}).get('scrape_yaml_password')
+        else:
+            redacted_yaml, plaintext = _extract_scrape_password(raw_yaml)
+            d['scrape_yaml'] = redacted_yaml
+            d['scrape_yaml_password'] = encrypt(plaintext) if plaintext else None
+        d.pop('scrape_targets', None)
+        d['scrape_targets_str'] = ''
+    else:
+        targets: Optional[list] = d.pop('scrape_targets', None)
+        d['scrape_targets_str'] = ','.join(targets) if targets else ''
+        d['scrape_yaml'] = None
+        d['scrape_yaml_password'] = None
+
     return d
 
 
@@ -172,10 +220,7 @@ async def update_settings(
             await _store_setting(db, CLUSTER_KEY, cluster_to_save)
 
         if body.prometheus is not None:
-            prometheus_dict = _prometheus_to_storage(body.prometheus)
-            prometheus_to_save = _merge_passwords(
-                prometheus_dict, prometheus_stored, _PROMETHEUS_PASSWORD_FIELDS
-            )
+            prometheus_to_save = _prometheus_to_storage(body.prometheus, prometheus_stored)
             await _store_setting(db, PROMETHEUS_KEY, prometheus_to_save)
 
         await db.commit()
