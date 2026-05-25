@@ -2,30 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { listRuns, createRun } from '../api.js'
 import { useWorker } from '../context/WorkerContext.jsx'
-
-const DEFAULT_DRIVER = `name: Kafka
-driverClass: io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver
-
-replicationFactor: 3
-
-topicConfig:
-  min.insync.replicas: 2
-
-commonConfig: |
-  bootstrap.servers=REPLACE_ME:9092
-  security.protocol=SASL_SSL
-  sasl.mechanism=SCRAM-SHA-256
-  sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="REPLACE_ME" password="REPLACE_ME";
-
-producerConfig: |
-  acks=all
-  linger.ms=1
-  batch.size=131072
-
-consumerConfig: |
-  auto.offset.reset=earliest
-  enable.auto.commit=false
-`
+import { useSettings } from '../context/SettingsContext.jsx'
+import DriverForm from '../components/DriverForm.jsx'
+import WorkloadForm from '../components/WorkloadForm.jsx'
 
 function StatusBadge({ status }) {
   return <span className={`badge badge-${status}`}>{status}</span>
@@ -38,8 +17,9 @@ function fmt(n, unit = '') {
 
 function RunCreateForm({ onCreated, initialWorkloadContent, initialWorkloadName }) {
   const { workersReady, status } = useWorker()
+  const { hasClusterConfig } = useSettings()
   const [name, setName] = useState(initialWorkloadName ? `Run — ${initialWorkloadName}` : '')
-  const [driverYaml, setDriverYaml] = useState(DEFAULT_DRIVER)
+  const [driverYaml, setDriverYaml] = useState('')
   const [workloadYaml, setWorkloadYaml] = useState(initialWorkloadContent || '')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -48,12 +28,13 @@ function RunCreateForm({ onCreated, initialWorkloadContent, initialWorkloadName 
   const blockMessage = status
     ? `Waiting for workers: ${status.ready}/${status.desired} ready. Please wait before starting a run.`
     : 'Worker status unknown. Please wait…'
+  const noCluster = !hasClusterConfig
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (notReady) return
+    if (notReady || noCluster) return
     if (!driverYaml.trim() || !workloadYaml.trim()) {
-      setError('Driver YAML and Workload YAML are both required.')
+      setError('Driver and Workload configuration are required.')
       return
     }
     setSubmitting(true)
@@ -74,12 +55,13 @@ function RunCreateForm({ onCreated, initialWorkloadContent, initialWorkloadName 
 
   return (
     <div className="card mb-20">
-      <div className="card-header">
-        <h2>New Run</h2>
-      </div>
+      <div className="card-header"><h2>New Run</h2></div>
       <div className="card-body">
-        {notReady && status && (
-          <div className="alert alert-warning mb-16">{blockMessage}</div>
+        {notReady && status && <div className="alert alert-warning mb-16">{blockMessage}</div>}
+        {noCluster && (
+          <div className="alert alert-warning mb-16">
+            Configure cluster settings before launching a run.
+          </div>
         )}
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -87,23 +69,24 @@ function RunCreateForm({ onCreated, initialWorkloadContent, initialWorkloadName 
             <input className="form-input" value={name} onChange={e => setName(e.target.value)}
               placeholder="e.g. 1KB 100-partition baseline" />
           </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Driver YAML</label>
-              <textarea className="form-textarea tall" value={driverYaml}
-                onChange={e => setDriverYaml(e.target.value)} />
+          <hr className="divider" />
+          <div className="form-row" style={{ alignItems: 'start' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Driver</div>
+              <DriverForm onChange={setDriverYaml} />
             </div>
-            <div className="form-group">
-              <label className="form-label">Workload YAML</label>
-              <textarea className="form-textarea tall" value={workloadYaml}
-                onChange={e => setWorkloadYaml(e.target.value)}
-                placeholder="Paste workload YAML here or select from Workload Library" />
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Workload</div>
+              <WorkloadForm initialYaml={initialWorkloadContent} onChange={setWorkloadYaml} />
             </div>
           </div>
-          {error && <div className="alert alert-error">{error}</div>}
-          <button type="submit" className="btn btn-primary" disabled={submitting || notReady}>
-            {submitting ? <><span className="spinner" /> Launching…</> : 'Launch Run'}
-          </button>
+          {error && <div className="alert alert-error mt-16">{error}</div>}
+          <div className="mt-20">
+            <button type="submit" className="btn btn-primary"
+              disabled={submitting || notReady || noCluster}>
+              {submitting ? <><span className="spinner" /> Launching…</> : 'Launch Run'}
+            </button>
+          </div>
         </form>
       </div>
     </div>
