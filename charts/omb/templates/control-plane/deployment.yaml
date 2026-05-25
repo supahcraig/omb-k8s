@@ -15,6 +15,8 @@ spec:
         app: omb-control-plane
     spec:
       serviceAccountName: omb-control-plane
+      nodeSelector:
+        node-pool: control-plane
       containers:
         - name: control-plane
           image: "{{ .Values.controlPlane.image.repository }}:{{ .Values.controlPlane.image.tag }}"
@@ -26,12 +28,21 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: OMB_WORKER_REPLICAS
-              value: "{{ .Values.worker.replicas }}"
+            - name: WORKER_IMAGE
+              value: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
             - name: OMB_DB_PATH
               value: /data/omb_ui.db
             - name: PORT
               value: "8000"
+            - name: PROMETHEUS_URL
+              value: "http://{{ .Release.Name }}-kube-prometheus-stack-prometheus.{{ .Release.Namespace }}.svc.cluster.local:9090"
+            {{- if .Values.controlPlane.encryptionKey }}
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: omb-control-plane-encryption
+                  key: encryption-key
+            {{- end }}
           volumeMounts:
             - name: data
               mountPath: /data

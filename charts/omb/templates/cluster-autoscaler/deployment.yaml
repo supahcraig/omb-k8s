@@ -19,6 +19,8 @@ spec:
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     spec:
       serviceAccountName: cluster-autoscaler
+      nodeSelector:
+        node-pool: control-plane
       containers:
         - name: cluster-autoscaler
           image: registry.k8s.io/autoscaling/cluster-autoscaler:v1.29.0
