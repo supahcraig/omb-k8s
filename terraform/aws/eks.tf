@@ -28,9 +28,9 @@ resource "aws_eks_cluster" "main" {
   role_arn = aws_iam_role.eks_cluster.arn
 
   vpc_config {
-    subnet_ids              = aws_subnet.private[*].id
-    endpoint_private_access = true
-    endpoint_public_access  = true
+    subnet_ids               = aws_subnet.private[*].id
+    endpoint_private_access  = true
+    endpoint_public_access   = true
   }
 
   depends_on = [
@@ -45,11 +45,74 @@ resource "aws_eks_addon" "ebs_csi" {
   addon_name               = "aws-ebs-csi-driver"
   service_account_role_arn = aws_iam_role.ebs_csi.arn
 
-  depends_on = [aws_eks_node_group.workers]
+  depends_on = [aws_eks_node_group.control_plane]
 }
 
-resource "aws_launch_template" "workers" {
-  name_prefix   = "${var.cluster_name}-workers-"
+# ── Control-plane node pool ───────────────────────────────────────────────────
+# m5.xlarge (4 vCPU / 16 GB), fixed at 2 nodes, no autoscaling.
+# Runs: control-plane, Prometheus, Grafana, Cluster Autoscaler, driver Jobs.
+
+resource "aws_launch_template" "control_plane" {
+  name_prefix   = "${var.cluster_name}-control-plane-"
+  instance_type = "m5.xlarge"
+
+  vpc_security_group_ids = [
+    aws_eks_cluster.main.vpc_config[0].cluster_security_group_id,
+  ]
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = merge(var.tags, {
+      Name = "${var.cluster_name}-control-plane"
+    })
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_eks_node_group" "control_plane" {
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = "${var.cluster_name}-control-plane"
+  node_role_arn   = aws_iam_role.node_group.arn
+  subnet_ids      = aws_subnet.private[*].id
+
+  launch_template {
+    id      = aws_launch_template.control_plane.id
+    version = aws_launch_template.control_plane.latest_version
+  }
+
+  scaling_config {
+    desired_size = 2
+    min_size     = 2
+    max_size     = 2
+  }
+
+  update_config {
+    max_unavailable = 1
+  }
+
+  labels = {
+    "node-pool" = "control-plane"
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.node_group_worker,
+    aws_iam_role_policy_attachment.node_group_cni,
+    aws_iam_role_policy_attachment.node_group_ecr,
+  ]
+
+  tags = var.tags
+}
+
+# ── Benchmark-worker node pool ────────────────────────────────────────────────
+# m5.4xlarge (16 vCPU / 64 GB), autoscales 0–20.
+# Tainted dedicated=benchmark:NoSchedule so only omb-worker pods land here.
+# Port 8080 SG attached for worker-to-worker communication.
+
+resource "aws_launch_template" "benchmark_workers" {
+  name_prefix   = "${var.cluster_name}-benchmark-workers-"
   instance_type = "m5.4xlarge"
 
   vpc_security_group_ids = [
@@ -60,7 +123,7 @@ resource "aws_launch_template" "workers" {
   tag_specifications {
     resource_type = "instance"
     tags = merge(var.tags, {
-      Name = "${var.cluster_name}-worker"
+      Name = "${var.cluster_name}-benchmark-worker"
     })
   }
 
@@ -69,25 +132,35 @@ resource "aws_launch_template" "workers" {
   }
 }
 
-resource "aws_eks_node_group" "workers" {
+resource "aws_eks_node_group" "benchmark_workers" {
   cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "${var.cluster_name}-workers"
+  node_group_name = "${var.cluster_name}-benchmark-workers"
   node_role_arn   = aws_iam_role.node_group.arn
   subnet_ids      = aws_subnet.private[*].id
 
   launch_template {
-    id      = aws_launch_template.workers.id
-    version = aws_launch_template.workers.latest_version
+    id      = aws_launch_template.benchmark_workers.id
+    version = aws_launch_template.benchmark_workers.latest_version
   }
 
   scaling_config {
-    desired_size = 3
-    min_size     = 2
-    max_size     = 6
+    desired_size = 2
+    min_size     = 0
+    max_size     = 20
   }
 
   update_config {
     max_unavailable = 1
+  }
+
+  labels = {
+    "node-pool" = "worker"
+  }
+
+  taint {
+    key    = "dedicated"
+    value  = "benchmark"
+    effect = "NO_SCHEDULE"
   }
 
   # Required tags for Cluster Autoscaler node group discovery
