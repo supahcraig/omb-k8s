@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     port: int = 8000
     encryption_key: str = ""  # Fernet key, base64-encoded; generated if empty
     worker_image: str = "ghcr.io/supahcraig/omb-worker:latest"
+    prometheus_url: str = ""  # In-cluster Prometheus URL; set via PROMETHEUS_URL env var
 
 
 settings = Settings()

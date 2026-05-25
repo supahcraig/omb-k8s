@@ -8,6 +8,11 @@ controlPlane:
   image:
     repository: ghcr.io/supahcraig/omb-control-plane
     tag: latest
+  # Fernet encryption key for passwords at rest (base64-encoded 32-byte key).
+  # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+  # If empty, an ephemeral key is generated at startup — passwords will not
+  # survive pod restarts. Set this before saving any credentials.
+  encryptionKey: ""
 
 storage:
   storageClassName: ""
@@ -32,6 +37,10 @@ kube-prometheus-stack:
     enabled: false
   prometheus:
     prometheusSpec:
+      additionalScrapeConfigsSecret:
+        enabled: true
+        name: omb-prometheus-additional-scrape-configs
+        key: additional-scrape-configs.yaml
       resources:
         requests:
           cpu: 200m

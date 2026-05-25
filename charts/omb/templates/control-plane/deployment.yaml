@@ -32,6 +32,15 @@ spec:
               value: /data/omb_ui.db
             - name: PORT
               value: "8000"
+            - name: PROMETHEUS_URL
+              value: "http://{{ .Release.Name }}-kube-prometheus-stack-prometheus.{{ .Release.Namespace }}.svc.cluster.local:9090"
+            {{- if .Values.controlPlane.encryptionKey }}
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: omb-control-plane-encryption
+                  key: encryption-key
+            {{- end }}
           volumeMounts:
             - name: data
               mountPath: /data

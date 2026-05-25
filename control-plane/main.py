@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from database import init_db
+from services.prometheus_config import apply_prometheus_config_on_startup
 from services.seeder import seed_bundled_workloads
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialised.")
     await seed_bundled_workloads()
+    await apply_prometheus_config_on_startup()
     yield
     logger.info("Shutting down.")
 

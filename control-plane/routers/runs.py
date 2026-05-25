@@ -16,6 +16,7 @@ from database import AsyncSessionLocal, get_db
 from models import Metrics, Run
 from schemas import RunListItem, RunOut, RunStatus
 from services.omb_runner import runner
+from services.prometheus_scraper import collect_prometheus_samples
 from services.result_parser import parse_result_from_logs
 
 logger = logging.getLogger(__name__)
@@ -175,6 +176,10 @@ async def _finish_run(run_id: int) -> None:
             run.status = RunStatus.failed.value
 
         run.completed_at = datetime.utcnow()
+        # Capture before commit expires the ORM attributes.
+        final_status = run.status
+        started_at = run.started_at
+        completed_at = run.completed_at
 
         try:
             await db.commit()
@@ -183,6 +188,9 @@ async def _finish_run(run_id: int) -> None:
             logger.exception("_finish_run: DB commit failed for run %d", run_id)
             return
 
-    logger.info(
-        "_finish_run: run %d finished — status=%s", run_id, run.status
-    )
+    logger.info("_finish_run: run %d finished — status=%s", run_id, final_status)
+
+    if final_status == RunStatus.completed.value and started_at and completed_at:
+        asyncio.create_task(
+            collect_prometheus_samples(run_id, started_at, completed_at)
+        )
