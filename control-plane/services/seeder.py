@@ -31,7 +31,11 @@ async def seed_bundled_workloads() -> None:
         yaml_files = sorted(WORKLOADS_DIR.glob("*.yaml"))
         seeded = 0
         for path in yaml_files:
-            content = path.read_text()
+            try:
+                content = path.read_text()
+            except OSError as exc:
+                logger.warning("Could not read workload file %s — skipping: %s", path, exc)
+                continue
             description = _extract_description(content)
             workload = Workload(
                 name=path.stem,  # filename without extension
