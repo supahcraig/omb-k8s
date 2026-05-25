@@ -12,6 +12,12 @@ Worker pods run as a StatefulSet so each pod gets a stable DNS name
 docker build -t omb-worker worker/
 ```
 
+On Apple Silicon (M1/M2/M3) build for the target cluster architecture:
+
+```bash
+docker build --platform linux/amd64 -t omb-worker worker/
+```
+
 The build clones the Redpanda OMB fork and compiles only the Kafka/Redpanda
 driver. Expect the first build to take 5–10 minutes (Maven dependency download
 + compilation). Subsequent builds are fast due to Docker layer caching.
@@ -70,8 +76,8 @@ pods — do not change instance types or heap settings.
 ## Published image
 
 ```
-ghcr.io/<org>/omb-worker:latest
-ghcr.io/<org>/omb-worker:<git-sha>
+ghcr.io/supahcraig/omb-worker:latest
+ghcr.io/supahcraig/omb-worker:<git-sha>
 ```
 
 The GitHub Actions workflow at `.github/workflows/build-worker.yml` builds and

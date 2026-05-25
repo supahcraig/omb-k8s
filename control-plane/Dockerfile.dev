@@ -1,0 +1,21 @@
+# Development image — Python backend only, no frontend, no OMB binary.
+# Use this until the React frontend is built in Session 5.
+# The app serves the API only; GET / returns a JSON message instead of the SPA.
+FROM python:3.11-slim
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY config.py database.py main.py models.py schemas.py ./
+COPY routers/ ./routers/
+COPY services/ ./services/
+COPY workloads/ /app/workloads/
+
+ENV OMB_DB_PATH=/data/omb_ui.db \
+    OMB_NAMESPACE=default \
+    PORT=8000
+
+EXPOSE 8000
+
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]

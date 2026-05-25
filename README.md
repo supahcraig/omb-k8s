@@ -53,17 +53,44 @@ terraform init && terraform apply
 # 2. Configure kubectl
 aws eks update-kubeconfig --name <cluster-name> --region <region>
 
-# 3. Install the Helm chart
+# 3. Create your my-values.yaml (see section below)
+
+# 4. Install the Helm chart
 helm install omb charts/omb \
   -f charts/omb/values-aws.yaml \
   -f my-values.yaml
 
-# 4. Open the UI
-kubectl get svc omb-control-plane -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+# 5. Open the UI
+kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 ```
 
 Open the LoadBalancer address in your browser. Configure cluster connectivity
 and Prometheus in Settings, then run benchmarks.
+
+## my-values.yaml
+
+Create this file before running `helm install`. It is gitignored and holds
+engagement-specific values that must not be committed.
+
+```yaml
+# Generate with:
+# python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Required — without this, saved SASL/Prometheus passwords are lost on pod restart.
+controlPlane:
+  encryptionKey: "<base64-encoded Fernet key>"
+
+# Required for EKS — values come from terraform output
+clusterAutoscaler:
+  enabled: true
+  clusterName: "<cluster-name>"
+  region: "<aws-region>"
+  roleArn: "<cluster-autoscaler-iam-role-arn>"
+```
+
+The Fernet key is stored in a Kubernetes Secret and mounted into the control plane
+pod. It encrypts SASL passwords and Prometheus credentials at rest in SQLite.
+Rotate it by updating `my-values.yaml` and running `helm upgrade` — any previously
+saved passwords will need to be re-entered in Settings.
 
 ## Deployment
 
@@ -75,7 +102,8 @@ cp terraform.tfvars.example terraform.tfvars
 # Edit: cluster_name, region, vpc_cidr, availability_zones, target_vpc_id, target_cidr
 terraform init && terraform apply
 aws eks update-kubeconfig --name <cluster-name> --region <region>
-helm install omb charts/omb -f charts/omb/values-aws.yaml -f my-values.yaml
+# Set controlPlane.encryptionKey and clusterAutoscaler values in my-values.yaml first
+helm install omb charts/omb -n omb --create-namespace -f charts/omb/values-aws.yaml -f my-values.yaml
 ```
 
 ### GCP (GKE)
@@ -86,7 +114,8 @@ cp terraform.tfvars.example terraform.tfvars
 # Edit: project_id, region, zone, cluster_name, target_network, target_cidr
 terraform init && terraform apply
 gcloud container clusters get-credentials <cluster-name> --region <region>
-helm install omb charts/omb -f charts/omb/values-gcp.yaml -f my-values.yaml
+# Set controlPlane.encryptionKey in my-values.yaml first
+helm install omb charts/omb -n omb --create-namespace -f charts/omb/values-gcp.yaml -f my-values.yaml
 ```
 
 ### Azure (AKS)
@@ -97,7 +126,8 @@ cp terraform.tfvars.example terraform.tfvars
 # Edit: resource_group_name, location, cluster_name, target_vnet_id
 terraform init && terraform apply
 az aks get-credentials --resource-group <rg> --name <cluster-name>
-helm install omb charts/omb -f charts/omb/values-azure.yaml -f my-values.yaml
+# Set controlPlane.encryptionKey in my-values.yaml first
+helm install omb charts/omb -n omb --create-namespace -f charts/omb/values-azure.yaml -f my-values.yaml
 ```
 
 ### Connecting to a target cluster

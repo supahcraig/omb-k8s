@@ -192,6 +192,25 @@ correct way to use a separately managed node pool with Standard GKE clusters.
 **Cluster provisioning is out of scope.** If you find yourself writing code that
 creates Redpanda broker nodes or interacts with the Redpanda Cloud API, stop.
 
+**Fernet encryption key is mounted from a k8s Secret, never generated ephemerally
+in production.** The `controlPlane.encryptionKey` Helm value creates an
+`omb-control-plane-encryption` Secret; the deployment mounts it as the
+`ENCRYPTION_KEY` env var. If the value is empty the app generates an ephemeral key
+at startup and logs a warning — this is acceptable for development but means any
+SASL or Prometheus passwords saved in SQLite become unreadable after a pod restart.
+Always set `controlPlane.encryptionKey` before saving credentials. Generate a key
+with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+
+**Prometheus scrape config is persisted via a k8s Secret, not a ConfigMap.**
+`services/prometheus_config.py` writes stored scrape targets to the
+`omb-prometheus-additional-scrape-configs` Secret on every startup. The
+kube-prometheus-stack Prometheus Operator watches this Secret via
+`additionalScrapeConfigsSecret` (configured in `values.yaml`) and reloads
+automatically when it changes. Do not switch this to a ConfigMap — the Prometheus
+Operator only supports Secrets for additional scrape configs. Remote write
+configuration cannot be applied dynamically; set it via
+`kube-prometheus-stack.prometheus.prometheusSpec.remoteWrite` in Helm values.
+
 ## Target clouds
 
 - AWS — primary (~80% of usage)
