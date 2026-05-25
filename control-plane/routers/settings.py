@@ -85,10 +85,9 @@ async def _load_setting(db: AsyncSession, key: str) -> Optional[dict]:
 
 
 async def _store_setting(db: AsyncSession, key: str, data: dict) -> None:
-    """Upsert a setting into the DB using session.merge()."""
+    """Stage a setting upsert. Caller is responsible for commit/rollback."""
     setting = Setting(key=key, value=json.dumps(data))
     await db.merge(setting)
-    await db.commit()
 
 
 def _build_cluster_out(stored: Optional[dict]) -> Optional[ClusterConfig]:
@@ -164,19 +163,25 @@ async def update_settings(
     cluster_stored = await _load_setting(db, CLUSTER_KEY)
     prometheus_stored = await _load_setting(db, PROMETHEUS_KEY)
 
-    if body.cluster is not None:
-        cluster_dict = body.cluster.model_dump()
-        cluster_to_save = _merge_passwords(
-            cluster_dict, cluster_stored, _CLUSTER_PASSWORD_FIELDS
-        )
-        await _store_setting(db, CLUSTER_KEY, cluster_to_save)
+    try:
+        if body.cluster is not None:
+            cluster_dict = body.cluster.model_dump()
+            cluster_to_save = _merge_passwords(
+                cluster_dict, cluster_stored, _CLUSTER_PASSWORD_FIELDS
+            )
+            await _store_setting(db, CLUSTER_KEY, cluster_to_save)
 
-    if body.prometheus is not None:
-        prometheus_dict = _prometheus_to_storage(body.prometheus)
-        prometheus_to_save = _merge_passwords(
-            prometheus_dict, prometheus_stored, _PROMETHEUS_PASSWORD_FIELDS
-        )
-        await _store_setting(db, PROMETHEUS_KEY, prometheus_to_save)
+        if body.prometheus is not None:
+            prometheus_dict = _prometheus_to_storage(body.prometheus)
+            prometheus_to_save = _merge_passwords(
+                prometheus_dict, prometheus_stored, _PROMETHEUS_PASSWORD_FIELDS
+            )
+            await _store_setting(db, PROMETHEUS_KEY, prometheus_to_save)
+
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     # Re-read from DB to build the canonical response.
     cluster_stored = await _load_setting(db, CLUSTER_KEY)
@@ -243,32 +248,44 @@ async def test_connection(db: AsyncSession = Depends(get_db)) -> dict:
         producer_kwargs["security_protocol"] = "SASL_PLAINTEXT"
 
     if sasl_enabled and sasl_mechanism and sasl_username and sasl_password:
-        # Normalise mechanism name for aiokafka (e.g. SCRAM-SHA-256 → SCRAM-SHA-256).
+        # aiokafka accepts "SCRAM-SHA-256", "SCRAM-SHA-512", "PLAIN" directly.
         producer_kwargs["sasl_mechanism"] = sasl_mechanism
         producer_kwargs["sasl_plain_username"] = sasl_username
         producer_kwargs["sasl_plain_password"] = sasl_password
 
     producer = AIOKafkaProducer(**producer_kwargs)
+    started = False
+    stopped = False
     try:
         await producer.start()
+        started = True
         await producer.stop()
+        stopped = True
         return {
             "success": True,
             "message": f"Successfully connected to broker at {bootstrap}.",
         }
-    except KafkaConnectionError as exc:
+    except KafkaConnectionError:
+        logger.warning("test-connection KafkaConnectionError for %s", bootstrap)
         return {
             "success": False,
-            "message": f"Connection refused by broker at {bootstrap}: {exc}",
+            "message": (
+                f"Could not reach broker at {bootstrap}. "
+                "Check that VPC peering is active and the bootstrap address is correct."
+            ),
         }
-    except Exception as exc:
+    except Exception:
+        logger.exception("test-connection unexpected error for %s", bootstrap)
         return {
             "success": False,
-            "message": f"Failed to connect to {bootstrap}: {exc}",
+            "message": (
+                f"Failed to connect to {bootstrap}. "
+                "Check broker address, TLS settings, and SASL credentials."
+            ),
         }
     finally:
-        # Ensure producer is stopped even if start() raised after partial init.
-        try:
-            await producer.stop()
-        except Exception:
-            pass
+        if started and not stopped:
+            try:
+                await producer.stop()
+            except Exception:
+                pass

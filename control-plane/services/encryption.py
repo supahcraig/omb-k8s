@@ -21,7 +21,7 @@ def get_fernet() -> Fernet:
     """
     global _fernet_instance, _fernet_key_used
 
-    key = settings.encryption_key or None
+    key = settings.encryption_key
 
     if not key:
         if _fernet_instance is None:
@@ -38,7 +38,7 @@ def get_fernet() -> Fernet:
     # Key is configured — rebuild if it changed (e.g. test overrides).
     if key != _fernet_key_used:
         _fernet_key_used = key
-        _fernet_instance = Fernet(key.encode() if isinstance(key, str) else key)
+        _fernet_instance = Fernet(key.encode())
 
     return _fernet_instance
 
