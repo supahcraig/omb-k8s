@@ -40,7 +40,7 @@ GKE provisions in ~3-5 minutes (significantly faster than EKS).
 
 ```bash
 gcloud container clusters get-credentials <cluster_name> --region <region> --project <project_id>
-kubectl get nodes  # should show 3 nodes in Ready state
+kubectl get nodes  # should show 4 nodes in Ready state (2 control-plane, 2 benchmark-workers)
 ```
 
 **4. If using BYOC: complete the peering handshake**
@@ -86,5 +86,5 @@ terraform destroy
 
 ## Cost note
 
-3× n2-standard-16 nodes in GCP costs roughly $2-4/hour while running. Always
+2× n2-standard-4 (control-plane) + 2× n2-standard-16 (benchmark-workers) nodes in GCP costs roughly $2-4/hour while running. Always
 run `terraform destroy` at engagement end. `helm uninstall` does not stop the nodes.

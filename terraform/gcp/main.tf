@@ -69,6 +69,8 @@ resource "google_container_node_pool" "benchmark_workers" {
   location = var.zone
   cluster  = google_container_cluster.main.name
 
+  initial_node_count = 2
+
   autoscaling {
     min_node_count = 0
     max_node_count = 20
@@ -104,6 +106,10 @@ resource "google_container_node_pool" "benchmark_workers" {
   }
 
   depends_on = [google_container_node_pool.control_plane]
+
+  lifecycle {
+    ignore_changes = [initial_node_count]
+  }
 }
 
 resource "google_compute_network_peering" "to_target" {
