@@ -62,14 +62,12 @@ resource "google_container_node_pool" "control_plane" {
 
 # ── Benchmark-worker node pool ────────────────────────────────────────────────
 # n2-standard-16 (16 vCPU / 64 GB), autoscales 0–20.
-# Tainted dedicated=benchmark:NO_SCHEDULE so only omb-worker pods land here.
+# Tainted dedicated=benchmark:NoSchedule — toleration must use NoSchedule (camelCase).
 
 resource "google_container_node_pool" "benchmark_workers" {
   name     = "${var.cluster_name}-benchmark-workers"
   location = var.zone
   cluster  = google_container_cluster.main.name
-
-  initial_node_count = 2
 
   autoscaling {
     min_node_count = 0
@@ -104,6 +102,8 @@ resource "google_container_node_pool" "benchmark_workers" {
     auto_repair  = true
     auto_upgrade = true
   }
+
+  depends_on = [google_container_node_pool.control_plane]
 }
 
 resource "google_compute_network_peering" "to_target" {
