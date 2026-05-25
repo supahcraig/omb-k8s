@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getSettings, updateSettings, testConnection } from '../api.js'
+import { useSettings } from '../context/SettingsContext.jsx'
 
 // A password field that masks saved values and requires an explicit "Change" click
 function PasswordField({ label, hint, hasSaved, value, onChange }) {
@@ -243,39 +244,26 @@ function ClusterTab({ initial, onChange }) {
 // ── Prometheus Tab ────────────────────────────────────────────────────────────
 
 function PrometheusTab({ initial, clusterMode, onChange }) {
-  // Prometheus mode follows cluster mode by default
   const [mode, setMode] = useState(initial?.mode || clusterMode || 'byoc')
-  const [remoteWriteUrl, setRemoteWriteUrl] = useState(initial?.remote_write_url || '')
-  const [rwUsername, setRwUsername] = useState(initial?.remote_write_username || '')
-  const [rwPassword, setRwPassword] = useState('')
-  const [rwPasswordChanged, setRwPasswordChanged] = useState(false)
+  const [scrapeYaml, setScrapeYaml] = useState(initial?.scrape_yaml || '')
   const [scrapeTargets, setScrapeTargets] = useState(
     Array.isArray(initial?.scrape_targets)
       ? initial.scrape_targets.join(',')
       : (initial?.scrape_targets || '')
   )
-
-  const hasSavedRwPassword = !!initial && !rwPasswordChanged
-
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState(null)
 
   function buildConfig() {
     if (mode === 'byoc') {
-      return {
-        mode: 'byoc',
-        remote_write_url: remoteWriteUrl,
-        remote_write_username: rwUsername,
-        remote_write_password: rwPasswordChanged ? rwPassword : null,
-        scrape_targets: null,
-      }
+      return { mode: 'byoc', scrape_yaml: scrapeYaml, scrape_targets: null }
     }
     return {
       mode: 'self-hosted',
-      remote_write_url: null,
-      remote_write_username: null,
-      remote_write_password: null,
-      scrape_targets: scrapeTargets ? scrapeTargets.split(',').map(s => s.trim()).filter(Boolean) : null,
+      scrape_yaml: null,
+      scrape_targets: scrapeTargets
+        ? scrapeTargets.split(',').map(s => s.trim()).filter(Boolean)
+        : null,
     }
   }
 
@@ -285,7 +273,6 @@ function PrometheusTab({ initial, clusterMode, onChange }) {
     try {
       await onChange(buildConfig())
       setSaveMsg({ type: 'success', text: 'Prometheus configuration saved and applied.' })
-      setRwPasswordChanged(false)
     } catch (e) {
       setSaveMsg({ type: 'error', text: e.message })
     } finally {
@@ -297,45 +284,32 @@ function PrometheusTab({ initial, clusterMode, onChange }) {
     <div>
       <div className="mode-tabs">
         <button className={`mode-tab${mode === 'byoc' ? ' active' : ''}`} onClick={() => setMode('byoc')}>
-          BYOC (Remote Write)
+          BYOC (Redpanda Cloud)
         </button>
         <button className={`mode-tab${mode === 'self-hosted' ? ' active' : ''}`} onClick={() => setMode('self-hosted')}>
-          Self-Hosted (Scrape)
+          Self-Hosted
         </button>
       </div>
 
       {mode === 'byoc' ? (
-        <>
-          <div className="form-group">
-            <label className="form-label">Remote Write URL</label>
-            <input
-              className="form-input"
-              value={remoteWriteUrl}
-              onChange={e => setRemoteWriteUrl(e.target.value)}
-              placeholder="https://prometheus.region.byoc.prd.cloud.redpanda.com/api/v1/write"
-            />
-            <span className="form-hint">Find this in the Redpanda Cloud UI under Metrics → Prometheus Remote Write.</span>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Username</label>
-            <input className="form-input" value={rwUsername} onChange={e => setRwUsername(e.target.value)} />
-          </div>
-          <PasswordField
-            label="Password"
-            hasSaved={hasSavedRwPassword}
-            value={rwPassword}
-            onChange={v => { setRwPassword(v); setRwPasswordChanged(true) }}
+        <div className="form-group">
+          <label className="form-label">Scrape Job YAML</label>
+          <textarea
+            className="form-textarea tall"
+            value={scrapeYaml}
+            onChange={e => setScrapeYaml(e.target.value)}
+            placeholder={'- job_name: redpandaCloud-...\n  static_configs:\n    - targets: [...]\n  basic_auth:\n    username: prometheus\n    password: your-password\n  scheme: https'}
+            style={{ fontFamily: 'monospace', fontSize: 12 }}
           />
-        </>
+          <span className="form-hint">
+            Paste the scrape job YAML from Redpanda Cloud UI → Metrics → Prometheus.
+          </span>
+        </div>
       ) : (
         <div className="form-group">
           <label className="form-label">Scrape Targets</label>
-          <input
-            className="form-input"
-            value={scrapeTargets}
-            onChange={e => setScrapeTargets(e.target.value)}
-            placeholder="broker-1:9644,broker-2:9644,broker-3:9644"
-          />
+          <input className="form-input" value={scrapeTargets} onChange={e => setScrapeTargets(e.target.value)}
+            placeholder="broker-1:9644,broker-2:9644,broker-3:9644" />
           <span className="form-hint">
             Typically the same hosts as your seed brokers on the Prometheus metrics port (default 9644 for Redpanda).
           </span>
@@ -360,6 +334,7 @@ function PrometheusTab({ initial, clusterMode, onChange }) {
 // ── Main Settings Page ────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
+  const { reload: reloadSettings } = useSettings()
   const [activeTab, setActiveTab] = useState('cluster')
   const [settings, setSettings] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -377,6 +352,7 @@ export default function SettingsPage() {
       prometheus: settings?.prometheus ?? null,
     })
     setSettings(updated)
+    reloadSettings()
   }
 
   async function savePrometheus(prometheusConfig) {
@@ -385,6 +361,7 @@ export default function SettingsPage() {
       prometheus: prometheusConfig,
     })
     setSettings(updated)
+    reloadSettings()
   }
 
   if (loading) return <div className="text-muted mt-20">Loading settings…</div>
