@@ -4,11 +4,6 @@ storage:
 
 clusterAutoscaler:
   enabled: true
-  # clusterName, region, and roleArn must be supplied at install time:
-  # helm install omb charts/omb -f values-aws.yaml \
-  #   --set clusterAutoscaler.clusterName=<name> \
-  #   --set clusterAutoscaler.region=<region> \
-  #   --set clusterAutoscaler.roleArn=<arn>
-  clusterName: ""
-  region: ""
-  roleArn: ""
+  # clusterName, region, and roleArn are engagement-specific — set them in
+  # my-values.yaml, not here. Putting empty strings here causes them to
+  # overwrite values from my-values.yaml when using -f values-aws.yaml.
