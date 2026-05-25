@@ -1,7 +1,14 @@
-import { NavLink } from 'react-router-dom'
+import { useState } from 'react'
+import { NavLink, Link } from 'react-router-dom'
 import WorkerScalingBar from './WorkerScalingBar.jsx'
+import { useSettings } from '../context/SettingsContext.jsx'
 
 export default function Layout({ children }) {
+  const { hasClusterConfig, settings } = useSettings()
+  const [dismissed, setDismissed] = useState(false)
+
+  const showBanner = settings !== undefined && !hasClusterConfig && !dismissed
+
   return (
     <div className="app-shell">
       <nav className="app-nav">
@@ -24,6 +31,20 @@ export default function Layout({ children }) {
         </div>
         <WorkerScalingBar />
       </nav>
+
+      {showBanner && (
+        <div className="setup-banner">
+          <span>⚠</span>
+          <span>
+            Cluster not configured. Add broker address and credentials in{' '}
+            <Link to="/settings">Settings</Link> before running benchmarks.
+          </span>
+          <button className="setup-banner-dismiss" onClick={() => setDismissed(true)} title="Dismiss">
+            ×
+          </button>
+        </div>
+      )}
+
       <main className="app-content">
         {children}
       </main>

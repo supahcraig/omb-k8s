@@ -826,3 +826,59 @@ body {
   border: 1px solid #fca5a5;
   color: #991b1b;
 }
+
+/* ── Bootstrap banner ───────────────────────────────── */
+
+.setup-banner {
+  background: #fffbeb;
+  border-bottom: 1px solid #fcd34d;
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.setup-banner a {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.setup-banner a:hover {
+  text-decoration: underline;
+}
+
+.setup-banner-dismiss {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #92400e;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+/* ── Form layout helpers ────────────────────────────── */
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 20px 0;
+}
