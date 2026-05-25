@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { listWorkloads, createWorkload, updateWorkload, deleteWorkload } from '../api.js'
+import WorkloadForm from '../components/WorkloadForm.jsx'
 
 function parseWorkloadParams(content) {
   try {
@@ -33,63 +34,14 @@ function formatRate(rate) {
   return `${rate} msg/s`
 }
 
-function WorkloadEditor({ workload, onSave, onCancel }) {
-  const [name, setName] = useState(workload?.name || '')
-  const [description, setDescription] = useState(workload?.description || '')
-  const [content, setContent] = useState(workload?.content || '')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
-
-  async function handleSave() {
-    if (!name.trim()) { setError('Name is required.'); return }
-    if (!content.trim()) { setError('Content is required.'); return }
-    setSaving(true)
-    setError(null)
-    try {
-      await onSave({ name: name.trim(), description: description.trim() || null, content })
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="inline-editor">
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">Name</label>
-          <input className="form-input" value={name} onChange={e => setName(e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Description (optional)</label>
-          <input className="form-input" value={description} onChange={e => setDescription(e.target.value)} />
-        </div>
-      </div>
-      <div className="form-group">
-        <label className="form-label">Workload YAML</label>
-        <textarea className="form-textarea tall" value={content} onChange={e => setContent(e.target.value)} />
-      </div>
-      {error && <div className="alert alert-error">{error}</div>}
-      <div className="flex gap-8">
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? <><span className="spinner" /> Saving…</> : 'Save'}
-        </button>
-        <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-      </div>
-    </div>
-  )
-}
-
 function WorkloadRow({ workload, editable, onUse, onClone, onEdit, onDelete }) {
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [editName, setEditName] = useState(workload.name)
+  const [editDesc, setEditDesc] = useState(workload.description || '')
+  const [editYaml, setEditYaml] = useState(workload.content)
+  const [editError, setEditError] = useState(null)
   const params = parseWorkloadParams(workload.content)
-
-  async function handleEdit(data) {
-    await onEdit(workload.id, data)
-    setEditing(false)
-  }
 
   return (
     <>
@@ -116,43 +68,52 @@ function WorkloadRow({ workload, editable, onUse, onClone, onEdit, onDelete }) {
           </div>
         </div>
         <div className="workload-actions">
-          <button className="btn btn-primary btn-sm" onClick={() => onUse(workload)}>
-            Use
-          </button>
+          <button className="btn btn-primary btn-sm" onClick={() => onUse(workload)}>Use</button>
           {editable ? (
             <>
               <button className="btn btn-secondary btn-sm" onClick={() => setEditing(e => !e)}>
-                Edit
+                {editing ? 'Close' : 'Edit'}
               </button>
               {confirmDelete ? (
                 <>
                   <span className="text-small text-muted">Confirm?</span>
-                  <button className="btn btn-danger btn-sm" onClick={() => onDelete(workload.id)}>
-                    Delete
-                  </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => setConfirmDelete(false)}>
-                    Cancel
-                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => onDelete(workload.id)}>Delete</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setConfirmDelete(false)}>Cancel</button>
                 </>
               ) : (
-                <button className="btn btn-danger btn-sm" onClick={() => setConfirmDelete(true)}>
-                  Delete
-                </button>
+                <button className="btn btn-danger btn-sm" onClick={() => setConfirmDelete(true)}>Delete</button>
               )}
             </>
           ) : (
-            <button className="btn btn-secondary btn-sm" onClick={() => onClone(workload)}>
-              Clone to Custom
-            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => onClone(workload)}>Clone to Custom</button>
           )}
         </div>
       </div>
+
       {editing && (
-        <WorkloadEditor
-          workload={workload}
-          onSave={handleEdit}
-          onCancel={() => setEditing(false)}
-        />
+        <div className="inline-editor">
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Name</label>
+              <input className="form-input" value={editName} onChange={e => setEditName(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Description (optional)</label>
+              <input className="form-input" value={editDesc} onChange={e => setEditDesc(e.target.value)} />
+            </div>
+          </div>
+          <WorkloadForm initialYaml={workload.content} onChange={setEditYaml} />
+          {editError && <div className="alert alert-error mt-8">{editError}</div>}
+          <div className="flex gap-8 mt-12">
+            <button className="btn btn-primary" onClick={async () => {
+              if (!editName.trim()) { setEditError('Name is required.'); return }
+              setEditError(null)
+              await onEdit(workload.id, { name: editName.trim(), description: editDesc.trim() || null, content: editYaml })
+              setEditing(false)
+            }}>Save</button>
+            <button className="btn btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
+          </div>
+        </div>
       )}
     </>
   )
@@ -164,6 +125,10 @@ export default function WorkloadLibraryPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [creatingNew, setCreatingNew] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newYaml, setNewYaml] = useState('')
+  const [createError, setCreateError] = useState(null)
+  const [creating, setCreating] = useState(false)
 
   async function load() {
     try {
@@ -185,11 +150,7 @@ export default function WorkloadLibraryPage() {
 
   async function handleClone(workload) {
     try {
-      await createWorkload({
-        name: `${workload.name} (copy)`,
-        content: workload.content,
-        cloned_from_id: workload.id,
-      })
+      await createWorkload({ name: `${workload.name} (copy)`, content: workload.content, cloned_from_id: workload.id })
       await load()
     } catch (e) {
       alert(`Clone failed: ${e.message}`)
@@ -208,12 +169,6 @@ export default function WorkloadLibraryPage() {
     } catch (e) {
       alert(`Delete failed: ${e.message}`)
     }
-  }
-
-  async function handleCreate(data) {
-    await createWorkload(data)
-    await load()
-    setCreatingNew(false)
   }
 
   if (loading) return <div className="text-muted mt-20">Loading workloads…</div>
@@ -235,13 +190,7 @@ export default function WorkloadLibraryPage() {
           <div className="empty-state"><p>No bundled workloads found.</p></div>
         ) : (
           workloads.bundled.map(w => (
-            <WorkloadRow
-              key={w.id}
-              workload={w}
-              editable={false}
-              onUse={handleUse}
-              onClone={handleClone}
-            />
+            <WorkloadRow key={w.id} workload={w} editable={false} onUse={handleUse} onClone={handleClone} />
           ))
         )}
       </div>
@@ -249,13 +198,38 @@ export default function WorkloadLibraryPage() {
       {/* ── Custom section ──────────────────────────────────────── */}
       <div className="card">
         <div className="section-label">Custom Workloads</div>
+
         {creatingNew && (
-          <WorkloadEditor
-            workload={null}
-            onSave={handleCreate}
-            onCancel={() => setCreatingNew(false)}
-          />
+          <div className="inline-editor">
+            <div className="form-group">
+              <label className="form-label">Name</label>
+              <input className="form-input" value={newName} onChange={e => setNewName(e.target.value)} />
+            </div>
+            <WorkloadForm onChange={setNewYaml} />
+            {createError && <div className="alert alert-error mt-8">{createError}</div>}
+            <div className="flex gap-8 mt-12">
+              <button className="btn btn-primary" disabled={creating} onClick={async () => {
+                if (!newName.trim()) { setCreateError('Name is required.'); return }
+                setCreating(true); setCreateError(null)
+                try {
+                  await createWorkload({ name: newName.trim(), content: newYaml })
+                  await load()
+                  setCreatingNew(false)
+                  setNewName('')
+                  setNewYaml('')
+                } catch (e) {
+                  setCreateError(e.message)
+                } finally {
+                  setCreating(false)
+                }
+              }}>
+                {creating ? <><span className="spinner" /> Saving…</> : 'Save'}
+              </button>
+              <button className="btn btn-secondary" onClick={() => setCreatingNew(false)}>Cancel</button>
+            </div>
+          </div>
         )}
+
         {workloads.custom.length === 0 && !creatingNew ? (
           <div className="empty-state">
             <p>No custom workloads yet. Clone a bundled workload or create a new one.</p>
@@ -263,12 +237,8 @@ export default function WorkloadLibraryPage() {
         ) : (
           workloads.custom.map(w => (
             <WorkloadRow
-              key={w.id}
-              workload={w}
-              editable={true}
-              onUse={handleUse}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
+              key={w.id} workload={w} editable={true}
+              onUse={handleUse} onEdit={handleEdit} onDelete={handleDelete}
             />
           ))
         )}
