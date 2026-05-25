@@ -12,6 +12,7 @@ controlPlane:
 storage:
   storageClassName: ""
   size: 10Gi
+  createStorageClass: false
 
 prometheus:
   enabled: true

@@ -38,6 +38,11 @@ output "vpc_peering_connection_id" {
   value       = length(aws_vpc_peering_connection.target) > 0 ? aws_vpc_peering_connection.target[0].id : ""
 }
 
+output "region" {
+  description = "AWS region"
+  value       = var.region
+}
+
 output "kubeconfig_command" {
   description = "Run this command to configure kubectl after apply"
   value       = "aws eks update-kubeconfig --region ${var.region} --name ${var.cluster_name}"

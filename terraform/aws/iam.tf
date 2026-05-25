@@ -132,3 +132,36 @@ resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
   role       = aws_iam_role.cluster_autoscaler.name
   policy_arn = aws_iam_policy.cluster_autoscaler.arn
 }
+
+# ── EBS CSI driver IRSA role ──────────────────────────────────────────────────
+
+data "aws_iam_policy_document" "ebs_csi_assume" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.eks.arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_issuer}:sub"
+      values   = ["system:serviceaccount:kube-system:ebs-csi-controller-sa"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_issuer}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ebs_csi" {
+  name               = "${var.cluster_name}-ebs-csi"
+  assume_role_policy = data.aws_iam_policy_document.ebs_csi_assume.json
+  tags               = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ebs_csi" {
+  role       = aws_iam_role.ebs_csi.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+}

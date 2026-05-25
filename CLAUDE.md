@@ -168,6 +168,22 @@ The workaround is a launch template that specifies both the cluster-managed secu
 group (`vpc_config[0].cluster_security_group_id`) and the OMB workers SG (port 8080).
 Do not remove the launch template or the node group will lose the port 8080 rules.
 
+**EKS requires the EBS CSI driver addon for PVC provisioning.** The default EKS
+setup only has the in-tree `kubernetes.io/aws-ebs` provisioner, which creates a
+`gp2` StorageClass. The Helm chart uses `gp3` (cheaper, faster), which requires
+the `aws-ebs-csi-driver` EKS addon. The addon is provisioned by the EKS Terraform
+module via `aws_eks_addon` with an IRSA role (`ebs-csi-controller-sa` in
+`kube-system`). The `gp3` StorageClass itself is created by the Helm chart
+(`templates/storageclass-gp3.yaml`), gated on `storage.createStorageClass: true`
+in `values-aws.yaml`. Do not remove either — without the addon the StorageClass
+exists but PVC provisioning fails; without the StorageClass the PVC stays Pending.
+
+**Worker pods require `dnsPolicy: ClusterFirstWithHostNet`.** When `hostNetwork: true`
+is set, the default `dnsPolicy` of `ClusterFirst` breaks — the pod uses the host's
+DNS instead of the cluster DNS, so `omb-worker-0.omb-worker.<ns>.svc.cluster.local`
+does not resolve. Setting `dnsPolicy: ClusterFirstWithHostNet` restores cluster DNS
+while keeping host networking. Do not remove this field.
+
 **GKE uses Standard mode, not Autopilot.** `hostNetwork: true` on worker pods
 requires Standard mode — Autopilot does not permit hostNetwork. Do not change
 `remove_default_node_pool = true` / `initial_node_count = 1` pattern; this is the

@@ -1,5 +1,6 @@
 storage:
   storageClassName: gp3
+  createStorageClass: true
 
 clusterAutoscaler:
   enabled: true
