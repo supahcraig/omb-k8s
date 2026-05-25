@@ -85,8 +85,21 @@ async def create_run(
     await db.commit()
     await db.refresh(run)
 
-    # Start the k8s Job
-    await runner.start(run.id, body.driver_content, body.workload_content)
+    # Start the k8s Job — if this fails, mark the run failed immediately
+    try:
+        await runner.start(run.id, body.driver_content, body.workload_content)
+    except Exception as exc:
+        logger.error("Failed to start k8s Job for run %d: %s", run.id, exc)
+        async with AsyncSessionLocal() as fail_db:
+            fail_run = await fail_db.get(Run, run.id)
+            if fail_run:
+                fail_run.status = RunStatus.failed.value
+                fail_run.completed_at = datetime.utcnow()
+                await fail_db.commit()
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to start benchmark job: {exc}",
+        )
 
     # Monitor until done in the background
     background_tasks.add_task(_finish_run, run.id)
@@ -134,6 +147,15 @@ async def _finish_run(run_id: int) -> None:
         if runner.is_done(run_id):
             break
 
+    # If the job didn't finish naturally (4-hour timeout), stop it to avoid
+    # leaving a hung k8s Job running indefinitely.
+    if not runner.is_done(run_id):
+        logger.warning("_finish_run: run %d timed out — stopping k8s Job", run_id)
+        try:
+            await runner.stop(run_id)
+        except Exception as exc:
+            logger.error("_finish_run: could not stop run %d: %s", run_id, exc)
+
     async with AsyncSessionLocal() as db:
         run = await db.get(Run, run_id)
         if run is None:
@@ -158,7 +180,8 @@ async def _finish_run(run_id: int) -> None:
             await db.commit()
         except Exception:
             await db.rollback()
-            raise
+            logger.exception("_finish_run: DB commit failed for run %d", run_id)
+            return
 
     logger.info(
         "_finish_run: run %d finished — status=%s", run_id, run.status

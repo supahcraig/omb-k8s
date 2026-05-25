@@ -6,7 +6,7 @@ import itertools
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 import yaml
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -60,11 +60,14 @@ async def create_sweep(
     param_values = [body.parameter_axes[k] for k in param_names]
     combinations = list(itertools.product(*param_values))
 
-    # Pre-create all Run records so they're visible immediately
+    # Pre-compute all per-run workload YAMLs once — used both for DB storage
+    # and for passing to the background task (avoids double _apply_params calls).
+    workload_contents: list[str] = []
     run_ids: list[int] = []
     for combo in combinations:
         params = dict(zip(param_names, combo))
         workload_content = _apply_params(body.workload_content, params)
+        workload_contents.append(workload_content)
         run = Run(
             name=f"{body.name} — {_combo_label(params)}",
             status="pending",
@@ -79,15 +82,13 @@ async def create_sweep(
 
     await db.commit()
 
-    # Execute runs sequentially in background
+    # Execute runs sequentially in background, reusing pre-computed contents
     background_tasks.add_task(
         _execute_sweep,
         sweep.id,
         run_ids,
         body.driver_base_content,
-        body.workload_content,
-        param_names,
-        combinations,
+        workload_contents,
         body.cooldown_seconds,
     )
 
@@ -183,9 +184,7 @@ async def _execute_sweep(
     sweep_id: int,
     run_ids: list[int],
     driver_base_content: str,
-    workload_base_content: str,
-    param_names: list[str],
-    combinations: list[tuple],
+    workload_contents: list[str],
     cooldown_seconds: int,
 ) -> None:
     """
@@ -193,10 +192,10 @@ async def _execute_sweep(
 
     Each run is started, waited to completion (via _finish_run), and then
     the cooldown delay is observed before the next run starts.
+    workload_contents contains pre-computed per-run YAML (same list used when
+    creating the Run records, so DB storage and actual execution are identical).
     """
-    for idx, (run_id, combo) in enumerate(zip(run_ids, combinations)):
-        params = dict(zip(param_names, combo))
-        workload_content = _apply_params(workload_base_content, params)
+    for idx, (run_id, workload_content) in enumerate(zip(run_ids, workload_contents)):
 
         # Mark run as running
         async with AsyncSessionLocal() as db:
