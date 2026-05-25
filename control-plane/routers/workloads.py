@@ -1,6 +1,6 @@
 """Workload library CRUD router — /api/workloads."""
 import logging
-from typing import Dict, List
+from datetime import datetime
 from uuid import uuid4
 
 import yaml
@@ -36,9 +36,11 @@ def _auto_description(content: str) -> str | None:
     if not isinstance(data, dict):
         return None
 
-    parts: List[str] = []
+    parts: list[str] = []
     if data.get("messageSize"):
-        parts.append(f"{data['messageSize'] // 1024}KB messages")
+        size = data["messageSize"]
+        label = f"{size // 1024}KB" if size >= 1024 else f"{size}B"
+        parts.append(f"{label} messages")
     if data.get("partitionsPerTopic"):
         parts.append(f"{data['partitionsPerTopic']} partitions")
     if data.get("producerRate"):
@@ -53,7 +55,7 @@ def _auto_description(content: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-@router.get("", response_model=Dict[str, List[WorkloadOut]])
+@router.get("")
 async def list_workloads(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -145,10 +147,8 @@ async def update_workload(
 
     workload.name = body.name
     workload.content = body.content
-    # Allow explicit None to clear the description; fall back to auto-generate
-    # only when the field is absent would require a PATCH — here PUT always
-    # overwrites so we respect whatever the caller sends (including None).
     workload.description = body.description
+    workload.updated_at = datetime.utcnow()
 
     try:
         await db.commit()
