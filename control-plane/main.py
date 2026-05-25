@@ -42,6 +42,7 @@ _routers_to_mount = [
     ("routers.workloads", "/api/workloads", ["workloads"]),
     ("routers.settings", "/api/settings", ["settings"]),
     ("routers.workers", "/api/workers", ["workers"]),
+    ("routers.prometheus", "/api/prometheus", ["prometheus"]),
 ]
 
 for module_path, prefix, tags in _routers_to_mount:
@@ -54,6 +55,15 @@ for module_path, prefix, tags in _routers_to_mount:
             "Router module %s not found — skipping (will be unavailable).",
             module_path,
         )
+
+# WebSocket router — paths are declared inline, so no prefix here
+try:
+    from routers.ws import router as ws_router
+
+    app.include_router(ws_router, tags=["websocket"])
+    logger.info("Mounted WebSocket router at /ws/runs/{run_id}")
+except ModuleNotFoundError:
+    logger.warning("WebSocket router (routers.ws) not found — skipping.")
 
 # ---------------------------------------------------------------------------
 # Health check
