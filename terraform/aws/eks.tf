@@ -174,4 +174,8 @@ resource "aws_eks_node_group" "benchmark_workers" {
     aws_iam_role_policy_attachment.node_group_cni,
     aws_iam_role_policy_attachment.node_group_ecr,
   ]
+
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
 }

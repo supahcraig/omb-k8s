@@ -39,7 +39,7 @@ Expect ~15-20 minutes for EKS to provision.
 
 ```bash
 aws eks update-kubeconfig --region <region> --name <cluster_name>
-kubectl get nodes  # should show 3 nodes in Ready state
+kubectl get nodes  # should show 4 nodes in Ready state (2 control-plane, 2 benchmark-workers)
 ```
 
 **4. Note the Cluster Autoscaler role ARN from outputs:**
@@ -104,7 +104,7 @@ clean up cloud resources cleanly and will need to delete them manually.
 
 ## Cost note
 
-3× m5.4xlarge nodes on AWS costs roughly $3–5/hour while running. Always run
+2× m5.xlarge control-plane nodes + 2× m5.4xlarge benchmark-worker nodes on AWS costs roughly $3–5/hour while running. Always run
 `terraform destroy` at engagement end. The m5.4xlarge size is intentional —
 at this instance class AWS allocates dedicated ENA network interfaces, which
 eliminates noisy-neighbor network contention and ensures benchmark results
