@@ -2,95 +2,51 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listSweeps, createSweep } from '../api.js'
 import { useWorker } from '../context/WorkerContext.jsx'
+import { useSettings } from '../context/SettingsContext.jsx'
+import DriverForm from '../components/DriverForm.jsx'
+import WorkloadForm from '../components/WorkloadForm.jsx'
 
-const DEFAULT_DRIVER = `name: Kafka
-driverClass: io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver
+const WORKLOAD_AXIS_FIELDS = [
+  'partitionsPerTopic', 'messageSize', 'producerRate', 'producersPerTopic',
+  'topics', 'subscriptionCount', 'consumerPerSubscription',
+  'consumerBacklogSizeGB', 'testDurationMinutes', 'warmupDurationMinutes',
+]
 
-replicationFactor: 3
-
-topicConfig:
-  min.insync.replicas: 2
-
-commonConfig: |
-  bootstrap.servers=REPLACE_ME:9092
-  security.protocol=SASL_SSL
-  sasl.mechanism=SCRAM-SHA-256
-  sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="REPLACE_ME" password="REPLACE_ME";
-
-producerConfig: |
-  acks=all
-  linger.ms=1
-  batch.size=131072
-
-consumerConfig: |
-  auto.offset.reset=earliest
-  enable.auto.commit=false
-`
+const DRIVER_AXIS_FIELDS = [
+  'replicationFactor', 'producerConfig.acks', 'producerConfig.linger.ms',
+  'producerConfig.batch.size', 'consumerConfig.auto.offset.reset',
+]
 
 function SweepCreateForm({ onCreated }) {
   const { workersReady, status } = useWorker()
+  const { hasClusterConfig } = useSettings()
   const [name, setName] = useState('')
-  const [driverYaml, setDriverYaml] = useState(DEFAULT_DRIVER)
+  const [driverYaml, setDriverYaml] = useState('')
   const [workloadYaml, setWorkloadYaml] = useState('')
   const [cooldown, setCooldown] = useState(60)
-  const [axes, setAxes] = useState([{ param: 'partitionsPerTopic', values: '50,100,200' }])
+  const [axes, setAxes] = useState([{ field: 'partitionsPerTopic', type: 'workload', values: '50,100,200', custom: false }])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
   const notReady = !workersReady
-  const blockMessage = status
-    ? `Waiting for workers: ${status.ready}/${status.desired} ready. Please wait before starting a sweep.`
-    : 'Worker status unknown. Please wait…'
+  const noCluster = !hasClusterConfig
 
   function addAxis() {
-    setAxes(prev => [...prev, { param: '', values: '' }])
+    setAxes(prev => [...prev, { field: 'partitionsPerTopic', type: 'workload', values: '', custom: false }])
   }
 
   function removeAxis(i) {
     setAxes(prev => prev.filter((_, idx) => idx !== i))
   }
 
-  function updateAxis(i, field, val) {
-    setAxes(prev => prev.map((a, idx) => idx === i ? { ...a, [field]: val } : a))
+  function updateAxis(i, updates) {
+    setAxes(prev => prev.map((a, idx) => idx === i ? { ...a, ...updates } : a))
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (notReady) return
-    if (!name.trim()) { setError('Sweep name is required.'); return }
-    if (!driverYaml.trim() || !workloadYaml.trim()) {
-      setError('Driver YAML and Workload YAML are required.')
-      return
-    }
-
-    // Build parameter_axes
-    const parameter_axes = {}
-    for (const { param, values } of axes) {
-      if (!param.trim()) { setError('All parameter axis names must be filled in.'); return }
-      const parsed = values.split(',').map(v => v.trim()).filter(Boolean).map(v => {
-        const n = Number(v)
-        return isNaN(n) ? v : n
-      })
-      if (!parsed.length) { setError(`Values for "${param}" cannot be empty.`); return }
-      parameter_axes[param.trim()] = parsed
-    }
-
-    setSubmitting(true)
-    setError(null)
-    try {
-      const sweep = await createSweep({
-        name: name.trim(),
-        driver_base_content: driverYaml,
-        workload_content: workloadYaml,
-        cooldown_seconds: Number(cooldown),
-        parameter_axes,
-      })
-      onCreated(sweep)
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setSubmitting(false)
-    }
+  function parseAxisValues(str) {
+    return str.split(',').map(v => v.trim()).filter(Boolean).map(v => {
+      const n = Number(v); return isNaN(n) ? v : n
+    })
   }
 
   const totalRuns = axes.reduce((acc, { values }) => {
@@ -98,14 +54,55 @@ function SweepCreateForm({ onCreated }) {
     return acc * (n || 1)
   }, 1)
 
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (notReady || noCluster) return
+    if (!name.trim()) { setError('Name is required.'); return }
+
+    const workload_parameter_axes = {}
+    const driver_parameter_axes = {}
+    for (const { field, type, values } of axes) {
+      const key = field.trim()
+      if (!key) { setError('All axis field names must be filled in.'); return }
+      const parsed = parseAxisValues(values)
+      if (!parsed.length) { setError(`Values for "${key}" cannot be empty.`); return }
+      if (type === 'driver') {
+        driver_parameter_axes[key] = parsed
+      } else {
+        workload_parameter_axes[key] = parsed
+      }
+    }
+
+    setSubmitting(true)
+    setError(null)
+    try {
+      await createSweep({
+        name: name.trim(),
+        driver_base_content: driverYaml,
+        workload_content: workloadYaml,
+        cooldown_seconds: Number(cooldown),
+        workload_parameter_axes,
+        driver_parameter_axes,
+      })
+      onCreated()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <div className="card mb-20">
-      <div className="card-header">
-        <h2>New Parameter Sweep</h2>
-      </div>
+      <div className="card-header"><h2>New Parameter Sweep</h2></div>
       <div className="card-body">
         {notReady && status && (
-          <div className="alert alert-warning mb-16">{blockMessage}</div>
+          <div className="alert alert-warning mb-16">
+            {`Waiting for workers: ${status.ready}/${status.desired} ready. Please wait before starting a sweep.`}
+          </div>
+        )}
+        {noCluster && (
+          <div className="alert alert-warning mb-16">Configure cluster settings before launching a sweep.</div>
         )}
         <form onSubmit={handleSubmit}>
           <div className="form-row">
@@ -124,46 +121,60 @@ function SweepCreateForm({ onCreated }) {
           <div className="form-group">
             <label className="form-label">Parameter Axes ({totalRuns} run{totalRuns !== 1 ? 's' : ''} total)</label>
             {axes.map((axis, i) => (
-              <div key={i} className="param-axis-row">
-                <input
-                  className="form-input"
-                  placeholder="Parameter name, e.g. partitionsPerTopic"
-                  value={axis.param}
-                  onChange={e => updateAxis(i, 'param', e.target.value)}
-                />
-                <input
-                  className="form-input"
-                  placeholder="Comma-separated values, e.g. 50,100,200"
-                  value={axis.values}
-                  onChange={e => updateAxis(i, 'values', e.target.value)}
-                />
-                <button type="button" className="btn btn-danger btn-sm" onClick={() => removeAxis(i)}
-                  disabled={axes.length === 1}>
-                  ×
-                </button>
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '140px 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'start' }}>
+                <select className="form-select" value={axis.type}
+                  onChange={e => updateAxis(i, {
+                    type: e.target.value,
+                    field: e.target.value === 'driver' ? DRIVER_AXIS_FIELDS[0] : WORKLOAD_AXIS_FIELDS[0],
+                    custom: false,
+                  })}>
+                  <option value="workload">Workload</option>
+                  <option value="driver">Driver</option>
+                </select>
+                {axis.custom ? (
+                  <input className="form-input" placeholder="Field name"
+                    value={axis.field} onChange={e => updateAxis(i, { field: e.target.value })} />
+                ) : (
+                  <select className="form-select" value={axis.field}
+                    onChange={e => {
+                      if (e.target.value === '__custom__') {
+                        updateAxis(i, { custom: true, field: '' })
+                      } else {
+                        updateAxis(i, { field: e.target.value })
+                      }
+                    }}>
+                    {(axis.type === 'driver' ? DRIVER_AXIS_FIELDS : WORKLOAD_AXIS_FIELDS).map(f => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                    <option value="__custom__">Custom…</option>
+                  </select>
+                )}
+                <input className="form-input" placeholder="Comma-separated values"
+                  value={axis.values} onChange={e => updateAxis(i, { values: e.target.value })} />
+                <button type="button" className="btn btn-danger btn-sm"
+                  onClick={() => removeAxis(i)} disabled={axes.length === 1}>×</button>
               </div>
             ))}
             <button type="button" className="btn btn-secondary btn-sm mt-8" onClick={addAxis}>
-              + Add Parameter
+              + Add axis
             </button>
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Driver YAML (base)</label>
-              <textarea className="form-textarea tall" value={driverYaml}
-                onChange={e => setDriverYaml(e.target.value)} />
+          <hr className="divider" />
+          <div className="form-row" style={{ alignItems: 'start' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Driver (base)</div>
+              <DriverForm onChange={setDriverYaml} />
             </div>
-            <div className="form-group">
-              <label className="form-label">Workload YAML (base)</label>
-              <textarea className="form-textarea tall" value={workloadYaml}
-                onChange={e => setWorkloadYaml(e.target.value)}
-                placeholder="Base workload YAML — parameter values will override matching top-level keys" />
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Workload (base)</div>
+              <WorkloadForm onChange={setWorkloadYaml} />
             </div>
           </div>
 
           {error && <div className="alert alert-error">{error}</div>}
-          <button type="submit" className="btn btn-primary" disabled={submitting || notReady}>
+          <button type="submit" className="btn btn-primary mt-16"
+            disabled={submitting || notReady || noCluster}>
             {submitting ? <><span className="spinner" /> Launching…</> : `Launch Sweep (${totalRuns} run${totalRuns !== 1 ? 's' : ''})`}
           </button>
         </form>
