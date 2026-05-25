@@ -1,3 +1,4 @@
+import importlib
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -45,8 +46,6 @@ _routers_to_mount = [
 
 for module_path, prefix, tags in _routers_to_mount:
     try:
-        import importlib
-
         module = importlib.import_module(module_path)
         app.include_router(module.router, prefix=prefix, tags=tags)
         logger.info("Mounted router: %s at %s", module_path, prefix)

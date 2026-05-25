@@ -37,6 +37,12 @@ class Run(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    prometheus_samples = relationship(
+        "PrometheusSample",
+        back_populates="run",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class Metrics(Base):
@@ -92,6 +98,8 @@ class PrometheusSample(Base):
     bytes_in_per_sec = Column(Float, nullable=True)
     bytes_out_per_sec = Column(Float, nullable=True)
     records_per_sec = Column(Float, nullable=True)
+
+    run = relationship("Run", back_populates="prometheus_samples")
 
 
 class Sweep(Base):

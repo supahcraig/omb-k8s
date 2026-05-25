@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional  # noqa: F401 — Any kept for SweepCreate.parameter_axes
 
 from pydantic import BaseModel
 
@@ -49,8 +49,8 @@ class MetricsOut(BaseModel):
 
     consume_rate_avg: Optional[float] = None
     backlog_avg: Optional[float] = None
-    backlog_timeseries: Optional[Any] = None
-    throughput_timeseries: Optional[Any] = None
+    backlog_timeseries: Optional[str] = None    # JSON text
+    throughput_timeseries: Optional[str] = None  # JSON text
 
     model_config = {"from_attributes": True}
 
@@ -139,6 +139,7 @@ class WorkloadOut(BaseModel):
 
 class WorkloadCreate(BaseModel):
     name: str
+    description: Optional[str] = None
     content: str
     cloned_from_id: Optional[str] = None
 
