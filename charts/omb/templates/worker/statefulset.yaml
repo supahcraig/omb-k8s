@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: omb-worker
+  labels:
+    app: omb-worker
+spec:
+  serviceName: omb-worker
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      app: omb-worker
+  template:
+    metadata:
+      labels:
+        app: omb-worker
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: worker
+          image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
+          imagePullPolicy: Always
+          env:
+            - name: OMB_MODE
+              value: worker
+          ports:
+            - containerPort: 8080
+              name: worker
+          resources:
+            requests:
+              cpu: "4"
+              memory: 8Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi

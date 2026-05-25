@@ -1,0 +1,74 @@
+worker:
+  replicas: 2
+  image:
+    repository: ghcr.io/supahcraig/omb-worker
+    tag: latest
+
+controlPlane:
+  image:
+    repository: ghcr.io/supahcraig/omb-control-plane
+    tag: latest
+
+storage:
+  storageClassName: ""
+  size: 10Gi
+
+prometheus:
+  enabled: true
+
+clusterAutoscaler:
+  enabled: false
+  clusterName: ""
+  region: ""
+  roleArn: ""
+
+driverJob:
+  enabled: false
+
+# kube-prometheus-stack subchart values
+kube-prometheus-stack:
+  alertmanager:
+    enabled: false
+  prometheus:
+    prometheusSpec:
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          cpu: 500m
+          memory: 1Gi
+      retention: 6h
+  grafana:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    adminPassword: admin
+  prometheusOperator:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  kube-state-metrics:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  prometheus-node-exporter:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi

@@ -1,0 +1,12 @@
+apiVersion: v2
+name: omb
+description: OpenMessaging Benchmark on Kubernetes — benchmarks Redpanda and Kafka-compatible clusters
+type: application
+version: 0.1.0
+appVersion: "latest"
+
+dependencies:
+  - name: kube-prometheus-stack
+    version: "65.3.1"
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: prometheus.enabled

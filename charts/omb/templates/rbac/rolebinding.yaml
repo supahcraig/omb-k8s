@@ -1,0 +1,14 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: omb-control-plane
+  labels:
+    app: omb-control-plane
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: omb-control-plane
+subjects:
+  - kind: ServiceAccount
+    name: omb-control-plane
+    namespace: {{ .Release.Namespace }}

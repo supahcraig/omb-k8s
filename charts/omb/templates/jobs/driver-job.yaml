@@ -1,0 +1,45 @@
+{{- /*
+RUNTIME TEMPLATE — NOT MANAGED BY HELM
+
+This file is intentionally never rendered by Helm (driverJob.enabled is always false).
+It exists as the reference template the control plane uses at runtime to construct
+Job manifests via the Kubernetes API.
+
+The control plane reads this template and substitutes these markers before submitting:
+  __JOB_NAME__       — unique run ID
+  __CONFIGMAP_NAME__ — ConfigMap created for this run
+  __WORKERS_ARG__    — comma-separated worker URLs constructed from replica count
+
+Do not set driverJob.enabled: true. This is not a Helm-managed resource.
+*/ -}}
+{{- if .Values.driverJob.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: __JOB_NAME__
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: driver
+          image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
+          imagePullPolicy: Always
+          env:
+            - name: OMB_MODE
+              value: driver
+          args:
+            - --drivers
+            - /etc/omb/driver.yaml
+            - /etc/omb/workload.yaml
+            - --workers
+            - __WORKERS_ARG__
+          volumeMounts:
+            - name: omb-config
+              mountPath: /etc/omb
+      volumes:
+        - name: omb-config
+          configMap:
+            name: __CONFIGMAP_NAME__
+{{- end }}

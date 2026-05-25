@@ -1,0 +1,13 @@
+storage:
+  storageClassName: gp3
+
+clusterAutoscaler:
+  enabled: true
+  # clusterName, region, and roleArn must be supplied at install time:
+  # helm install omb charts/omb -f values-aws.yaml \
+  #   --set clusterAutoscaler.clusterName=<name> \
+  #   --set clusterAutoscaler.region=<region> \
+  #   --set clusterAutoscaler.roleArn=<arn>
+  clusterName: ""
+  region: ""
+  roleArn: ""
