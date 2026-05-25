@@ -46,9 +46,9 @@ Cloud credentials configured for your target cloud.
 ```bash
 # 1. Provision the Kubernetes cluster
 cd terraform/aws          # or gcp / azure
-cp terraform.tfvars.example ../engagements/<customer>.tfvars
-# Edit the tfvars file for the engagement
-terraform init && terraform apply -var-file=../engagements/<customer>.tfvars
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars for the engagement (it is gitignored)
+terraform init && terraform apply
 
 # 2. Configure kubectl
 aws eks update-kubeconfig --name <cluster-name> --region <region>
@@ -71,9 +71,9 @@ and Prometheus in Settings, then run benchmarks.
 
 ```bash
 cd terraform/aws
-cp terraform.tfvars.example ../engagements/<customer>.tfvars
+cp terraform.tfvars.example terraform.tfvars
 # Edit: cluster_name, region, vpc_cidr, availability_zones, target_vpc_id, target_cidr
-terraform init && terraform apply -var-file=../engagements/<customer>.tfvars
+terraform init && terraform apply
 aws eks update-kubeconfig --name <cluster-name> --region <region>
 helm install omb charts/omb -f charts/omb/values-aws.yaml -f my-values.yaml
 ```
@@ -82,9 +82,9 @@ helm install omb charts/omb -f charts/omb/values-aws.yaml -f my-values.yaml
 
 ```bash
 cd terraform/gcp
-cp terraform.tfvars.example ../engagements/<customer>.tfvars
-# Edit: project, region, cluster_name, target_network, target_cidr
-terraform init && terraform apply -var-file=../engagements/<customer>.tfvars
+cp terraform.tfvars.example terraform.tfvars
+# Edit: project_id, region, zone, cluster_name, target_network, target_cidr
+terraform init && terraform apply
 gcloud container clusters get-credentials <cluster-name> --region <region>
 helm install omb charts/omb -f charts/omb/values-gcp.yaml -f my-values.yaml
 ```
@@ -93,9 +93,9 @@ helm install omb charts/omb -f charts/omb/values-gcp.yaml -f my-values.yaml
 
 ```bash
 cd terraform/azure
-cp terraform.tfvars.example ../engagements/<customer>.tfvars
-# Edit: resource_group_name, location, cluster_name, target_vnet_id, target_address_space
-terraform init && terraform apply -var-file=../engagements/<customer>.tfvars
+cp terraform.tfvars.example terraform.tfvars
+# Edit: resource_group_name, location, cluster_name, target_vnet_id
+terraform init && terraform apply
 az aks get-credentials --resource-group <rg> --name <cluster-name>
 helm install omb charts/omb -f charts/omb/values-azure.yaml -f my-values.yaml
 ```
@@ -136,7 +136,7 @@ The correct response to needing more throughput is more worker pods.
 helm uninstall omb
 
 # Destroy the Kubernetes cluster and VPC
-cd terraform/modules/<cloud>
+cd terraform/<cloud>
 terraform destroy
 ```
 

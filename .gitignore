@@ -9,14 +9,6 @@ terraform.tfstate.backup
 crash.log
 crash.*.log
 
-# Per-engagement Terraform working directories are intentionally excluded from
-# version control. SEs create these for each customer engagement, and they
-# contain sensitive variables (broker addresses, credentials, account IDs) that
-# must not be committed. Each SE manages their own state locally and is
-# responsible for running terraform destroy before deleting their state.
-terraform/engagements/
-!terraform/engagements/.gitkeep
-!terraform/engagements/README.md
 
 # ─── Helm ────────────────────────────────────────────────────────────────────
 *.tgz

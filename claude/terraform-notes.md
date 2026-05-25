@@ -182,12 +182,13 @@ in the same account.
 
 ## Per-engagement workflow
 
-Each engagement should have its own tfvars file, not committed to the repo:
+Each engagement uses a `terraform.tfvars` file in the cloud directory:
 
-  terraform/engagements/<customer-name>.tfvars
+  terraform/<cloud>/terraform.tfvars
 
-Add terraform/engagements/ to .gitignore. This prevents one engagement's config
-from stomping another's and avoids committing customer infrastructure details.
+This file is gitignored via `*.tfvars` in the root `.gitignore` (the example
+file `terraform.tfvars.example` is explicitly un-ignored). SEs copy the example,
+fill in engagement-specific values, and never commit the result.
 
 The SE must keep their local terraform state directory until after
 terraform destroy completes for the engagement. Document this prominently.

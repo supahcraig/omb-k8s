@@ -21,16 +21,16 @@ and EC2 resources.
 **1. Create your tfvars file (never commit this):**
 
 ```bash
-cp terraform.tfvars.example ../../engagements/<customer>.tfvars
-# Edit the file with your engagement-specific values
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your engagement-specific values (it is gitignored)
 ```
 
 **2. Initialize and apply:**
 
 ```bash
 terraform init
-terraform plan -var-file=../../engagements/<customer>.tfvars
-terraform apply -var-file=../../engagements/<customer>.tfvars
+terraform plan
+terraform apply
 ```
 
 Expect ~15-20 minutes for EKS to provision.
@@ -93,7 +93,7 @@ You must run `terraform destroy` to stop incurring costs.
 
 ```bash
 helm uninstall omb -n default
-terraform destroy -var-file=../../engagements/<customer>.tfvars
+terraform destroy
 ```
 
 Destroy takes ~10-15 minutes. Verify in the AWS console that the EKS cluster, VPC,

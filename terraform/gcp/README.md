@@ -22,16 +22,16 @@ Authenticate before running: `gcloud auth application-default login`
 **1. Create your tfvars file (never commit this):**
 
 ```bash
-cp terraform.tfvars.example ../../engagements/<customer>.tfvars
-# Edit with your engagement values
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your engagement values (it is gitignored)
 ```
 
 **2. Initialize and apply:**
 
 ```bash
 terraform init
-terraform plan -var-file=../../engagements/<customer>.tfvars
-terraform apply -var-file=../../engagements/<customer>.tfvars
+terraform plan
+terraform apply
 ```
 
 GKE provisions in ~3-5 minutes (significantly faster than EKS).
@@ -81,7 +81,7 @@ They must create a peering from their network to yours via the BYOC UI.
 
 ```bash
 helm uninstall omb -n default
-terraform destroy -var-file=../../engagements/<customer>.tfvars
+terraform destroy
 ```
 
 ## Cost note
