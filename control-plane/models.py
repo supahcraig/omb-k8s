@@ -115,11 +115,7 @@ class Workload(Base):
     description = Column(String, nullable=True)
     content = Column(Text, nullable=False)        # full YAML content
     is_bundled = Column(Boolean, default=False)
-    cloned_from_id = Column(
-        String,
-        ForeignKey("workloads.id"),
-        nullable=True,
-    )
+    cloned_from_id = Column(String, nullable=True)  # no FK — source may be deleted
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_used_at = Column(DateTime, nullable=True)
