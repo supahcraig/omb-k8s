@@ -8,6 +8,11 @@ controlPlane:
   image:
     repository: ghcr.io/supahcraig/omb-control-plane
     tag: latest
+  # Fernet encryption key for passwords at rest (base64-encoded 32-byte key).
+  # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+  # If empty, an ephemeral key is generated at startup — passwords will not
+  # survive pod restarts. Set this before saving any credentials.
+  encryptionKey: ""
 
 storage:
   storageClassName: ""
@@ -32,6 +37,12 @@ kube-prometheus-stack:
     enabled: false
   prometheus:
     prometheusSpec:
+      nodeSelector:
+        node-pool: control-plane
+      additionalScrapeConfigsSecret:
+        enabled: true
+        name: omb-prometheus-additional-scrape-configs
+        key: additional-scrape-configs.yaml
       resources:
         requests:
           cpu: 200m
@@ -41,6 +52,8 @@ kube-prometheus-stack:
           memory: 1Gi
       retention: 6h
   grafana:
+    nodeSelector:
+      node-pool: control-plane
     resources:
       requests:
         cpu: 100m
@@ -50,6 +63,8 @@ kube-prometheus-stack:
         memory: 256Mi
     adminPassword: admin
   prometheusOperator:
+    nodeSelector:
+      node-pool: control-plane
     resources:
       requests:
         cpu: 100m
@@ -58,6 +73,8 @@ kube-prometheus-stack:
         cpu: 200m
         memory: 256Mi
   kube-state-metrics:
+    nodeSelector:
+      node-pool: control-plane
     resources:
       requests:
         cpu: 10m
@@ -66,6 +83,12 @@ kube-prometheus-stack:
         cpu: 100m
         memory: 64Mi
   prometheus-node-exporter:
+    # DaemonSet — no nodeSelector, must run on all nodes including tainted workers.
+    tolerations:
+      - key: dedicated
+        operator: Equal
+        value: benchmark
+        effect: NoSchedule
     resources:
       requests:
         cpu: 10m
