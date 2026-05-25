@@ -8,3 +8,4 @@ kubernetes==31.0.0
 cryptography==43.0.1
 pydantic-settings==2.6.1
 python-multipart==0.0.12
+aiokafka==0.11.0
