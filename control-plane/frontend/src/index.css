@@ -329,7 +329,7 @@ body {
 }
 
 .form-textarea {
-  resize: vertical;
+  resize: both;
   min-height: 120px;
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 12px;

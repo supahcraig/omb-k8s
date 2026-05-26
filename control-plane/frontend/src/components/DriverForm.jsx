@@ -212,7 +212,7 @@ export default function DriverForm({ onChange }) {
         + Add field
       </button>
 
-      <details open>
+      <details open style={{ width: '100%' }}>
         <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600, marginBottom: 8, userSelect: 'none' }}>
           YAML Preview {isOverride && <span style={{ color: 'var(--color-warning)', fontSize: 11 }}>(manually overridden)</span>}
         </summary>
@@ -220,7 +220,6 @@ export default function DriverForm({ onChange }) {
           className="form-textarea tall"
           value={previewYaml}
           onChange={e => setYamlOverride(e.target.value)}
-          style={{ fontFamily: 'monospace', fontSize: 12 }}
         />
         {isOverride && (
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => setYamlOverride(null)}
