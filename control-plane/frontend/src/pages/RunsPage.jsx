@@ -99,7 +99,10 @@ export default function RunsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showForm, setShowForm] = useState(!!location.state?.workloadContent)
-  const [lastRun, setLastRun] = useState(null)
+  // null = fetch in flight, false = no fetch needed, object = fetched
+  const [lastRun, setLastRun] = useState(
+    location.state?.workloadContent ? false : null
+  )
 
   const initialWorkloadContent = location.state?.workloadContent || ''
   const initialWorkloadName = location.state?.workloadName || ''
@@ -119,21 +122,23 @@ export default function RunsPage() {
   useEffect(() => { loadRuns() }, [])
 
   async function handleShowForm() {
-    setShowForm(f => {
-      if (f) return false  // toggling off — no fetch needed
-      return true
-    })
-    if (!showForm && runs.length > 0 && !lastRun) {
+    if (showForm) { setShowForm(false); return }
+    setShowForm(true)
+    if (runs.length > 0) {
       try {
         const run = await getRun(runs[0].id)
         setLastRun(run)
-      } catch { /* ignore — form still works with defaults */ }
+      } catch {
+        setLastRun(false)  // fetch failed — show form with defaults
+      }
+    } else {
+      setLastRun(false)  // no prior runs — show form immediately
     }
   }
 
   function handleCreated(run) {
     setShowForm(false)
-    setLastRun(null)
+    setLastRun(null)  // reset so next open fetches the just-completed run
     loadRuns()
   }
 
@@ -149,7 +154,7 @@ export default function RunsPage() {
         </button>
       </div>
 
-      {showForm && (
+      {showForm && lastRun !== null && (
         <RunCreateForm
           onCreated={handleCreated}
           initialWorkloadContent={defaultWorkloadContent}
