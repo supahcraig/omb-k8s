@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getRun, cancelRun, getPrometheusSamples } from '../api.js'
+import RunCharts from '../components/RunCharts.jsx'
+import { parseLiveMetric } from '../lib/ombLogParser.js'
+import { parseWorkloadYaml } from '../components/WorkloadForm.jsx'
 
 function StatusBadge({ status }) {
   return <span className={`badge badge-${status}`}>{status}</span>
@@ -55,65 +58,6 @@ function LatencyTable({ metrics }) {
   )
 }
 
-// Simple SVG line chart
-function LineChart({ data, xKey, yKey, label, color = '#e63946' }) {
-  if (!data || data.length < 2) return null
-
-  const W = 700, H = 200
-  const PAD = { top: 20, right: 20, bottom: 30, left: 60 }
-  const w = W - PAD.left - PAD.right
-  const h = H - PAD.top - PAD.bottom
-
-  const xs = data.map(d => d[xKey])
-  const ys = data.map(d => d[yKey]).filter(v => v != null)
-  if (!ys.length) return null
-
-  const xMin = Math.min(...xs), xMax = Math.max(...xs)
-  const yMin = 0, yMax = Math.max(...ys) * 1.1
-
-  const scX = v => (xMax === xMin ? w / 2 : ((v - xMin) / (xMax - xMin)) * w)
-  const scY = v => (yMax === 0 ? h : h - ((v - yMin) / (yMax - yMin)) * h)
-
-  const points = data
-    .filter(d => d[yKey] != null)
-    .map(d => `${scX(d[xKey]).toFixed(1)},${scY(d[yKey]).toFixed(1)}`)
-    .join(' ')
-
-  const yLabels = [0, 0.25, 0.5, 0.75, 1].map(t => ({
-    v: yMin + t * (yMax - yMin),
-    y: scY(yMin + t * (yMax - yMin)),
-  }))
-
-  function fmtY(v) {
-    if (yMax > 1e6) return `${(v / 1e6).toFixed(1)}M`
-    if (yMax > 1e3) return `${(v / 1e3).toFixed(0)}K`
-    return v.toFixed(0)
-  }
-
-  return (
-    <div className="chart-container mt-20">
-      <div className="metric-label" style={{ marginBottom: 8 }}>{label}</div>
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ maxWidth: '100%' }}>
-        <g transform={`translate(${PAD.left},${PAD.top})`}>
-          {yLabels.map(({ v, y }) => (
-            <g key={v}>
-              <line x1={0} y1={y} x2={w} y2={y} stroke="#e8e8e8" strokeWidth="1" />
-              <text x={-4} y={y + 4} textAnchor="end" fontSize="10" fill="#888">{fmtY(v)}</text>
-            </g>
-          ))}
-          <polyline
-            points={points}
-            fill="none"
-            stroke={color}
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-          <text x={w / 2} y={h + 22} textAnchor="middle" fontSize="10" fill="#888">Time (s)</text>
-        </g>
-      </svg>
-    </div>
-  )
-}
 
 export default function RunDetailPage() {
   const { id } = useParams()
@@ -123,8 +67,10 @@ export default function RunDetailPage() {
   const [logs, setLogs] = useState([])
   const [logDone, setLogDone] = useState(false)
   const [promSamples, setPromSamples] = useState([])
+  const [livePoints, setLivePoints] = useState([])
   const wsRef = useRef(null)
   const logEndRef = useRef(null)
+  const liveMatchedRef = useRef(false)
 
   async function loadRun() {
     try {
@@ -143,12 +89,22 @@ export default function RunDetailPage() {
   }
 
   useEffect(() => {
+    // Reset live state when navigating to a new run
+    setLivePoints([])
+    liveMatchedRef.current = false
+
     loadRun()
     // WebSocket log streaming
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const wsUrl = `${proto}://${window.location.host}/ws/runs/${id}`
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
+
+    const warnTimer = setTimeout(() => {
+      if (!liveMatchedRef.current) {
+        console.warn('[RunCharts] No OMB stat lines matched after 10s. Check log format.')
+      }
+    }, 10000)
 
     ws.onmessage = (evt) => {
       try {
@@ -159,7 +115,14 @@ export default function RunDetailPage() {
           return
         }
       } catch { /* not JSON — it's a log line */ }
-      setLogs(prev => [...prev, evt.data])
+      const line = evt.data
+      setLogs(prev => [...prev, line])
+      setLivePoints(prev => {
+        const p = parseLiveMetric(line, prev.length)
+        if (!p) return prev
+        liveMatchedRef.current = true
+        return [...prev, p]
+      })
     }
 
     ws.onerror = () => setLogDone(true)
@@ -168,7 +131,10 @@ export default function RunDetailPage() {
       loadRun()
     }
 
-    return () => ws.close()
+    return () => {
+      clearTimeout(warnTimer)
+      ws.close()
+    }
   }, [id])
 
   // Auto-scroll log
@@ -191,6 +157,8 @@ export default function RunDetailPage() {
   if (!run) return null
 
   const m = run.metrics
+  const workloadParams = run?.workload_config ? parseWorkloadYaml(run.workload_config) : {}
+  const messageSize = workloadParams?.values?.messageSize ?? 1024
 
   return (
     <div>
@@ -234,15 +202,14 @@ export default function RunDetailPage() {
         </>
       )}
 
-      {/* Prometheus throughput chart */}
-      {promSamples.length > 0 && (
-        <LineChart
-          data={promSamples}
-          xKey="t"
-          yKey="bytes_in_per_sec"
-          label="Bytes In/sec (Prometheus)"
-        />
-      )}
+      {/* Charts — live during run, post-run from stored metrics + Prometheus */}
+      <RunCharts
+        livePoints={livePoints}
+        metricsOut={run?.metrics ?? null}
+        promSamples={promSamples}
+        isLive={run?.status === 'running'}
+        messageSize={messageSize}
+      />
 
       {/* Log output */}
       <div className="card mt-20">
