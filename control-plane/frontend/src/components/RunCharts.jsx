@@ -18,28 +18,35 @@ function ChartCard({ title, badge, children }) {
   );
 }
 
-function LatencyStatsTable({ stats, keys, labels }) {
+function LatencyStatsTable({ stats, keys, labels, warmupNote }) {
   if (!stats) return null;
   const fmt = v => v == null ? '—' : v.toFixed(1);
   return (
-    <table className="latency-stats-table">
-      <thead>
-        <tr><th>Percentile</th><th>Min</th><th>Mean</th><th>Max</th></tr>
-      </thead>
-      <tbody>
-        {keys.map((k, i) => {
-          const s = stats[k];
-          return (
-            <tr key={k}>
-              <td>{labels[i]}</td>
-              <td>{s ? fmt(s.min) : '—'}</td>
-              <td>{s ? fmt(s.mean) : '—'}</td>
-              <td>{s ? fmt(s.max) : '—'}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div>
+      {warmupNote && (
+        <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 6, marginBottom: 2, fontStyle: 'italic' }}>
+          warmup in progress — stats include warmup data
+        </div>
+      )}
+      <table className="latency-stats-table">
+        <thead>
+          <tr><th>Percentile</th><th>Min</th><th>Mean</th><th>Max</th></tr>
+        </thead>
+        <tbody>
+          {keys.map((k, i) => {
+            const s = stats[k];
+            return (
+              <tr key={k}>
+                <td>{labels[i]}</td>
+                <td>{s ? fmt(s.min) : '—'}</td>
+                <td>{s ? fmt(s.mean) : '—'}</td>
+                <td>{s ? fmt(s.max) : '—'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -52,7 +59,10 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
   const progressPct    = totalSamples > 0 ? Math.min(100, (currentSamples / totalSamples) * 100) : 0;
   const warmupPct      = totalSamples > 0 ? Math.min(100, (warmupSamples / totalSamples) * 100) : 0;
 
-  const latencyStats = computeLatencyStats(chartPoints, warmupSamples);
+  // During a live run show stats for all collected data so the table isn't
+  // blank for the entire warmup period. Post-run, exclude warmup for accuracy.
+  const statsWarmup = isLive ? 0 : warmupSamples;
+  const latencyStats = computeLatencyStats(chartPoints, statsWarmup);
 
   if (chartPoints.length === 0 && promPoints.length === 0) return null;
 
@@ -141,6 +151,7 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
               stats={latencyStats}
               keys={['pubP50', 'pubP99', 'pubP999']}
               labels={['P50', 'P99', 'P99.9']}
+              warmupNote={isLive && currentSamples <= warmupSamples}
             />
           </ChartCard>
 
@@ -164,6 +175,7 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
               stats={latencyStats}
               keys={['e2eP50', 'e2eP99', 'e2eP999']}
               labels={['P50', 'P99', 'P99.9']}
+              warmupNote={isLive && currentSamples <= warmupSamples}
             />
           </ChartCard>
         </div>

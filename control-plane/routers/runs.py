@@ -173,12 +173,19 @@ async def _finish_run(run_id: int) -> None:
 
         metrics_data = parse_result_from_logs(lines)
 
-        if metrics_data and success:
+        # Mark completed if we parsed metrics, regardless of Job exit code.
+        # The aggregate summary line only appears on clean OMB completion, so
+        # its presence is a reliable signal that results are valid.
+        if metrics_data:
             run.status = RunStatus.completed.value
             metrics = Metrics(run_id=run_id, **metrics_data)
             db.add(metrics)
         else:
             run.status = RunStatus.failed.value
+            logger.warning(
+                "_finish_run: run %d — no parseable metrics (success=%s, lines=%d)",
+                run_id, success, len(lines),
+            )
 
         run.completed_at = datetime.utcnow()
 

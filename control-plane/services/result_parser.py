@@ -1,39 +1,78 @@
 """
 Parse OMB benchmark results from Job log lines.
 
-The OMB benchmark writes a JSON result line to stdout at the end of the run
-containing keys like "publishRate", "consumeRate", etc.
+OMB writes the full result JSON to a file (--output path), not to stdout.
+stdout contains per-second stat lines and a final aggregate summary line.
+
+Strategy 1: Look for a bare JSON line with 'publishRate' (future-proof).
+Strategy 2: Parse the 'Aggregated Pub Latency' summary line + per-second stats.
 """
 import json
+import re
 import statistics
 from typing import Optional
+
+# Per-second stat line:
+# Pub rate 12345 msg/s / 11.77 MB/s | Cons rate ... | Backlog: 0.0 K | ...
+_PUB_STAT_RE = re.compile(
+    r'Pub rate\s+([\d,.]+)\s*msg/s'
+    r'.*?Cons rate\s+([\d,.]+)\s*msg/s'
+    r'.*?Backlog:\s*(-?[\d,.]+)'
+)
+
+# Final aggregate summary line printed once at end of test (warmup excluded):
+# ----- Aggregated Pub Latency (ms) avg: X - 50%: X - 95%: X - 99%: X - 99.9%: X - 99.99%: X - Max: X
+#   | Pub Delay (us)  avg: X - 50%: X - 95%: X - 99%: X - 99.9%: X - 99.99%: X - Max: X
+_AGG_PUB_RE = re.compile(
+    r'Aggregated Pub Latency \(ms\)'
+    r'.*?avg:\s*([\d,.]+)'
+    r'.*?50%:\s*([\d,.]+)'
+    r'.*?95%:\s*([\d,.]+)'
+    r'.*?99%:\s*([\d,.]+)'
+    r'.*?99\.9%:\s*([\d,.]+)'
+    r'.*?99\.99%:\s*([\d,.]+)'
+    r'.*?Max:\s*([\d,.]+)'
+)
+_AGG_DELAY_RE = re.compile(
+    r'Pub Delay \(us\)'
+    r'.*?avg:\s*([\d,.]+)'
+    r'.*?50%:\s*([\d,.]+)'
+    r'.*?95%:\s*([\d,.]+)'
+    r'.*?99%:\s*([\d,.]+)'
+    r'.*?99\.9%:\s*([\d,.]+)'
+    r'.*?99\.99%:\s*([\d,.]+)'
+    r'.*?Max:\s*([\d,.]+)'
+)
+
+
+def _num(s: str) -> float:
+    return float(s.replace(',', ''))
 
 
 def parse_result_from_logs(lines: list[str]) -> Optional[dict]:
     """
     Parse OMB result metrics from log lines.
 
-    Looks for a JSON line containing 'publishRate' (the OMB result JSON).
-    Returns a dict matching the Metrics model fields, or None if not found.
+    Tries two strategies in order and returns the first that succeeds.
     """
-    # Iterate in reverse — result JSON is usually near the end
+    # Strategy 1: bare JSON line with publishRate (original approach)
     for line in reversed(lines):
-        line = line.strip()
-        if not line.startswith("{"):
+        stripped = line.strip()
+        if not stripped.startswith("{"):
             continue
         try:
-            data = json.loads(line)
+            data = json.loads(stripped)
         except json.JSONDecodeError:
             continue
-        if "publishRate" not in data:
-            continue
-        return _extract_metrics(data)
+        if "publishRate" in data:
+            return _extract_metrics_from_json(data)
 
-    return None
+    # Strategy 2: parse aggregate summary + per-second stat lines
+    return _extract_metrics_from_log_lines(lines)
 
 
-def _extract_metrics(data: dict) -> dict:
-    """Extract and average metrics from the OMB JSON result."""
+def _extract_metrics_from_json(data: dict) -> dict:
+    """Extract metrics from the OMB result JSON (written to the output file)."""
 
     def avg(lst):
         return statistics.mean(lst) if lst else None
@@ -66,5 +105,73 @@ def _extract_metrics(data: dict) -> dict:
             "publish_rate": data.get("publishRate", []),
             "consume_rate": data.get("consumeRate", []),
             "sample_rate_ms": data.get("sampleRateMillis", 1000),
+        }),
+    }
+
+
+def _extract_metrics_from_log_lines(lines: list[str]) -> Optional[dict]:
+    """
+    Parse metrics from OMB stdout log lines.
+
+    Collects per-second throughput/backlog values and extracts the
+    single aggregate latency summary line printed at the end.
+    """
+    pub_rates: list[float] = []
+    cons_rates: list[float] = []
+    backlogs: list[float] = []
+    agg_pub: Optional[tuple] = None
+    agg_delay: Optional[tuple] = None
+
+    for line in lines:
+        m = _PUB_STAT_RE.search(line)
+        if m:
+            pub_rates.append(_num(m.group(1)))
+            cons_rates.append(_num(m.group(2)))
+            backlogs.append(_num(m.group(3)))
+
+        m = _AGG_PUB_RE.search(line)
+        if m:
+            agg_pub = m.groups()
+
+        m = _AGG_DELAY_RE.search(line)
+        if m:
+            agg_delay = m.groups()
+
+    # Require the aggregate summary line — it only appears on clean completion
+    if not agg_pub or not pub_rates:
+        return None
+
+    def avg(lst):
+        return statistics.mean(lst) if lst else None
+
+    # Pub Delay Latency is in microseconds; convert to ms for consistency
+    def us_to_ms(s: str) -> float:
+        return _num(s) / 1000.0
+
+    return {
+        "publish_rate_avg": avg(pub_rates),
+        "publish_latency_avg": _num(agg_pub[0]),
+        "publish_latency_p50": _num(agg_pub[1]),
+        "publish_latency_p75": None,
+        "publish_latency_p95": _num(agg_pub[2]),
+        "publish_latency_p99": _num(agg_pub[3]),
+        "publish_latency_p999": _num(agg_pub[4]),
+        "publish_latency_p9999": _num(agg_pub[5]),
+        "publish_latency_max": _num(agg_pub[6]),
+        "end_to_end_latency_avg": us_to_ms(agg_delay[0]) if agg_delay else None,
+        "end_to_end_latency_p50": us_to_ms(agg_delay[1]) if agg_delay else None,
+        "end_to_end_latency_p75": None,
+        "end_to_end_latency_p95": us_to_ms(agg_delay[2]) if agg_delay else None,
+        "end_to_end_latency_p99": us_to_ms(agg_delay[3]) if agg_delay else None,
+        "end_to_end_latency_p999": us_to_ms(agg_delay[4]) if agg_delay else None,
+        "end_to_end_latency_p9999": us_to_ms(agg_delay[5]) if agg_delay else None,
+        "end_to_end_latency_max": us_to_ms(agg_delay[6]) if agg_delay else None,
+        "consume_rate_avg": avg(cons_rates),
+        "backlog_avg": avg(backlogs),
+        "backlog_timeseries": json.dumps({"backlog": backlogs, "sample_rate_ms": 1000}),
+        "throughput_timeseries": json.dumps({
+            "publish_rate": pub_rates,
+            "consume_rate": cons_rates,
+            "sample_rate_ms": 1000,
         }),
     }
