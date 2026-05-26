@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from models import Setting
 from schemas import ClusterConfig, PrometheusConfig, SettingsOut
-from services.encryption import decrypt, encrypt
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +22,7 @@ router = APIRouter()
 CLUSTER_KEY = "cluster"
 PROMETHEUS_KEY = "prometheus"
 
-# Cluster fields that hold sensitive secrets and must be encrypted at rest.
-_CLUSTER_PASSWORD_FIELDS = {"sasl_password"}
+_CLUSTER_PASSWORD_FIELDS = ("sasl_password",)
 
 
 # ---------------------------------------------------------------------------
@@ -32,45 +30,13 @@ _CLUSTER_PASSWORD_FIELDS = {"sasl_password"}
 # ---------------------------------------------------------------------------
 
 
-def _encrypt_passwords(data: dict, password_fields: set) -> dict:
-    """Return a copy of *data* with password_fields values encrypted."""
-    out = dict(data)
-    for field in password_fields:
-        val = out.get(field)
-        if val is not None:
-            out[field] = encrypt(val)
-    return out
-
-
-def _redact_passwords(data: dict, password_fields: set) -> dict:
-    """Return a copy of *data* with password_fields set to None."""
-    out = dict(data)
-    for field in password_fields:
-        out[field] = None
-    return out
-
-
-def _merge_passwords(
-    incoming: dict,
-    stored: Optional[dict],
-    password_fields: set,
-) -> dict:
-    """Return *incoming* with password fields filled from *stored* when the
-    incoming value is None (caller did not supply a new password).
-
-    The returned dict has passwords in *encrypted* form — callers must not
-    pass plaintext-encrypted hybrids here; *stored* must already be the
-    encrypted version from the DB.
-    """
+def _merge_cluster(incoming: dict, stored: Optional[dict]) -> dict:
+    """Preserve existing password fields when the incoming value is None."""
     out = dict(incoming)
-    for field in password_fields:
-        incoming_val = out.get(field)
-        if incoming_val is None and stored is not None:
-            # Keep the existing encrypted value.
-            out[field] = stored.get(field)
-        elif incoming_val is not None:
-            # New plaintext supplied — encrypt it.
-            out[field] = encrypt(incoming_val)
+    if stored is not None:
+        for field in _CLUSTER_PASSWORD_FIELDS:
+            if out.get(field) is None:
+                out[field] = stored.get(field)
     return out
 
 
@@ -90,11 +56,9 @@ async def _store_setting(db: AsyncSession, key: str, data: dict) -> None:
 
 
 def _build_cluster_out(stored: Optional[dict]) -> Optional[ClusterConfig]:
-    """Build a ClusterConfig with passwords redacted, or None if no stored config."""
     if stored is None:
         return None
-    redacted = _redact_passwords(stored, _CLUSTER_PASSWORD_FIELDS)
-    return ClusterConfig(**redacted)
+    return ClusterConfig(**stored)
 
 
 def _extract_scrape_password(scrape_yaml_str: str) -> tuple:
@@ -112,15 +76,15 @@ def _extract_scrape_password(scrape_yaml_str: str) -> tuple:
     return redacted, plaintext
 
 
-def _inject_scrape_password(scrape_yaml_str: str, plaintext_password: str) -> str:
+def _inject_scrape_password(scrape_yaml_str: str, password: str) -> str:
     """Replace __REDACTED__ sentinel with the actual password."""
-    return scrape_yaml_str.replace('__REDACTED__', plaintext_password, 1)
+    return scrape_yaml_str.replace('__REDACTED__', password, 1)
 
 
 def _build_prometheus_out(stored: Optional[dict]) -> Optional[PrometheusConfig]:
     """Build a PrometheusConfig for the API response.
 
-    BYOC: re-injects the decrypted password into the scrape YAML so the
+    BYOC: re-injects the stored password into the scrape YAML so the
     frontend can display the full (unredacted) YAML for editing.
     Self-hosted: normalises scrape_targets from the stored comma-separated string.
     """
@@ -130,13 +94,9 @@ def _build_prometheus_out(stored: Optional[dict]) -> Optional[PrometheusConfig]:
 
     if d.get('mode') == 'byoc':
         raw_yaml = d.get('scrape_yaml') or ''
-        enc_password = d.get('scrape_yaml_password')
-        if enc_password and '__REDACTED__' in raw_yaml:
-            try:
-                plaintext = decrypt(enc_password)
-                d['scrape_yaml'] = _inject_scrape_password(raw_yaml, plaintext)
-            except Exception:
-                pass  # Return YAML with __REDACTED__ rather than crashing
+        password = d.get('scrape_yaml_password')
+        if password and '__REDACTED__' in raw_yaml:
+            d['scrape_yaml'] = _inject_scrape_password(raw_yaml, password)
         d['scrape_targets'] = None
     else:
         scrape_str = d.pop('scrape_targets_str', None)
@@ -154,7 +114,7 @@ def _build_prometheus_out(stored: Optional[dict]) -> Optional[PrometheusConfig]:
 def _prometheus_to_storage(config: PrometheusConfig, existing_stored: Optional[dict]) -> dict:
     """Convert a PrometheusConfig to the dict persisted in the DB.
 
-    BYOC: stores scrape_yaml (redacted) + scrape_yaml_password (encrypted).
+    BYOC: stores scrape_yaml (redacted) + scrape_yaml_password (plaintext).
     Self-hosted: stores scrape_targets_str (comma-separated string).
     """
     d = config.model_dump()
@@ -162,14 +122,14 @@ def _prometheus_to_storage(config: PrometheusConfig, existing_stored: Optional[d
     if config.mode == 'byoc':
         raw_yaml = d.get('scrape_yaml') or ''
         # If the client sent back a YAML that still contains __REDACTED__, the
-        # password was not changed — preserve the existing encrypted value.
+        # password was not changed — preserve the existing value.
         if '__REDACTED__' in raw_yaml:
             d['scrape_yaml'] = raw_yaml
             d['scrape_yaml_password'] = (existing_stored or {}).get('scrape_yaml_password')
         else:
             redacted_yaml, plaintext = _extract_scrape_password(raw_yaml)
             d['scrape_yaml'] = redacted_yaml
-            d['scrape_yaml_password'] = encrypt(plaintext) if plaintext else None
+            d['scrape_yaml_password'] = plaintext
         d.pop('scrape_targets', None)
         d['scrape_targets_str'] = ''
     else:
@@ -188,7 +148,6 @@ def _prometheus_to_storage(config: PrometheusConfig, existing_stored: Optional[d
 
 @router.get("", response_model=SettingsOut)
 async def get_settings(db: AsyncSession = Depends(get_db)) -> SettingsOut:
-    """Return current settings with all password fields redacted."""
     cluster_stored = await _load_setting(db, CLUSTER_KEY)
     prometheus_stored = await _load_setting(db, PROMETHEUS_KEY)
 
@@ -205,8 +164,8 @@ async def update_settings(
 ) -> SettingsOut:
     """Persist cluster and Prometheus configuration.
 
-    Password fields: if the incoming value is non-None, encrypt and store it.
-    If None, preserve the existing stored password unchanged.
+    Password fields: if the incoming value is non-None, store it.
+    If None, preserve the existing stored value unchanged.
     """
     cluster_stored = await _load_setting(db, CLUSTER_KEY)
     prometheus_stored = await _load_setting(db, PROMETHEUS_KEY)
@@ -214,9 +173,7 @@ async def update_settings(
     try:
         if body.cluster is not None:
             cluster_dict = body.cluster.model_dump()
-            cluster_to_save = _merge_passwords(
-                cluster_dict, cluster_stored, _CLUSTER_PASSWORD_FIELDS
-            )
+            cluster_to_save = _merge_cluster(cluster_dict, cluster_stored)
             await _store_setting(db, CLUSTER_KEY, cluster_to_save)
 
         if body.prometheus is not None:
@@ -266,18 +223,7 @@ async def test_connection(db: AsyncSession = Depends(get_db)) -> dict:
     sasl_enabled: bool = cluster_stored.get("sasl_enabled", False)
     sasl_mechanism: Optional[str] = cluster_stored.get("sasl_mechanism")
     sasl_username: Optional[str] = cluster_stored.get("sasl_username")
-    sasl_password_enc: Optional[str] = cluster_stored.get("sasl_password")
-
-    # Decrypt the stored password for the connection attempt.
-    sasl_password: Optional[str] = None
-    if sasl_password_enc:
-        try:
-            sasl_password = decrypt(sasl_password_enc)
-        except Exception:
-            return {
-                "success": False,
-                "message": "Failed to decrypt stored SASL password — re-save credentials.",
-            }
+    sasl_password: Optional[str] = cluster_stored.get("sasl_password")
 
     # Build aiokafka producer kwargs.
     producer_kwargs: dict = {

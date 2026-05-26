@@ -13,41 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database import AsyncSessionLocal, get_db
-from models import Metrics, Run, Setting
+from models import Metrics, Run
 from schemas import RunListItem, RunOut, RunStatus
-from services.encryption import decrypt
 from services.omb_runner import runner
 from services.result_parser import parse_result_from_logs
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-_SASL_PASSWORD_PLACEHOLDER = "__SASL_PASSWORD__"
-
-
-async def inject_sasl_password(driver_content: str, db: AsyncSession) -> str:
-    """Replace __SASL_PASSWORD__ in driver_content with the decrypted SASL password."""
-    if _SASL_PASSWORD_PLACEHOLDER not in driver_content:
-        return driver_content
-
-    import json
-    row: Setting | None = await db.get(Setting, "cluster")
-    if row is None:
-        return driver_content
-
-    cluster = json.loads(row.value)
-    enc_password = cluster.get("sasl_password")
-    if not enc_password:
-        return driver_content
-
-    try:
-        plaintext = decrypt(enc_password)
-    except Exception:
-        logger.warning("inject_sasl_password: could not decrypt SASL password")
-        return driver_content
-
-    return driver_content.replace(_SASL_PASSWORD_PLACEHOLDER, plaintext)
 
 
 # ---------------------------------------------------------------------------
@@ -112,12 +85,9 @@ async def create_run(
     await db.commit()
     await db.refresh(run)
 
-    # Substitute the SASL password placeholder before launching
-    resolved_driver = await inject_sasl_password(body.driver_content, db)
-
     # Start the k8s Job — if this fails, mark the run failed immediately
     try:
-        await runner.start(run.id, resolved_driver, body.workload_content)
+        await runner.start(run.id, body.driver_content, body.workload_content)
     except Exception as exc:
         logger.error("Failed to start k8s Job for run %d: %s", run.id, exc)
         async with AsyncSessionLocal() as fail_db:

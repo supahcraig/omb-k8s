@@ -82,7 +82,11 @@ async def healthz():
 # ---------------------------------------------------------------------------
 
 if os.path.isdir(STATIC_DIR):
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    # Vite builds JS/CSS into assets/ — mount it at /assets so the browser
+    # can fetch them with the correct MIME type.
+    _assets_dir = os.path.join(STATIC_DIR, "assets")
+    if os.path.isdir(_assets_dir):
+        app.mount("/assets", StaticFiles(directory=_assets_dir), name="assets")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str):

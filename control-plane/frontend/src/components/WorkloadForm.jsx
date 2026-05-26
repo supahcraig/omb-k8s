@@ -51,6 +51,11 @@ export function buildWorkloadYaml(values, customFields) {
     })
     .map(k => `${k}: ${values[k]}`)
 
+  // The Job init container generates /payload/payload.data with exactly messageSize random bytes.
+  if (!lines.some(l => l.startsWith('payloadFile:'))) {
+    lines.push('payloadFile: /payload/payload.data')
+  }
+
   for (const { key, value } of customFields) {
     if (key.trim()) lines.push(`${key}: ${value}`)
   }

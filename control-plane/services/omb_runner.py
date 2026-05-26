@@ -89,14 +89,39 @@ class OmbRunner:
             for i in range(replica_count)
         )
 
+        # Parse messageSize so the init container generates the right payload size
+        import yaml as _yaml
+        try:
+            _wl = _yaml.safe_load(workload_content) or {}
+            message_size = int(_wl.get("messageSize", 1024))
+        except Exception:
+            message_size = 1024
+
         # 4. Create Job
         job = k8s_client.V1Job(
             metadata=k8s_client.V1ObjectMeta(name=job_name, namespace=namespace),
             spec=k8s_client.V1JobSpec(
                 ttl_seconds_after_finished=300,
+                backoff_limit=0,
                 template=k8s_client.V1PodTemplateSpec(
                     spec=k8s_client.V1PodSpec(
                         restart_policy="Never",
+                        init_containers=[
+                            k8s_client.V1Container(
+                                name="gen-payload",
+                                image="busybox:latest",
+                                command=[
+                                    "dd", "if=/dev/urandom",
+                                    "of=/payload/payload.data",
+                                    f"bs={message_size}", "count=1",
+                                ],
+                                volume_mounts=[
+                                    k8s_client.V1VolumeMount(
+                                        name="payload", mount_path="/payload"
+                                    )
+                                ],
+                            )
+                        ],
                         containers=[
                             k8s_client.V1Container(
                                 name="driver",
@@ -111,12 +136,18 @@ class OmbRunner:
                                     "/etc/omb/workload.yaml",
                                     "--workers",
                                     workers_arg,
+                                    "--output",
+                                    "/tmp/omb-results",
                                 ],
                                 volume_mounts=[
                                     k8s_client.V1VolumeMount(
                                         name="omb-config",
                                         mount_path="/etc/omb",
-                                    )
+                                    ),
+                                    k8s_client.V1VolumeMount(
+                                        name="payload",
+                                        mount_path="/payload",
+                                    ),
                                 ],
                             )
                         ],
@@ -126,7 +157,11 @@ class OmbRunner:
                                 config_map=k8s_client.V1ConfigMapVolumeSource(
                                     name=configmap_name
                                 ),
-                            )
+                            ),
+                            k8s_client.V1Volume(
+                                name="payload",
+                                empty_dir=k8s_client.V1EmptyDirVolumeSource(),
+                            ),
                         ],
                     )
                 ),
