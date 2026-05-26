@@ -1,4 +1,4 @@
-import { normalizeTimeseries, promToChartData } from '../chartDataUtils.js';
+import { normalizeTimeseries, promToChartData, computeLatencyStats } from '../chartDataUtils.js';
 
 describe('normalizeTimeseries', () => {
   const metricsOut = {
@@ -51,8 +51,12 @@ describe('normalizeTimeseries', () => {
 
   test('pubP99 and e2eP99 are always null (not in stored timeseries)', () => {
     const result = normalizeTimeseries(metricsOut, 1024);
+    expect(result[0].pubP50).toBeNull();
     expect(result[0].pubP99).toBeNull();
+    expect(result[0].pubP999).toBeNull();
+    expect(result[0].e2eP50).toBeNull();
     expect(result[0].e2eP99).toBeNull();
+    expect(result[0].e2eP999).toBeNull();
   });
 
   test('returns empty array when metricsOut is null', () => {
@@ -103,5 +107,57 @@ describe('promToChartData', () => {
 
   test('returns empty array for empty input', () => {
     expect(promToChartData([])).toEqual([]);
+  });
+});
+
+describe('computeLatencyStats', () => {
+  const makePoint = (t, pubP50, pubP99, pubP999, e2eP50, e2eP99, e2eP999) => ({
+    t, pubMsgSec: 1, consMsgSec: 1, pubMBSec: 1, consMBSec: 1, backlog: 0,
+    pubP50, pubP99, pubP999, e2eP50, e2eP99, e2eP999,
+  });
+
+  const points = [
+    makePoint(0, 5,  10, 20, 8,  15, 25),  // warmup sample
+    makePoint(1, 6,  12, 22, 9,  16, 26),
+    makePoint(2, 7,  14, 24, 10, 17, 27),
+    makePoint(3, 8,  16, 26, 11, 18, 28),
+  ];
+
+  test('returns null when no non-warmup points', () => {
+    expect(computeLatencyStats(points, 4)).toBeNull();
+  });
+
+  test('excludes warmup samples from stats', () => {
+    const stats = computeLatencyStats(points, 1);
+    expect(stats.pubP50.min).toBe(6);
+    expect(stats.pubP50.max).toBe(8);
+    expect(stats.pubP50.mean).toBeCloseTo(7);
+  });
+
+  test('computes correct min/mean/max for pubP99', () => {
+    const stats = computeLatencyStats(points, 1);
+    expect(stats.pubP99.min).toBe(12);
+    expect(stats.pubP99.max).toBe(16);
+    expect(stats.pubP99.mean).toBeCloseTo(14);
+  });
+
+  test('computes e2e stats correctly', () => {
+    const stats = computeLatencyStats(points, 1);
+    expect(stats.e2eP99.min).toBe(16);
+    expect(stats.e2eP99.max).toBe(18);
+  });
+
+  test('returns null for a stat key when all values are null', () => {
+    const nullPoints = [
+      makePoint(0, null, null, null, null, null, null),
+      makePoint(1, null, null, null, null, null, null),
+    ];
+    const stats = computeLatencyStats(nullPoints, 0);
+    expect(stats.pubP50).toBeNull();
+  });
+
+  test('warmupSamples defaults to 0 (no exclusion)', () => {
+    const stats = computeLatencyStats(points);
+    expect(stats.pubP50.min).toBe(5);
   });
 });

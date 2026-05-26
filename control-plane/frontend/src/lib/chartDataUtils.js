@@ -22,9 +22,34 @@ export function normalizeTimeseries(metricsOut, messageSize) {
     pubMBSec:   pub[i]  * mbFactor,
     consMBSec:  cons[i] * mbFactor,
     backlog:    backlog[i],
+    pubP50:     null,
     pubP99:     null,
+    pubP999:    null,
+    e2eP50:     null,
     e2eP99:     null,
+    e2eP999:    null,
   }));
+}
+
+export function computeLatencyStats(points, warmupSamples = 0) {
+  const sample = points.slice(warmupSamples);
+  if (sample.length === 0) return null;
+
+  function stats(key) {
+    const vals = sample.map(p => p[key]).filter(v => v != null);
+    if (vals.length === 0) return null;
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    return { min: Math.min(...vals), mean, max: Math.max(...vals) };
+  }
+
+  return {
+    pubP50:  stats('pubP50'),
+    pubP99:  stats('pubP99'),
+    pubP999: stats('pubP999'),
+    e2eP50:  stats('e2eP50'),
+    e2eP99:  stats('e2eP99'),
+    e2eP999: stats('e2eP999'),
+  };
 }
 
 export function promToChartData(samples) {

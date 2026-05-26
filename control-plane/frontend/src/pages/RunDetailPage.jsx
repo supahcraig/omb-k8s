@@ -125,12 +125,12 @@ export default function RunDetailPage() {
         liveMatchedRef.current = true
         return [...prev, p]
       })
-      // Patch e2eP99 onto the most recent point when E2E line arrives
-      const e2eVal = parseE2ELatency(line)
-      if (e2eVal !== null) {
+      // Patch e2e latency onto the most recent point when E2E line arrives
+      const e2eObj = parseE2ELatency(line)
+      if (e2eObj !== null) {
         setLivePoints(prev => {
           if (prev.length === 0) return prev
-          const last = { ...prev[prev.length - 1], e2eP99: e2eVal }
+          const last = { ...prev[prev.length - 1], ...e2eObj }
           return [...prev.slice(0, -1), last]
         })
       }
@@ -170,6 +170,8 @@ export default function RunDetailPage() {
   const m = run.metrics
   const workloadParams = run?.workload_config ? parseWorkloadYaml(run.workload_config) : {}
   const messageSize = workloadParams?.values?.messageSize ?? 1024
+  const warmupSamples = (workloadParams?.values?.warmupDurationMinutes ?? 1) * 60
+  const totalSamples  = ((workloadParams?.values?.warmupDurationMinutes ?? 1) + (workloadParams?.values?.testDurationMinutes ?? 5)) * 60
 
   return (
     <div>
@@ -220,6 +222,8 @@ export default function RunDetailPage() {
         promSamples={promSamples}
         isLive={run?.status === 'running'}
         messageSize={messageSize}
+        warmupSamples={warmupSamples}
+        totalSamples={totalSamples}
       />
 
       {/* Log output */}

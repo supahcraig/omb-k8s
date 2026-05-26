@@ -1,7 +1,7 @@
 import { parseLiveMetric, parseE2ELatency } from '../ombLogParser.js';
 
 describe('parseLiveMetric', () => {
-  const fullLine = '16:23:18.626 [main] INFO - Pub rate 98412.300 msg/s / 96.100 MB/s | Cons rate 97881.200 msg/s / 95.600 MB/s | Backlog: 0 K | Pub Latency (ms) avg: 8.200 - 50%: 7.400 - 99%: 15.200 - 99.9%: 22.400 - Max: 25.000 | E2E Latency (ms) avg: 11.300 - 50%: 10.100 - 99%: 18.600 - 99.9%: 28.100 - Max: 30.000';
+  const fullLine = '16:23:18.626 [main] INFO - Pub rate 98412.300 msg/s / 96.100 MB/s | Cons rate 97881.200 msg/s / 95.600 MB/s | Backlog: 0 K | Pub Latency (ms) avg: 8.200 - 50%: 7.400 - 99%: 15.200 - 99.9%: 22.400 - Max: 25.000';
 
   test('parses publish rate', () => {
     const result = parseLiveMetric(fullLine, 5);
@@ -27,7 +27,13 @@ describe('parseLiveMetric', () => {
   test('parses pub and e2e p99 latency', () => {
     const result = parseLiveMetric(fullLine, 5);
     expect(result.pubP99).toBeCloseTo(15.2);
-    expect(result.e2eP99).toBeCloseTo(18.6);
+    expect(result.e2eP99).toBeNull();
+  });
+
+  test('parses pubP50 and pubP999', () => {
+    const result = parseLiveMetric(fullLine, 5);
+    expect(result.pubP50).toBeCloseTo(7.4);
+    expect(result.pubP999).toBeCloseTo(22.4);
   });
 
   test('sets t to sampleIndex', () => {
@@ -64,9 +70,14 @@ describe('parseLiveMetric', () => {
 });
 
 describe('parseE2ELatency', () => {
-  test('parses e2e p99 from standalone E2E line', () => {
-    const line = '16:23:18.636 [main] INFO - E2E Latency (ms) avg: 784.594 - 50%: 677.119 - 99%: 2982.287 - 99.9%: 3684.543 - Max: 4135.519';
-    expect(parseE2ELatency(line)).toBeCloseTo(2982.287);
+  const e2eLine = '16:23:18.636 [main] INFO - E2E Latency (ms) avg: 11.300 - 50%: 10.100 - 99%: 18.600 - 99.9%: 28.100 - Max: 30.000';
+
+  test('parses e2e p50, p99, p999 from standalone E2E line', () => {
+    const result = parseE2ELatency(e2eLine);
+    expect(result).not.toBeNull();
+    expect(result.e2eP50).toBeCloseTo(10.1);
+    expect(result.e2eP99).toBeCloseTo(18.6);
+    expect(result.e2eP999).toBeCloseTo(28.1);
   });
 
   test('returns null for non-E2E line', () => {
