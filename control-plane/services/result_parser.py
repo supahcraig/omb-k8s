@@ -34,6 +34,17 @@ _AGG_PUB_RE = re.compile(
     r'.*?Max:\s*([\d,.]+)'
 )
 
+# Per-second E2E latency line:
+# E2E Latency (ms) avg: X - 50%: X - 99%: X - 99.9%: X - Max: X
+_E2E_STAT_RE = re.compile(
+    r'E2E Latency \(ms\)'
+    r'.*?avg:\s*([\d,.]+)'
+    r'.*?50%:\s*([\d,.]+)'
+    r'.*?99%:\s*([\d,.]+)'
+    r'.*?99\.9%:\s*([\d,.]+)'
+    r'.*?Max:\s*([\d,.]+)'
+)
+
 
 def _num(s: str) -> float:
     return float(s.replace(',', ''))
@@ -110,6 +121,11 @@ def _extract_metrics_from_log_lines(lines: list[str]) -> Optional[dict]:
     cons_rates: list[float] = []
     backlogs: list[float] = []
     agg_pub: Optional[tuple] = None
+    e2e_avgs: list[float] = []
+    e2e_p50s: list[float] = []
+    e2e_p99s: list[float] = []
+    e2e_p999s: list[float] = []
+    e2e_maxs: list[float] = []
 
     for line in lines:
         m = _PUB_STAT_RE.search(line)
@@ -121,6 +137,14 @@ def _extract_metrics_from_log_lines(lines: list[str]) -> Optional[dict]:
         m = _AGG_PUB_RE.search(line)
         if m:
             agg_pub = m.groups()
+
+        m = _E2E_STAT_RE.search(line)
+        if m:
+            e2e_avgs.append(_num(m.group(1)))
+            e2e_p50s.append(_num(m.group(2)))
+            e2e_p99s.append(_num(m.group(3)))
+            e2e_p999s.append(_num(m.group(4)))
+            e2e_maxs.append(_num(m.group(5)))
 
     # Require the aggregate summary line — it only appears on clean completion
     if not agg_pub or not pub_rates:
@@ -139,17 +163,14 @@ def _extract_metrics_from_log_lines(lines: list[str]) -> Optional[dict]:
         "publish_latency_p999": _num(agg_pub[4]),
         "publish_latency_p9999": _num(agg_pub[5]),
         "publish_latency_max": _num(agg_pub[6]),
-        # OMB only logs per-second E2E latency lines; there is no aggregated
-        # E2E summary line to parse. "Pub Delay (us)" is producer-side batching
-        # delay, not end-to-end latency, so we leave these fields as None.
-        "end_to_end_latency_avg": None,
-        "end_to_end_latency_p50": None,
+        "end_to_end_latency_avg": avg(e2e_avgs),
+        "end_to_end_latency_p50": avg(e2e_p50s),
         "end_to_end_latency_p75": None,
         "end_to_end_latency_p95": None,
-        "end_to_end_latency_p99": None,
-        "end_to_end_latency_p999": None,
+        "end_to_end_latency_p99": avg(e2e_p99s),
+        "end_to_end_latency_p999": avg(e2e_p999s),
         "end_to_end_latency_p9999": None,
-        "end_to_end_latency_max": None,
+        "end_to_end_latency_max": avg(e2e_maxs) if e2e_maxs else None,
         "consume_rate_avg": avg(cons_rates),
         "backlog_avg": avg(backlogs),
         "backlog_timeseries": json.dumps({"backlog": backlogs, "sample_rate_ms": 1000}),

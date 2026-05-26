@@ -25,6 +25,9 @@ export default function Layout({ children }) {
           <NavLink to="/workloads" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
             Workload Library
           </NavLink>
+          <NavLink to="/cluster" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+            Cluster
+          </NavLink>
           <NavLink to="/settings" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
             Settings
           </NavLink>

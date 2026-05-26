@@ -49,3 +49,11 @@ export const cancelSweep = (id) => request('DELETE', `/sweeps/${id}`)
 
 // Prometheus samples
 export const getPrometheusSamples = (runId) => request('GET', `/prometheus/runs/${runId}`)
+
+// Cluster / k8s
+export const listPods    = ()                              => request('GET', '/cluster/pods')
+export const getPodLogs  = (name, container, tail = 500)  => {
+  const params = new URLSearchParams({ tail })
+  if (container) params.set('container', container)
+  return request('GET', `/cluster/pods/${encodeURIComponent(name)}/logs?${params}`)
+}

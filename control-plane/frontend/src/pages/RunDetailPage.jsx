@@ -68,6 +68,7 @@ export default function RunDetailPage() {
   const [logDone, setLogDone] = useState(false)
   const [promSamples, setPromSamples] = useState([])
   const [livePoints, setLivePoints] = useState([])
+  const [firstStatAt, setFirstStatAt] = useState(null)
   const wsRef = useRef(null)
   const logEndRef = useRef(null)
   const liveMatchedRef = useRef(false)
@@ -111,6 +112,7 @@ export default function RunDetailPage() {
   useEffect(() => {
     // Reset live state when navigating to a new run
     setLivePoints([])
+    setFirstStatAt(null)
     liveMatchedRef.current = false
     setLogs([])
     setLogDone(false)
@@ -143,6 +145,7 @@ export default function RunDetailPage() {
         const p = parseLiveMetric(line, prev.length)
         if (!p) return prev
         liveMatchedRef.current = true
+        if (prev.length === 0) setFirstStatAt(Date.now())
         return [...prev, p]
       })
       // Patch e2e latency onto the most recent point when E2E line arrives
@@ -244,6 +247,7 @@ export default function RunDetailPage() {
         messageSize={messageSize}
         warmupSamples={warmupSamples}
         totalSamples={totalSamples}
+        startedAt={firstStatAt}
       />
 
       {/* Log output */}
