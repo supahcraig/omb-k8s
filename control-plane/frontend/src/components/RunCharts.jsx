@@ -6,6 +6,25 @@ import {
 } from 'recharts';
 import { normalizeTimeseries, promToChartData, computeLatencyStats } from '../lib/chartDataUtils.js';
 
+const C = {
+  grid:     '#2a3045',
+  axis:     '#7a8399',
+  publish:  '#e63946',
+  consume:  '#4ade80',
+  backlog:  '#f59e0b',
+  pubP50:   '#6ee7b7',
+  pubP99:   '#f59e0b',
+  pubP999:  '#fcd34d',
+  e2eP50:   '#6ee7b7',
+  e2eP99:   '#fcd34d',
+  e2eP999:  '#fb923c',
+  bytesIn:  '#38bdf8',
+  bytesOut: '#7dd3fc',
+  records:  '#a78bfa',
+  pubLatencyGrid: 'rgba(245,158,11,0.2)',
+  e2eLatencyGrid: 'rgba(252,211,77,0.15)',
+};
+
 function ChartCard({ title, badge, children }) {
   return (
     <div className="chart-card">
@@ -50,7 +69,7 @@ function LatencyStatsTable({ stats, keys, labels, warmupNote }) {
   );
 }
 
-export default function RunCharts({ livePoints = [], metricsOut = null, promSamples = [], isLive = false, messageSize = 1024, warmupSamples = 60, totalSamples = 360, startedAt = null }) {
+export default function RunCharts({ livePoints = [], metricsOut = null, promSamples = [], isLive = false, messageSize = 1024, warmupSamples = 60, totalSamples = 360, warmupStartedAt = null, benchmarkStartedAt = null }) {
   const [, setTick] = useState(0)
   useEffect(() => {
     if (!isLive) return
@@ -64,16 +83,24 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
   const promPoints  = promToChartData(promSamples);
   const hasLatency  = chartPoints.some(p => p.pubP99 != null || p.pubP50 != null);
 
-  // startedAt is a ms timestamp set when the first OMB stat line arrives
-  const currentSamples = (isLive && startedAt)
-    ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+  // Progress bar driven by log-line timestamps: bar starts when warmup traffic
+  // begins, green benchmark portion starts when benchmark traffic begins.
+  const currentSamples = (isLive && warmupStartedAt)
+    ? Math.max(0, (Date.now() - warmupStartedAt) / 1000)
     : chartPoints.length
-  const progressPct    = totalSamples > 0 ? Math.min(100, (currentSamples / totalSamples) * 100) : 0;
-  const warmupPct      = totalSamples > 0 ? Math.min(100, (warmupSamples / totalSamples) * 100) : 0;
+  const progressPct = totalSamples > 0 ? Math.min(100, (currentSamples / totalSamples) * 100) : 0
 
-  // During a live run show stats for all collected data so the table isn't
-  // blank for the entire warmup period. Post-run, exclude warmup for accuracy.
-  const statsWarmup = isLive ? 0 : warmupSamples;
+  // Warmup divider: use actual elapsed time to benchmark start if known, else
+  // fall back to the configured warmup duration.
+  const warmupElapsed = (warmupStartedAt && benchmarkStartedAt)
+    ? (benchmarkStartedAt - warmupStartedAt) / 1000
+    : warmupSamples
+  const warmupPct = totalSamples > 0 ? Math.min(100, (warmupElapsed / totalSamples) * 100) : 0
+
+  // Exclude warmup from stats once we have post-warmup data, regardless of
+  // live/complete state — avoids a visible flip in the stats table at completion.
+  // Fall back to all data during warmup so the table isn't blank.
+  const statsWarmup = chartPoints.length > warmupSamples ? warmupSamples : 0;
   const latencyStats = computeLatencyStats(chartPoints, statsWarmup);
 
   if (chartPoints.length === 0 && promPoints.length === 0) return null;
@@ -111,13 +138,13 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
         <ChartCard title="Throughput (msg/s)" badge="omb">
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartPoints} syncId="run">
-              <CartesianGrid strokeDasharray="3 3" stroke="#2a3045" />
-              <XAxis dataKey="t" stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} />
-              <YAxis stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} width={50} />
+              <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
+              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
-              <Legend wrapperStyle={{ fontSize: 11, color: '#7a8399' }} />
-              <Line type="monotone" dataKey="pubMsgSec"  name="publish"  stroke="#e63946" dot={false} strokeWidth={2} />
-              <Line type="monotone" dataKey="consMsgSec" name="consume"  stroke="#4ade80" dot={false} strokeWidth={1.5} strokeDasharray="5 3" />
+              <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
+              <Line type="monotone" dataKey="pubMsgSec"  name="publish"  stroke={C.publish} dot={false} strokeWidth={2} />
+              <Line type="monotone" dataKey="consMsgSec" name="consume"  stroke={C.consume} dot={false} strokeWidth={1.5} strokeDasharray="5 3" />
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -125,13 +152,13 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
         <ChartCard title="Throughput (MB/s)" badge="omb">
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartPoints} syncId="run">
-              <CartesianGrid strokeDasharray="3 3" stroke="#2a3045" />
-              <XAxis dataKey="t" stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} />
-              <YAxis stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} width={50} />
+              <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
+              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
-              <Legend wrapperStyle={{ fontSize: 11, color: '#7a8399' }} />
-              <Line type="monotone" dataKey="pubMBSec"  name="publish"  stroke="#e63946" dot={false} strokeWidth={2} />
-              <Line type="monotone" dataKey="consMBSec" name="consume"  stroke="#4ade80" dot={false} strokeWidth={1.5} strokeDasharray="5 3" />
+              <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
+              <Line type="monotone" dataKey="pubMBSec"  name="publish"  stroke={C.publish} dot={false} strokeWidth={2} />
+              <Line type="monotone" dataKey="consMBSec" name="consume"  stroke={C.consume} dot={false} strokeWidth={1.5} strokeDasharray="5 3" />
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -139,11 +166,11 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
         <ChartCard title="Backlog (msgs)" badge="omb">
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartPoints} syncId="run">
-              <CartesianGrid strokeDasharray="3 3" stroke="#2a3045" />
-              <XAxis dataKey="t" stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} />
-              <YAxis stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} width={65} tickFormatter={v => v.toLocaleString()} />
+              <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
+              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={65} domain={[0, 'auto']} tickFormatter={v => v.toLocaleString()} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={v => [v.toLocaleString(), 'backlog']} />
-              <Line type="monotone" dataKey="backlog" name="backlog" stroke="#f59e0b" dot={false} strokeWidth={2} />
+              <Line type="monotone" dataKey="backlog" name="backlog" stroke={C.backlog} dot={false} strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -155,17 +182,17 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
           <ChartCard title="Publish Latency (ms)" badge="omb">
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={chartPoints} syncId="run">
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a3045" />
-                <XAxis dataKey="t" stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} />
-                <YAxis stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} width={50} />
+                <CartesianGrid strokeDasharray="3 3" stroke={C.pubLatencyGrid} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
-                <Legend wrapperStyle={{ fontSize: 11, color: '#7a8399' }} />
+                <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
                 {warmupSamples > 0 && chartPoints.length > 0 && (
                   <ReferenceArea x1={0} x2={Math.min(warmupSamples, chartPoints[chartPoints.length - 1].t)} fill="rgba(255,255,255,0.04)" />
                 )}
-                <Line type="monotone" dataKey="pubP50"  name="p50"   stroke="#6ee7b7" dot={false} strokeWidth={1.5} strokeDasharray="4 2" connectNulls />
-                <Line type="monotone" dataKey="pubP99"  name="p99"   stroke="#f59e0b" dot={false} strokeWidth={2} connectNulls />
-                <Line type="monotone" dataKey="pubP999" name="p99.9" stroke="#fcd34d" dot={false} strokeWidth={1.5} strokeDasharray="2 2" connectNulls />
+                <Line type="monotone" dataKey="pubP50"  name="p50"   stroke={C.pubP50}  dot={false} strokeWidth={1.5} strokeDasharray="4 2" connectNulls />
+                <Line type="monotone" dataKey="pubP99"  name="p99"   stroke={C.pubP99}  dot={false} strokeWidth={2} connectNulls />
+                <Line type="monotone" dataKey="pubP999" name="p99.9" stroke={C.pubP999} dot={false} strokeWidth={1.5} strokeDasharray="2 2" connectNulls />
               </LineChart>
             </ResponsiveContainer>
             <LatencyStatsTable
@@ -179,17 +206,17 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
           <ChartCard title="E2E Latency (ms)" badge="omb">
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={chartPoints} syncId="run">
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a3045" />
-                <XAxis dataKey="t" stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} />
-                <YAxis stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} width={50} />
+                <CartesianGrid strokeDasharray="3 3" stroke={C.e2eLatencyGrid} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
-                <Legend wrapperStyle={{ fontSize: 11, color: '#7a8399' }} />
+                <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
                 {warmupSamples > 0 && chartPoints.length > 0 && (
                   <ReferenceArea x1={0} x2={Math.min(warmupSamples, chartPoints[chartPoints.length - 1].t)} fill="rgba(255,255,255,0.04)" />
                 )}
-                <Line type="monotone" dataKey="e2eP50"  name="p50"   stroke="#6ee7b7" dot={false} strokeWidth={1.5} strokeDasharray="4 2" connectNulls />
-                <Line type="monotone" dataKey="e2eP99"  name="p99"   stroke="#fcd34d" dot={false} strokeWidth={2} connectNulls />
-                <Line type="monotone" dataKey="e2eP999" name="p99.9" stroke="#fb923c" dot={false} strokeWidth={1.5} strokeDasharray="2 2" connectNulls />
+                <Line type="monotone" dataKey="e2eP50"  name="p50"   stroke={C.e2eP50}  dot={false} strokeWidth={1.5} strokeDasharray="4 2" connectNulls />
+                <Line type="monotone" dataKey="e2eP99"  name="p99"   stroke={C.e2eP99}  dot={false} strokeWidth={2} connectNulls />
+                <Line type="monotone" dataKey="e2eP999" name="p99.9" stroke={C.e2eP999} dot={false} strokeWidth={1.5} strokeDasharray="2 2" connectNulls />
               </LineChart>
             </ResponsiveContainer>
             <LatencyStatsTable
@@ -208,13 +235,13 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
           <ChartCard title="Broker Bytes In/Out (MB/s)" badge="redpanda">
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={promPoints} syncId="run">
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a3045" />
-                <XAxis dataKey="t" stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} />
-                <YAxis stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} width={50} />
+                <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
-                <Legend wrapperStyle={{ fontSize: 11, color: '#7a8399' }} />
-                <Line type="monotone" dataKey="bytesInMBSec"  name="bytes in"  stroke="#38bdf8" dot={false} strokeWidth={2} />
-                <Line type="monotone" dataKey="bytesOutMBSec" name="bytes out" stroke="#7dd3fc" dot={false} strokeWidth={1.5} strokeDasharray="5 3" />
+                <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
+                <Line type="monotone" dataKey="bytesInMBSec"  name="bytes in"  stroke={C.bytesIn}  dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="bytesOutMBSec" name="bytes out" stroke={C.bytesOut} dot={false} strokeWidth={1.5} strokeDasharray="5 3" />
               </LineChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -222,11 +249,11 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
           <ChartCard title="Records / sec" badge="redpanda">
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={promPoints} syncId="run">
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a3045" />
-                <XAxis dataKey="t" stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} />
-                <YAxis stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} width={50} />
+                <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
-                <Line type="monotone" dataKey="recordsPerSec" name="records/sec" stroke="#a78bfa" dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="recordsPerSec" name="records/sec" stroke={C.records} dot={false} strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </ChartCard>

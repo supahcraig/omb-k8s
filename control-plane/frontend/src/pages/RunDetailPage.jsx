@@ -68,7 +68,8 @@ export default function RunDetailPage() {
   const [logDone, setLogDone] = useState(false)
   const [promSamples, setPromSamples] = useState([])
   const [livePoints, setLivePoints] = useState([])
-  const [firstStatAt, setFirstStatAt] = useState(null)
+  const [warmupStartedAt, setWarmupStartedAt] = useState(null)
+  const [benchmarkStartedAt, setBenchmarkStartedAt] = useState(null)
   const wsRef = useRef(null)
   const logEndRef = useRef(null)
   const liveMatchedRef = useRef(false)
@@ -79,8 +80,14 @@ export default function RunDetailPage() {
       setRun(data)
       setError(null)
       if (data.status === 'completed') {
-        // Try to load prometheus samples
         getPrometheusSamples(id).then(setPromSamples).catch(() => {})
+      }
+      // Seed progress bar position from DB timestamp when navigating to a run
+      // mid-flight so the bar isn't stuck at 0. The precise log-line timestamps
+      // will overwrite this if they arrive via WebSocket.
+      if (data.status === 'running' && data.started_at) {
+        const t = new Date(data.started_at).getTime()
+        setWarmupStartedAt(prev => prev ?? t)
       }
     } catch (e) {
       setError(e.message)
@@ -112,7 +119,8 @@ export default function RunDetailPage() {
   useEffect(() => {
     // Reset live state when navigating to a new run
     setLivePoints([])
-    setFirstStatAt(null)
+    setWarmupStartedAt(null)
+    setBenchmarkStartedAt(null)
     liveMatchedRef.current = false
     setLogs([])
     setLogDone(false)
@@ -141,11 +149,12 @@ export default function RunDetailPage() {
       } catch { /* not JSON — it's a log line */ }
       const line = evt.data
       setLogs(prev => [...prev, line])
+      if (line.includes('Starting warm-up traffic'))  setWarmupStartedAt(Date.now())
+      if (line.includes('Starting benchmark traffic')) setBenchmarkStartedAt(Date.now())
       setLivePoints(prev => {
         const p = parseLiveMetric(line, prev.length)
         if (!p) return prev
         liveMatchedRef.current = true
-        if (prev.length === 0) setFirstStatAt(Date.now())
         return [...prev, p]
       })
       // Patch e2e latency onto the most recent point when E2E line arrives
@@ -247,7 +256,8 @@ export default function RunDetailPage() {
         messageSize={messageSize}
         warmupSamples={warmupSamples}
         totalSamples={totalSamples}
-        startedAt={firstStatAt}
+        warmupStartedAt={warmupStartedAt}
+        benchmarkStartedAt={benchmarkStartedAt}
       />
 
       {/* Log output */}

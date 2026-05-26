@@ -10,11 +10,77 @@ const DRIVER_OPTIONS = [
 const DEFAULTS = {
   driver: 'redpanda',
   replicationFactor: 3,
+  retentionMs: 3600000,
   acks: 'all',
   lingerMs: 1,
   batchSize: 131072,
   autoOffsetReset: 'earliest',
   autoCommit: false,
+}
+
+const KNOWN_TOP = new Set(['name', 'driverClass', 'replicationFactor', 'commonConfig', 'topicConfig', 'producerConfig', 'consumerConfig'])
+
+function parseDriverYaml(yamlStr) {
+  if (!yamlStr) return { values: {}, customFields: [] }
+  const values = {}
+  const customFields = []
+  const sections = {}
+  let currentSection = null
+
+  for (const line of yamlStr.split('\n')) {
+    const topMatch = line.match(/^([\w.]+):\s*(.*)$/)
+    if (topMatch) {
+      const [, key, rest] = topMatch
+      currentSection = null
+      const val = rest.trim()
+      if (key === 'name') {
+        const opt = DRIVER_OPTIONS.find(d => d.label === val)
+        if (opt) values.driver = opt.value
+      } else if (key === 'replicationFactor') {
+        values.replicationFactor = Number(val)
+      } else if (KNOWN_TOP.has(key)) {
+        if (val === '|') { sections[key] = []; currentSection = key }
+        else sections[key] = val
+      } else {
+        customFields.push({ key, value: val })
+      }
+      continue
+    }
+    const indented = line.match(/^  (.+)$/)
+    if (indented && currentSection) sections[currentSection].push(indented[1])
+    else currentSection = null
+  }
+
+  for (const item of sections.producerConfig || []) {
+    const m = item.match(/^([\w.]+)=(.+)$/)
+    if (!m) continue
+    if (m[1] === 'acks')      values.acks     = m[2]
+    if (m[1] === 'linger.ms') values.lingerMs = Number(m[2])
+    if (m[1] === 'batch.size') values.batchSize = Number(m[2])
+  }
+  for (const item of sections.consumerConfig || []) {
+    const m = item.match(/^([\w.]+)=(.+)$/)
+    if (!m) continue
+    if (m[1] === 'auto.offset.reset')  values.autoOffsetReset = m[2]
+    if (m[1] === 'enable.auto.commit') values.autoCommit = m[2] === 'true'
+  }
+  for (const item of sections.topicConfig || []) {
+    const m = item.match(/^retention\.ms=(.+)$/)
+    if (m) values.retentionMs = m[1]
+  }
+
+  return { values, customFields }
+}
+
+function fmtRetentionMs(val) {
+  const ms = Number(val)
+  if (val === '' || val == null) return ''
+  if (ms === -1) return 'unlimited'
+  if (ms <= 0) return ''
+  if (ms < 60_000)     return `${+(ms / 1_000).toFixed(1)} sec`
+  if (ms < 3_600_000)  return `${+(ms / 60_000).toFixed(1)} min`
+  if (ms < 86_400_000) return `${+(ms / 3_600_000).toFixed(1)} hr`
+  return `${+(ms / 86_400_000).toFixed(2)} days`
 }
 
 function deriveProtocol(cluster) {
@@ -56,7 +122,12 @@ export function buildDriverYaml(values, customFields, cluster) {
     commonLines.forEach(l => out.push(`  ${l}`))
   }
 
-  out.push(``, `topicConfig: ""`)
+  if (values.retentionMs !== '' && values.retentionMs != null) {
+    out.push(``, `topicConfig: |`)
+    out.push(`  retention.ms=${values.retentionMs}`)
+  } else {
+    out.push(``, `topicConfig: ""`)
+  }
   out.push(``, `producerConfig: |`)
   out.push(`  acks=${values.acks}`)
   out.push(`  linger.ms=${values.lingerMs}`)
@@ -77,17 +148,15 @@ export default function DriverForm({ onChange, initialYaml }) {
   const { settings, hasClusterConfig } = useSettings()
   const cluster = settings?.cluster
 
-  const [values, setValues] = useState({ ...DEFAULTS })
-  const [customFields, setCustomFields] = useState([])
-  const [yamlOverride, setYamlOverride] = useState(initialYaml || null)
+  const { values: parsedValues, customFields: parsedFields } = parseDriverYaml(initialYaml)
+  const [values, setValues] = useState({ ...DEFAULTS, ...parsedValues })
+  const [customFields, setCustomFields] = useState(parsedFields)
 
   useEffect(() => {
-    const yaml = yamlOverride !== null ? yamlOverride : buildDriverYaml(values, customFields, cluster)
-    onChange?.(yaml)
-  }, [values, customFields, yamlOverride, cluster])
+    onChange?.(buildDriverYaml(values, customFields, cluster))
+  }, [values, customFields, cluster])
 
   function setField(key, val) {
-    setYamlOverride(null)
     setValues(prev => ({ ...prev, [key]: val }))
   }
 
@@ -96,16 +165,12 @@ export default function DriverForm({ onChange, initialYaml }) {
   }
 
   function updateCustomField(i, field, val) {
-    setYamlOverride(null)
     setCustomFields(prev => prev.map((f, idx) => idx === i ? { ...f, [field]: val } : f))
   }
 
   function removeCustomField(i) {
     setCustomFields(prev => prev.filter((_, idx) => idx !== i))
   }
-
-  const isOverride = yamlOverride !== null
-  const previewYaml = isOverride ? yamlOverride : buildDriverYaml(values, customFields, cluster)
 
   return (
     <div>
@@ -139,22 +204,37 @@ export default function DriverForm({ onChange, initialYaml }) {
         <div className="form-group">
           <label className="form-label">Driver</label>
           <select className="form-select" value={values.driver}
-            onChange={e => setField('driver', e.target.value)} disabled={isOverride}>
+            onChange={e => setField('driver', e.target.value)}>
             {DRIVER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
         <div className="form-group">
           <label className="form-label">Replication Factor</label>
           <input type="number" className="form-input" value={values.replicationFactor}
-            onChange={e => setField('replicationFactor', Number(e.target.value))} disabled={isOverride} />
+            onChange={e => setField('replicationFactor', Number(e.target.value))} />
         </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">retention.ms</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <input type="number" className="form-input" value={values.retentionMs}
+            placeholder="broker default"
+            onChange={e => setField('retentionMs', e.target.value)} />
+          {fmtRetentionMs(values.retentionMs) && (
+            <span style={{ fontSize: 13, color: 'var(--color-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>
+              ≈ {fmtRetentionMs(values.retentionMs)}
+            </span>
+          )}
+        </div>
+        <span className="form-hint">-1 for unlimited. Empty = broker default.</span>
       </div>
 
       <div className="form-row">
         <div className="form-group">
           <label className="form-label">acks</label>
           <select className="form-select" value={values.acks}
-            onChange={e => setField('acks', e.target.value)} disabled={isOverride}>
+            onChange={e => setField('acks', e.target.value)}>
             <option value="all">all</option>
             <option value="1">1</option>
             <option value="0">0</option>
@@ -163,7 +243,7 @@ export default function DriverForm({ onChange, initialYaml }) {
         <div className="form-group">
           <label className="form-label">linger.ms</label>
           <input type="number" className="form-input" value={values.lingerMs}
-            onChange={e => setField('lingerMs', Number(e.target.value))} disabled={isOverride} />
+            onChange={e => setField('lingerMs', Number(e.target.value))} />
         </div>
       </div>
 
@@ -171,12 +251,12 @@ export default function DriverForm({ onChange, initialYaml }) {
         <div className="form-group">
           <label className="form-label">batch.size</label>
           <input type="number" className="form-input" value={values.batchSize}
-            onChange={e => setField('batchSize', Number(e.target.value))} disabled={isOverride} />
+            onChange={e => setField('batchSize', Number(e.target.value))} />
         </div>
         <div className="form-group">
           <label className="form-label">auto.offset.reset</label>
           <select className="form-select" value={values.autoOffsetReset}
-            onChange={e => setField('autoOffsetReset', e.target.value)} disabled={isOverride}>
+            onChange={e => setField('autoOffsetReset', e.target.value)}>
             <option value="earliest">earliest</option>
             <option value="latest">latest</option>
           </select>
@@ -187,7 +267,7 @@ export default function DriverForm({ onChange, initialYaml }) {
         <div className="toggle-row">
           <label className="toggle">
             <input type="checkbox" checked={values.autoCommit}
-              onChange={e => setField('autoCommit', e.target.checked)} disabled={isOverride} />
+              onChange={e => setField('autoCommit', e.target.checked)} />
             <span className="toggle-slider" />
           </label>
           <span className="toggle-label">enable.auto.commit</span>
@@ -199,35 +279,17 @@ export default function DriverForm({ onChange, initialYaml }) {
           {customFields.map((f, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 6 }}>
               <input className="form-input" placeholder="key" value={f.key}
-                onChange={e => updateCustomField(i, 'key', e.target.value)} disabled={isOverride} />
+                onChange={e => updateCustomField(i, 'key', e.target.value)} />
               <input className="form-input" placeholder="value" value={f.value}
-                onChange={e => updateCustomField(i, 'value', e.target.value)} disabled={isOverride} />
+                onChange={e => updateCustomField(i, 'value', e.target.value)} />
               <button type="button" className="btn btn-danger btn-sm" onClick={() => removeCustomField(i)}>×</button>
             </div>
           ))}
         </div>
       )}
-      <button type="button" className="btn btn-secondary btn-sm" onClick={addCustomField} disabled={isOverride}
-        style={{ marginBottom: 16 }}>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={addCustomField}>
         + Add field
       </button>
-
-      <details open style={{ width: '100%' }}>
-        <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600, marginBottom: 8, userSelect: 'none' }}>
-          YAML Preview {isOverride && <span style={{ color: 'var(--color-warning)', fontSize: 11 }}>(manually overridden)</span>}
-        </summary>
-        <textarea
-          className="form-textarea tall"
-          value={previewYaml}
-          onChange={e => setYamlOverride(e.target.value)}
-        />
-        {isOverride && (
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setYamlOverride(null)}
-            style={{ marginTop: 6 }}>
-            Reset to form
-          </button>
-        )}
-      </details>
     </div>
   )
 }

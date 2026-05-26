@@ -36,28 +36,30 @@ export default function WorkerScalingBar() {
     <div className="worker-bar">
       <span className="worker-label">Workers</span>
       <span className={`worker-readiness ${readinessClass}`}>{readinessLabel}</span>
-      <input
-        type="number"
-        className="worker-spinner-input"
-        value={desired}
-        min={1}
-        max={20}
-        onChange={e => setDesired(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-        title="Desired worker count (1–20)"
-      />
-      <button
-        className="btn-nav"
-        onClick={handleScale}
-        disabled={scaling || desired === desiredFromServer}
-        title={desired === desiredFromServer ? 'Already at desired count' : `Scale to ${desired} workers`}
-      >
-        {scaling ? <span className="spinner" /> : 'Scale'}
-      </button>
-      {scaleError && (
-        <span style={{ color: '#f87171', fontSize: 12, maxWidth: 160 }} title={scaleError}>
-          Scale failed
-        </span>
-      )}
+      <div className="worker-controls">
+        <input
+          type="number"
+          className="worker-spinner-input"
+          value={desired}
+          min={1}
+          max={20}
+          onChange={e => setDesired(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+          title="Desired worker count (1–20)"
+        />
+        <button
+          className="btn-nav"
+          onClick={handleScale}
+          disabled={scaling || desired === desiredFromServer}
+          title={desired === desiredFromServer ? 'Already at desired count' : `Scale to ${desired} workers`}
+        >
+          {scaling ? <span className="spinner" /> : 'Scale'}
+        </button>
+        {scaleError && (
+          <span style={{ color: '#f87171', fontSize: 12 }} title={scaleError}>
+            Scale failed
+          </span>
+        )}
+      </div>
     </div>
   )
 }

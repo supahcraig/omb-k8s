@@ -3,6 +3,7 @@ import { WorkerProvider } from './context/WorkerContext.jsx'
 import { SettingsProvider } from './context/SettingsContext.jsx'
 import Layout from './components/Layout.jsx'
 import RunsPage from './pages/RunsPage.jsx'
+import NewRunPage from './pages/NewRunPage.jsx'
 import RunDetailPage from './pages/RunDetailPage.jsx'
 import SweepsPage from './pages/SweepsPage.jsx'
 import SweepDetailPage from './pages/SweepDetailPage.jsx'
@@ -18,6 +19,7 @@ export default function App() {
           <Layout>
             <Routes>
               <Route path="/" element={<RunsPage />} />
+              <Route path="/runs/new" element={<NewRunPage />} />
               <Route path="/runs/:id" element={<RunDetailPage />} />
               <Route path="/sweeps" element={<SweepsPage />} />
               <Route path="/sweeps/:id" element={<SweepDetailPage />} />
