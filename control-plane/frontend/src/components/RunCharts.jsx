@@ -69,7 +69,7 @@ function LatencyStatsTable({ stats, keys, labels, warmupNote }) {
   );
 }
 
-export default function RunCharts({ livePoints = [], metricsOut = null, promSamples = [], isLive = false, messageSize = 1024, warmupSamples = 60, totalSamples = 360, startedAt = null }) {
+export default function RunCharts({ livePoints = [], metricsOut = null, promSamples = [], isLive = false, messageSize = 1024, warmupSamples = 60, totalSamples = 360, warmupStartedAt = null, benchmarkStartedAt = null }) {
   const [, setTick] = useState(0)
   useEffect(() => {
     if (!isLive) return
@@ -83,12 +83,19 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
   const promPoints  = promToChartData(promSamples);
   const hasLatency  = chartPoints.some(p => p.pubP99 != null || p.pubP50 != null);
 
-  // startedAt is a ms timestamp set when the first OMB stat line arrives
-  const currentSamples = (isLive && startedAt)
-    ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+  // Progress bar driven by log-line timestamps: bar starts when warmup traffic
+  // begins, green benchmark portion starts when benchmark traffic begins.
+  const currentSamples = (isLive && warmupStartedAt)
+    ? Math.max(0, (Date.now() - warmupStartedAt) / 1000)
     : chartPoints.length
-  const progressPct    = totalSamples > 0 ? Math.min(100, (currentSamples / totalSamples) * 100) : 0;
-  const warmupPct      = totalSamples > 0 ? Math.min(100, (warmupSamples / totalSamples) * 100) : 0;
+  const progressPct = totalSamples > 0 ? Math.min(100, (currentSamples / totalSamples) * 100) : 0
+
+  // Warmup divider: use actual elapsed time to benchmark start if known, else
+  // fall back to the configured warmup duration.
+  const warmupElapsed = (warmupStartedAt && benchmarkStartedAt)
+    ? (benchmarkStartedAt - warmupStartedAt) / 1000
+    : warmupSamples
+  const warmupPct = totalSamples > 0 ? Math.min(100, (warmupElapsed / totalSamples) * 100) : 0
 
   // Exclude warmup from stats once we have post-warmup data, regardless of
   // live/complete state — avoids a visible flip in the stats table at completion.
