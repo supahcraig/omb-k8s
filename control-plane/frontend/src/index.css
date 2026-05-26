@@ -923,3 +923,43 @@ body {
   color: #f87171;
   border: 1px solid rgba(153,27,27,0.6);
 }
+
+.run-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.charts-row {
+  display: grid;
+  gap: 12px;
+}
+
+.charts-row-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.charts-row-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.chart-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.chart-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.chart-card-title {
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+}
