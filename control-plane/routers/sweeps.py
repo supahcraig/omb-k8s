@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from database import AsyncSessionLocal, get_db
 from models import Run, Sweep
-from routers.runs import _finish_run
+from routers.runs import _finish_run, inject_sasl_password
 from schemas import RunOut, RunStatus, SweepCreate, SweepOut
 from services.omb_runner import runner
 
@@ -76,6 +76,7 @@ async def create_sweep(
 
         workload_content = _apply_params(body.workload_content, workload_params)
         driver_content = _apply_params(body.driver_base_content, driver_params)
+        driver_content = await inject_sasl_password(driver_content, db)
         workload_contents.append(workload_content)
         driver_contents.append(driver_content)
 

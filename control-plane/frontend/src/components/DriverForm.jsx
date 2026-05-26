@@ -39,7 +39,7 @@ export function buildDriverYaml(values, customFields, cluster) {
         ? 'org.apache.kafka.common.security.plain.PlainLoginModule'
         : 'org.apache.kafka.common.security.scram.ScramLoginModule'
       if (cluster.sasl_username) {
-        commonLines.push(`sasl.jaas.config=${loginModule} required username="${cluster.sasl_username}" password="[configured in settings]";`)
+        commonLines.push(`sasl.jaas.config=${loginModule} required username="${cluster.sasl_username}" password="__SASL_PASSWORD__";`)
       }
     }
   }
@@ -56,6 +56,7 @@ export function buildDriverYaml(values, customFields, cluster) {
     commonLines.forEach(l => out.push(`  ${l}`))
   }
 
+  out.push(``, `topicConfig: ""`)
   out.push(``, `producerConfig: |`)
   out.push(`  acks=${values.acks}`)
   out.push(`  linger.ms=${values.lingerMs}`)
