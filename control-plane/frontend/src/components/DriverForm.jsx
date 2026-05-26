@@ -10,11 +10,23 @@ const DRIVER_OPTIONS = [
 const DEFAULTS = {
   driver: 'redpanda',
   replicationFactor: 3,
+  retentionMs: '',
   acks: 'all',
   lingerMs: 1,
   batchSize: 131072,
   autoOffsetReset: 'earliest',
   autoCommit: false,
+}
+
+function fmtRetentionMs(val) {
+  const ms = Number(val)
+  if (val === '' || val == null) return ''
+  if (ms === -1) return 'unlimited'
+  if (ms <= 0) return ''
+  if (ms < 60_000)     return `${+(ms / 1_000).toFixed(1)} sec`
+  if (ms < 3_600_000)  return `${+(ms / 60_000).toFixed(1)} min`
+  if (ms < 86_400_000) return `${+(ms / 3_600_000).toFixed(1)} hr`
+  return `${+(ms / 86_400_000).toFixed(2)} days`
 }
 
 function deriveProtocol(cluster) {
@@ -56,7 +68,12 @@ export function buildDriverYaml(values, customFields, cluster) {
     commonLines.forEach(l => out.push(`  ${l}`))
   }
 
-  out.push(``, `topicConfig: ""`)
+  if (values.retentionMs !== '' && values.retentionMs != null) {
+    out.push(``, `topicConfig: |`)
+    out.push(`  retention.ms=${values.retentionMs}`)
+  } else {
+    out.push(``, `topicConfig: ""`)
+  }
   out.push(``, `producerConfig: |`)
   out.push(`  acks=${values.acks}`)
   out.push(`  linger.ms=${values.lingerMs}`)
@@ -148,6 +165,21 @@ export default function DriverForm({ onChange, initialYaml }) {
           <input type="number" className="form-input" value={values.replicationFactor}
             onChange={e => setField('replicationFactor', Number(e.target.value))} disabled={isOverride} />
         </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">retention.ms</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <input type="number" className="form-input" value={values.retentionMs}
+            placeholder="broker default"
+            onChange={e => setField('retentionMs', e.target.value)} disabled={isOverride} />
+          {fmtRetentionMs(values.retentionMs) && (
+            <span style={{ fontSize: 13, color: 'var(--color-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>
+              ≈ {fmtRetentionMs(values.retentionMs)}
+            </span>
+          )}
+        </div>
+        <span className="form-hint">-1 for unlimited. Empty = broker default.</span>
       </div>
 
       <div className="form-row">
