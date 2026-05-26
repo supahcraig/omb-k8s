@@ -88,6 +88,26 @@ export default function RunDetailPage() {
     }
   }
 
+  // After the WebSocket signals completion the backend _finish_run task may
+  // still be writing to the DB (it polls every 2 s).  Poll until the status
+  // leaves "running" so the UI reflects the final result without a manual
+  // refresh.
+  async function pollUntilFinished() {
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 500))
+      try {
+        const data = await getRun(id)
+        setRun(data)
+        if (data.status !== 'running') {
+          if (data.status === 'completed') {
+            getPrometheusSamples(id).then(setPromSamples).catch(() => {})
+          }
+          return
+        }
+      } catch { return }
+    }
+  }
+
   useEffect(() => {
     // Reset live state when navigating to a new run
     setLivePoints([])
@@ -113,7 +133,7 @@ export default function RunDetailPage() {
         const msg = JSON.parse(evt.data)
         if (msg.type === 'done') {
           setLogDone(true)
-          loadRun()
+          pollUntilFinished()
           return
         }
       } catch { /* not JSON — it's a log line */ }
@@ -139,7 +159,7 @@ export default function RunDetailPage() {
     ws.onerror = () => setLogDone(true)
     ws.onclose = () => {
       setLogDone(true)
-      loadRun()
+      pollUntilFinished()
     }
 
     return () => {

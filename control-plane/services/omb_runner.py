@@ -284,6 +284,7 @@ class OmbRunner:
                     core_api.read_namespaced_pod_log,
                     name=pod_name,
                     namespace=namespace,
+                    container="driver",
                     follow=True,
                     _request_timeout=3600,
                 ):
@@ -295,6 +296,23 @@ class OmbRunner:
             await run_sync(_do_stream)
         except Exception as exc:
             state["lines"].append(f"[omb-runner] Executor error: {exc}")
+
+        # Fetch the complete log once more after the container exits.
+        # follow=True occasionally misses the last few lines before shutdown;
+        # a non-follow read on the completed pod returns the full buffer.
+        try:
+            complete = await run_sync(
+                core_api.read_namespaced_pod_log,
+                pod_name,
+                namespace,
+                container="driver",
+            )
+            if complete:
+                final_lines = [l for l in complete.split("\n") if l.strip()]
+                if len(final_lines) > len(state["lines"]):
+                    state["lines"] = final_lines
+        except Exception:
+            pass  # keep whatever follow=True captured
 
         # --- Determine success ---
         try:
