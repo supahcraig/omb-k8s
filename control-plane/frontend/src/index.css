@@ -245,6 +245,22 @@ body {
   background: rgba(230,57,70,0.1);
 }
 
+.btn-launch {
+  background: #10b981;
+  color: #fff;
+  border-color: #10b981;
+}
+
+.btn-launch:hover:not(:disabled) {
+  background: #059669;
+  border-color: #059669;
+}
+
+.btn-launch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--color-primary);

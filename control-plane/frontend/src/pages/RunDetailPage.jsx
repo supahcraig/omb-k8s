@@ -80,8 +80,14 @@ export default function RunDetailPage() {
       setRun(data)
       setError(null)
       if (data.status === 'completed') {
-        // Try to load prometheus samples
         getPrometheusSamples(id).then(setPromSamples).catch(() => {})
+      }
+      // Seed progress bar position from DB timestamp when navigating to a run
+      // mid-flight so the bar isn't stuck at 0. The precise log-line timestamps
+      // will overwrite this if they arrive via WebSocket.
+      if (data.status === 'running' && data.started_at) {
+        const t = new Date(data.started_at).getTime()
+        setWarmupStartedAt(prev => prev ?? t)
       }
     } catch (e) {
       setError(e.message)

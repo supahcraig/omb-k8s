@@ -67,16 +67,21 @@ function RunCreateForm({ onCreated, initialWorkloadContent, initialWorkloadName,
   }
 
   return (
-    <div className="card mb-20">
-      <div className="card-header"><h2>New Run</h2></div>
-      <div className="card-body">
-        {notReady && status && <div className="alert alert-warning mb-16">{blockMessage}</div>}
-        {noCluster && (
-          <div className="alert alert-warning mb-16">
-            Configure cluster settings before launching a run.
-          </div>
-        )}
-        <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit}>
+      <div className="card mb-20">
+        <div className="card-header">
+          <h2>New Run</h2>
+          <button type="submit" className="btn btn-launch" disabled={submitting || notReady || noCluster}>
+            {submitting ? <><span className="spinner" /> Launching…</> : 'Launch Run'}
+          </button>
+        </div>
+        <div className="card-body">
+          {notReady && status && <div className="alert alert-warning mb-16">{blockMessage}</div>}
+          {noCluster && (
+            <div className="alert alert-warning mb-16">
+              Configure cluster settings before launching a run.
+            </div>
+          )}
           <div className="form-group">
             <label className="form-label">Run Name (optional)</label>
             <input className="form-input" value={name} onChange={e => setName(e.target.value)}
@@ -105,15 +110,9 @@ function RunCreateForm({ onCreated, initialWorkloadContent, initialWorkloadName,
             </div>
           </div>
           {error && <div className="alert alert-error mt-16">{error}</div>}
-          <div className="mt-20">
-            <button type="submit" className="btn btn-primary"
-              disabled={submitting || notReady || noCluster}>
-              {submitting ? <><span className="spinner" /> Launching…</> : 'Launch Run'}
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
-    </div>
+    </form>
   )
 }
 
@@ -173,8 +172,8 @@ export default function RunsPage() {
     <div>
       <div className="page-header">
         <h1 className="page-title">Benchmark Runs</h1>
-        <button className="btn btn-primary" onClick={handleShowForm}>
-          {showForm ? 'Cancel' : '+ New Run'}
+        <button className="btn btn-secondary" onClick={handleShowForm}>
+          + New Run
         </button>
       </div>
 
