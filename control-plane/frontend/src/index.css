@@ -329,6 +329,8 @@ body {
 }
 
 .form-textarea {
+  width: 100%;
+  box-sizing: border-box;
   resize: both;
   min-height: 120px;
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;

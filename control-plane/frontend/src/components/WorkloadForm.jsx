@@ -33,6 +33,8 @@ export function parseWorkloadYaml(yamlStr) {
     else { const num = Number(val); parsed = !isNaN(num) && val !== '' ? num : val }
     if (KNOWN_KEYS.includes(key)) {
       values[key] = parsed
+    } else if (key === 'payloadFile') {
+      // auto-injected at job creation time — never treat as a custom field
     } else {
       customFields.push({ key, value: val })
     }
@@ -100,12 +102,6 @@ export default function WorkloadForm({ initialYaml, onChange }) {
 
   const previewYaml = yamlOverride !== null ? yamlOverride : buildWorkloadYaml(values, customFields)
   const isOverride = yamlOverride !== null
-
-  const totalMsgSec = Number(values.producerRate) || 0
-  const totalMBSec = (totalMsgSec * (Number(values.messageSize) || 0)) / 1_048_576
-  const perProducerCount = (Number(values.producersPerTopic) || 1) * (Number(values.topics) || 1)
-  const perProducerMsgSec = perProducerCount > 0 ? totalMsgSec / perProducerCount : 0
-  const perProducerMBSec = perProducerCount > 0 ? totalMBSec / perProducerCount : 0
 
   function numInput(key, label, hint) {
     return (
@@ -176,18 +172,6 @@ export default function WorkloadForm({ initialYaml, onChange }) {
           <span className="form-hint">Number of distinct payload buffers to generate at startup.</span>
         </div>
       )}
-
-      <div className="projected-load">
-        <div className="projected-load-title">Projected Load</div>
-        <div className="projected-load-grid">
-          <span>Total</span>
-          <span>{totalMsgSec.toLocaleString()} msg/s</span>
-          <span>{totalMBSec.toFixed(1)} MB/s</span>
-          <span>Per producer</span>
-          <span>{perProducerMsgSec.toLocaleString(undefined, { maximumFractionDigits: 0 })} msg/s</span>
-          <span>{perProducerMBSec.toFixed(1)} MB/s</span>
-        </div>
-      </div>
 
       {customFields.length > 0 && (
         <div style={{ marginBottom: 12 }}>

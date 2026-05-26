@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { listRuns, createRun, getRun } from '../api.js'
 import { useWorker } from '../context/WorkerContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import DriverForm from '../components/DriverForm.jsx'
-import WorkloadForm from '../components/WorkloadForm.jsx'
+import WorkloadForm, { parseWorkloadYaml } from '../components/WorkloadForm.jsx'
 
 function StatusBadge({ status }) {
   return <span className={`badge badge-${status}`}>{status}</span>
@@ -23,6 +23,19 @@ function RunCreateForm({ onCreated, initialWorkloadContent, initialWorkloadName,
   const [workloadYaml, setWorkloadYaml] = useState(initialWorkloadContent || '')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
+
+  const projectedLoad = useMemo(() => {
+    const { values } = parseWorkloadYaml(workloadYaml)
+    const totalMsgSec = Number(values.producerRate) || 0
+    const totalMBSec = (totalMsgSec * (Number(values.messageSize) || 0)) / 1_048_576
+    const perProducerCount = (Number(values.producersPerTopic) || 1) * (Number(values.topics) || 1)
+    return {
+      totalMsgSec,
+      totalMBSec,
+      perProducerMsgSec: perProducerCount > 0 ? totalMsgSec / perProducerCount : 0,
+      perProducerMBSec: perProducerCount > 0 ? totalMBSec / perProducerCount : 0,
+    }
+  }, [workloadYaml])
 
   const notReady = !workersReady
   const blockMessage = status
@@ -70,6 +83,17 @@ function RunCreateForm({ onCreated, initialWorkloadContent, initialWorkloadName,
               placeholder="e.g. 1KB 100-partition baseline" />
           </div>
           <hr className="divider" />
+          <div className="projected-load" style={{ marginBottom: 16 }}>
+            <div className="projected-load-title">Projected Load</div>
+            <div className="projected-load-grid">
+              <span>Total</span>
+              <span>{projectedLoad.totalMsgSec.toLocaleString()} msg/s</span>
+              <span>{projectedLoad.totalMBSec.toFixed(1)} MB/s</span>
+              <span>Per producer</span>
+              <span>{projectedLoad.perProducerMsgSec.toLocaleString(undefined, { maximumFractionDigits: 0 })} msg/s</span>
+              <span>{projectedLoad.perProducerMBSec.toFixed(1)} MB/s</span>
+            </div>
+          </div>
           <div className="form-row" style={{ alignItems: 'start' }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Driver</div>

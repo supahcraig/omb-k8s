@@ -292,6 +292,13 @@ operations after initial deployment.
 8. Run benchmarks
 9. helm uninstall omb && terraform destroy when engagement is complete
 
+## Current environment
+
+- **Cloud:** AWS (EKS)
+- **Kubernetes namespace:** `omb`
+- Use `kubectl -n omb` for all kubectl commands in this project.
+- Use `helm install omb charts/omb -n omb ...` when deploying.
+
 ## Worker memory and JVM settings
 
 Worker pods are standardized at 4 vCPU / 8GB memory. This is fixed — do not
