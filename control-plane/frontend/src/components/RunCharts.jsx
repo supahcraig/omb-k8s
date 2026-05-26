@@ -51,7 +51,9 @@ function LatencyStatsTable({ stats, keys, labels, warmupNote }) {
 }
 
 export default function RunCharts({ livePoints = [], metricsOut = null, promSamples = [], isLive = false, messageSize = 1024, warmupSamples = 60, totalSamples = 360 }) {
-  const chartPoints = isLive || !metricsOut ? livePoints : normalizeTimeseries(metricsOut, messageSize);
+  // Keep live data once collected; only reconstruct from stored metrics when
+  // viewing a historical run (livePoints empty, e.g. after page reload).
+  const chartPoints = livePoints.length > 0 ? livePoints : (metricsOut ? normalizeTimeseries(metricsOut, messageSize) : []);
   const promPoints  = promToChartData(promSamples);
   const hasLatency  = chartPoints.some(p => p.pubP99 != null || p.pubP50 != null);
 
