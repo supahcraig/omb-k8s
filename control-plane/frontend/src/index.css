@@ -302,8 +302,10 @@ body {
 }
 
 .form-hint {
-  font-size: 12px;
+  display: block;
+  font-size: 11px;
   color: var(--color-text-muted);
+  margin-top: 3px;
 }
 
 .form-input,
@@ -697,10 +699,11 @@ body {
 /* ── Section label ──────────────────────────────────── */
 
 .section-label {
-  font-size: 11px;
+  margin-bottom: 8px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--color-text-muted);
   padding: 12px 16px 8px;
   background: #131929;
@@ -860,36 +863,6 @@ body {
   font-size: 16px;
   line-height: 1;
   padding: 0 4px;
-}
-
-/* ── Form layout helpers ────────────────────────────── */
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.form-hint {
-  display: block;
-  font-size: 11px;
-  color: var(--color-text-muted);
-  margin-top: 3px;
-}
-
-.divider {
-  border: none;
-  border-top: 1px solid var(--color-border);
-  margin: 20px 0;
-}
-
-.section-label {
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-text-muted);
 }
 
 .projected-load {
