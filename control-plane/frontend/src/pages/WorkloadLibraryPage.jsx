@@ -145,7 +145,7 @@ export default function WorkloadLibraryPage() {
   useEffect(() => { load() }, [])
 
   function handleUse(workload) {
-    navigate('/', { state: { workloadContent: workload.content, workloadName: workload.name } })
+    navigate('/runs/new', { state: { workloadContent: workload.content, workloadName: workload.name } })
   }
 
   async function handleClone(workload) {

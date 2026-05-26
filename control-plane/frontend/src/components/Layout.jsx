@@ -15,9 +15,13 @@ export default function Layout({ children }) {
         <NavLink to="/" className="app-nav-brand">
           OMB <span>Control Plane</span>
         </NavLink>
+
         <div className="nav-links">
+          <NavLink to="/runs/new" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+            New Run
+          </NavLink>
           <NavLink to="/" end className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
-            Runs
+            Benchmark Runs
           </NavLink>
           <NavLink to="/sweeps" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
             Sweeps
@@ -25,32 +29,42 @@ export default function Layout({ children }) {
           <NavLink to="/workloads" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
             Workload Library
           </NavLink>
+        </div>
+
+        <div className="nav-section-divider" />
+        <div className="nav-section-label">Infrastructure</div>
+
+        <div className="nav-links">
           <NavLink to="/cluster" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
-            Cluster
+            OMB Cluster
           </NavLink>
           <NavLink to="/settings" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
             Settings
           </NavLink>
         </div>
-        <WorkerScalingBar />
+
+        <div className="nav-bottom">
+          <WorkerScalingBar />
+        </div>
       </nav>
 
-      {showBanner && (
-        <div className="setup-banner">
-          <span>⚠</span>
-          <span>
-            Cluster not configured. Add broker address and credentials in{' '}
-            <Link to="/settings">Settings</Link> before running benchmarks.
-          </span>
-          <button className="setup-banner-dismiss" onClick={() => setDismissed(true)} title="Dismiss">
-            ×
-          </button>
-        </div>
-      )}
-
-      <main className="app-content">
-        {children}
-      </main>
+      <div className="app-right">
+        {showBanner && (
+          <div className="setup-banner">
+            <span>⚠</span>
+            <span>
+              Cluster not configured. Add broker address and credentials in{' '}
+              <Link to="/settings">Settings</Link> before running benchmarks.
+            </span>
+            <button className="setup-banner-dismiss" onClick={() => setDismissed(true)} title="Dismiss">
+              ×
+            </button>
+          </div>
+        )}
+        <main className="app-content">
+          {children}
+        </main>
+      </div>
     </div>
   )
 }

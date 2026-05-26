@@ -36,7 +36,7 @@ body {
 
 .app-shell {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   min-height: 100vh;
 }
 
@@ -44,24 +44,28 @@ body {
   background: var(--color-nav-bg);
   color: var(--color-nav-text);
   display: flex;
-  align-items: center;
-  gap: 0;
-  padding: 0 16px;
-  height: 56px;
+  flex-direction: column;
+  width: 220px;
+  min-width: 220px;
+  min-height: 100vh;
   position: sticky;
   top: 0;
+  height: 100vh;
+  overflow-y: auto;
   z-index: 100;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+  box-shadow: 2px 0 6px rgba(0,0,0,0.3);
 }
 
 .app-nav-brand {
+  display: block;
   font-size: 15px;
   font-weight: 700;
   color: #fff;
   text-decoration: none;
-  margin-right: 24px;
   letter-spacing: 0.02em;
-  white-space: nowrap;
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  margin-bottom: 8px;
 }
 
 .app-nav-brand span {
@@ -70,22 +74,21 @@ body {
 
 .nav-links {
   display: flex;
-  align-items: stretch;
+  flex-direction: column;
   gap: 0;
-  flex: 1;
 }
 
 .nav-link {
   display: flex;
   align-items: center;
-  padding: 0 14px;
-  height: 56px;
+  justify-content: space-between;
+  padding: 9px 16px;
   color: var(--color-nav-text);
   text-decoration: none;
   font-size: 13px;
   font-weight: 500;
   transition: background 0.15s;
-  white-space: nowrap;
+  border-left: 3px solid transparent;
 }
 
 .nav-link:hover {
@@ -95,8 +98,37 @@ body {
 
 .nav-link.active {
   background: var(--color-nav-hover);
-  border-bottom: 2px solid var(--color-primary);
+  border-left-color: var(--color-primary);
   color: #fff;
+}
+
+.nav-section-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.07);
+  margin: 10px 0 4px;
+}
+
+.nav-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+  padding: 4px 16px 6px;
+}
+
+
+.nav-bottom {
+  margin-top: auto;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+
+.app-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .app-content {
@@ -104,7 +136,6 @@ body {
   padding: 24px;
   max-width: 1400px;
   width: 100%;
-  margin: 0 auto;
 }
 
 /* ── Cards ─────────────────────────────────────────── */
@@ -138,11 +169,15 @@ body {
 
 .worker-bar {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px 14px;
+}
+
+.worker-controls {
+  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 0 0 16px;
-  border-left: 1px solid rgba(255,255,255,0.1);
-  margin-left: auto;
+  gap: 8px;
 }
 
 .worker-label {

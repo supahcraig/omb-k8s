@@ -151,15 +151,12 @@ export default function DriverForm({ onChange, initialYaml }) {
   const { values: parsedValues, customFields: parsedFields } = parseDriverYaml(initialYaml)
   const [values, setValues] = useState({ ...DEFAULTS, ...parsedValues })
   const [customFields, setCustomFields] = useState(parsedFields)
-  const [yamlOverride, setYamlOverride] = useState(null)
 
   useEffect(() => {
-    const yaml = yamlOverride !== null ? yamlOverride : buildDriverYaml(values, customFields, cluster)
-    onChange?.(yaml)
-  }, [values, customFields, yamlOverride, cluster])
+    onChange?.(buildDriverYaml(values, customFields, cluster))
+  }, [values, customFields, cluster])
 
   function setField(key, val) {
-    setYamlOverride(null)
     setValues(prev => ({ ...prev, [key]: val }))
   }
 
@@ -168,16 +165,12 @@ export default function DriverForm({ onChange, initialYaml }) {
   }
 
   function updateCustomField(i, field, val) {
-    setYamlOverride(null)
     setCustomFields(prev => prev.map((f, idx) => idx === i ? { ...f, [field]: val } : f))
   }
 
   function removeCustomField(i) {
     setCustomFields(prev => prev.filter((_, idx) => idx !== i))
   }
-
-  const isOverride = yamlOverride !== null
-  const previewYaml = isOverride ? yamlOverride : buildDriverYaml(values, customFields, cluster)
 
   return (
     <div>
@@ -211,14 +204,14 @@ export default function DriverForm({ onChange, initialYaml }) {
         <div className="form-group">
           <label className="form-label">Driver</label>
           <select className="form-select" value={values.driver}
-            onChange={e => setField('driver', e.target.value)} disabled={isOverride}>
+            onChange={e => setField('driver', e.target.value)}>
             {DRIVER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
         <div className="form-group">
           <label className="form-label">Replication Factor</label>
           <input type="number" className="form-input" value={values.replicationFactor}
-            onChange={e => setField('replicationFactor', Number(e.target.value))} disabled={isOverride} />
+            onChange={e => setField('replicationFactor', Number(e.target.value))} />
         </div>
       </div>
 
@@ -227,7 +220,7 @@ export default function DriverForm({ onChange, initialYaml }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <input type="number" className="form-input" value={values.retentionMs}
             placeholder="broker default"
-            onChange={e => setField('retentionMs', e.target.value)} disabled={isOverride} />
+            onChange={e => setField('retentionMs', e.target.value)} />
           {fmtRetentionMs(values.retentionMs) && (
             <span style={{ fontSize: 13, color: 'var(--color-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>
               ≈ {fmtRetentionMs(values.retentionMs)}
@@ -241,7 +234,7 @@ export default function DriverForm({ onChange, initialYaml }) {
         <div className="form-group">
           <label className="form-label">acks</label>
           <select className="form-select" value={values.acks}
-            onChange={e => setField('acks', e.target.value)} disabled={isOverride}>
+            onChange={e => setField('acks', e.target.value)}>
             <option value="all">all</option>
             <option value="1">1</option>
             <option value="0">0</option>
@@ -250,7 +243,7 @@ export default function DriverForm({ onChange, initialYaml }) {
         <div className="form-group">
           <label className="form-label">linger.ms</label>
           <input type="number" className="form-input" value={values.lingerMs}
-            onChange={e => setField('lingerMs', Number(e.target.value))} disabled={isOverride} />
+            onChange={e => setField('lingerMs', Number(e.target.value))} />
         </div>
       </div>
 
@@ -258,12 +251,12 @@ export default function DriverForm({ onChange, initialYaml }) {
         <div className="form-group">
           <label className="form-label">batch.size</label>
           <input type="number" className="form-input" value={values.batchSize}
-            onChange={e => setField('batchSize', Number(e.target.value))} disabled={isOverride} />
+            onChange={e => setField('batchSize', Number(e.target.value))} />
         </div>
         <div className="form-group">
           <label className="form-label">auto.offset.reset</label>
           <select className="form-select" value={values.autoOffsetReset}
-            onChange={e => setField('autoOffsetReset', e.target.value)} disabled={isOverride}>
+            onChange={e => setField('autoOffsetReset', e.target.value)}>
             <option value="earliest">earliest</option>
             <option value="latest">latest</option>
           </select>
@@ -274,7 +267,7 @@ export default function DriverForm({ onChange, initialYaml }) {
         <div className="toggle-row">
           <label className="toggle">
             <input type="checkbox" checked={values.autoCommit}
-              onChange={e => setField('autoCommit', e.target.checked)} disabled={isOverride} />
+              onChange={e => setField('autoCommit', e.target.checked)} />
             <span className="toggle-slider" />
           </label>
           <span className="toggle-label">enable.auto.commit</span>
@@ -286,39 +279,17 @@ export default function DriverForm({ onChange, initialYaml }) {
           {customFields.map((f, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 6 }}>
               <input className="form-input" placeholder="key" value={f.key}
-                onChange={e => updateCustomField(i, 'key', e.target.value)} disabled={isOverride} />
+                onChange={e => updateCustomField(i, 'key', e.target.value)} />
               <input className="form-input" placeholder="value" value={f.value}
-                onChange={e => updateCustomField(i, 'value', e.target.value)} disabled={isOverride} />
+                onChange={e => updateCustomField(i, 'value', e.target.value)} />
               <button type="button" className="btn btn-danger btn-sm" onClick={() => removeCustomField(i)}>×</button>
             </div>
           ))}
         </div>
       )}
-      <button type="button" className="btn btn-secondary btn-sm" onClick={addCustomField} disabled={isOverride}
-        style={{ marginBottom: 16 }}>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={addCustomField}>
         + Add field
       </button>
-
-      <hr className="divider" />
-
-      <details open style={{ width: '100%' }}>
-        <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600, marginBottom: 8, userSelect: 'none' }}>
-          YAML Preview {isOverride && <span style={{ color: 'var(--color-warning)', fontSize: 11 }}>(manually overridden)</span>}
-        </summary>
-        <textarea
-          className="form-textarea"
-          style={{ minHeight: 'unset' }}
-          rows={Math.max(8, previewYaml.split('\n').length + 1)}
-          value={previewYaml}
-          onChange={e => setYamlOverride(e.target.value)}
-        />
-        {isOverride && (
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setYamlOverride(null)}
-            style={{ marginTop: 6 }}>
-            Reset to form
-          </button>
-        )}
-      </details>
     </div>
   )
 }
