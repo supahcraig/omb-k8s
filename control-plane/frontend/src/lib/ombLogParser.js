@@ -1,6 +1,6 @@
-const PUB_RE    = /Pub rate:\s*([\d,.]+)\s*msg\/s\s*\/\s*([\d,.]+)\s*MB\/s/;
-const CONS_RE   = /Cons rate:\s*([\d,.]+)\s*msg\/s\s*\/\s*([\d,.]+)\s*MB\/s/;
-const BACK_RE   = /Backlog:\s*([\d,.]+)/;
+const PUB_RE    = /Pub rate\s+([\d,.]+)\s*msg\/s\s*\/\s*([\d,.]+)\s*MB\/s/;
+const CONS_RE   = /Cons rate\s+([\d,.]+)\s*msg\/s\s*\/\s*([\d,.]+)\s*MB\/s/;
+const BACK_RE   = /Backlog:\s*(-?[\d,.]+)/;
 const PUB_P99_RE = /Pub Latency[^|]*?99%:\s*([\d,.]+)/;
 const E2E_P99_RE = /E2E Latency[^|]*?99%:\s*([\d,.]+)/;
 
@@ -26,4 +26,9 @@ export function parseLiveMetric(line, sampleIndex) {
     pubP99:     pubP99Match ? num(pubP99Match[1]) : null,
     e2eP99:     e2eP99Match ? num(e2eP99Match[1]) : null,
   };
+}
+
+export function parseE2ELatency(line) {
+  const m = E2E_P99_RE.exec(line);
+  return m ? num(m[1]) : null;
 }

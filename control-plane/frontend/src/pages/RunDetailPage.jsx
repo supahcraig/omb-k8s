@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getRun, cancelRun, getPrometheusSamples } from '../api.js'
 import RunCharts from '../components/RunCharts.jsx'
-import { parseLiveMetric } from '../lib/ombLogParser.js'
+import { parseLiveMetric, parseE2ELatency } from '../lib/ombLogParser.js'
 import { parseWorkloadYaml } from '../components/WorkloadForm.jsx'
 
 function StatusBadge({ status }) {
@@ -125,6 +125,15 @@ export default function RunDetailPage() {
         liveMatchedRef.current = true
         return [...prev, p]
       })
+      // Patch e2eP99 onto the most recent point when E2E line arrives
+      const e2eVal = parseE2ELatency(line)
+      if (e2eVal !== null) {
+        setLivePoints(prev => {
+          if (prev.length === 0) return prev
+          const last = { ...prev[prev.length - 1], e2eP99: e2eVal }
+          return [...prev.slice(0, -1), last]
+        })
+      }
     }
 
     ws.onerror = () => setLogDone(true)
