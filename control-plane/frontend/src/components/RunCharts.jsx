@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
@@ -50,12 +50,24 @@ function LatencyStatsTable({ stats, keys, labels, warmupNote }) {
   );
 }
 
-export default function RunCharts({ livePoints = [], metricsOut = null, promSamples = [], isLive = false, messageSize = 1024, warmupSamples = 60, totalSamples = 360 }) {
-  const chartPoints = isLive || !metricsOut ? livePoints : normalizeTimeseries(metricsOut, messageSize);
+export default function RunCharts({ livePoints = [], metricsOut = null, promSamples = [], isLive = false, messageSize = 1024, warmupSamples = 60, totalSamples = 360, startedAt = null }) {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    if (!isLive) return
+    const id = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [isLive])
+
+  // Keep live data once collected; only reconstruct from stored metrics when
+  // viewing a historical run (livePoints empty, e.g. after page reload).
+  const chartPoints = livePoints.length > 0 ? livePoints : (metricsOut ? normalizeTimeseries(metricsOut, messageSize) : []);
   const promPoints  = promToChartData(promSamples);
   const hasLatency  = chartPoints.some(p => p.pubP99 != null || p.pubP50 != null);
 
-  const currentSamples = chartPoints.length;
+  // startedAt is a ms timestamp set when the first OMB stat line arrives
+  const currentSamples = (isLive && startedAt)
+    ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+    : chartPoints.length
   const progressPct    = totalSamples > 0 ? Math.min(100, (currentSamples / totalSamples) * 100) : 0;
   const warmupPct      = totalSamples > 0 ? Math.min(100, (warmupSamples / totalSamples) * 100) : 0;
 
@@ -71,10 +83,19 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
       {/* Progress bar */}
       <div className="run-progress">
         <div className="run-progress-bar">
-          {warmupPct > 0 && (
-            <div className="run-progress-warmup-region" style={{ width: `${warmupPct}%` }} />
+          {/* Warmup fill: dark blue, 0 → min(progress, warmup) */}
+          <div className="run-progress-fill" style={{
+            width: `${Math.min(progressPct, warmupPct)}%`,
+            background: '#1e40af',
+          }} />
+          {/* Benchmark fill: green, warmup → progress */}
+          {progressPct > warmupPct && (
+            <div className="run-progress-fill" style={{
+              left: `${warmupPct}%`,
+              width: `${Math.min(progressPct - warmupPct, 100 - warmupPct)}%`,
+              background: '#4ade80',
+            }} />
           )}
-          <div className="run-progress-fill" style={{ width: `${progressPct}%` }} />
           {warmupPct > 0 && warmupPct < 100 && (
             <div className="run-progress-warmup-marker" style={{ left: `${warmupPct}%` }} />
           )}
@@ -115,13 +136,13 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Backlog (K msgs)" badge="omb">
+        <ChartCard title="Backlog (msgs)" badge="omb">
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke="#2a3045" />
               <XAxis dataKey="t" stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} />
-              <YAxis stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} width={50} />
-              <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
+              <YAxis stroke="#7a8399" tick={{ fill: '#7a8399', fontSize: 10 }} width={65} tickFormatter={v => v.toLocaleString()} />
+              <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={v => [v.toLocaleString(), 'backlog']} />
               <Line type="monotone" dataKey="backlog" name="backlog" stroke="#f59e0b" dot={false} strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>

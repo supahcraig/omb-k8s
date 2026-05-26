@@ -8,6 +8,7 @@ import SweepsPage from './pages/SweepsPage.jsx'
 import SweepDetailPage from './pages/SweepDetailPage.jsx'
 import WorkloadLibraryPage from './pages/WorkloadLibraryPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
+import ClusterPage from './pages/ClusterPage.jsx'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
               <Route path="/sweeps/:id" element={<SweepDetailPage />} />
               <Route path="/workloads" element={<WorkloadLibraryPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/cluster" element={<ClusterPage />} />
             </Routes>
           </Layout>
         </BrowserRouter>

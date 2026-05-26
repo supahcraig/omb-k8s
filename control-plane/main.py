@@ -45,6 +45,7 @@ _routers_to_mount = [
     ("routers.settings", "/api/settings", ["settings"]),
     ("routers.workers", "/api/workers", ["workers"]),
     ("routers.prometheus", "/api/prometheus", ["prometheus"]),
+    ("routers.cluster",   "/api/cluster",    ["cluster"]),
 ]
 
 for module_path, prefix, tags in _routers_to_mount:

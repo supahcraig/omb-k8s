@@ -68,6 +68,7 @@ export default function RunDetailPage() {
   const [logDone, setLogDone] = useState(false)
   const [promSamples, setPromSamples] = useState([])
   const [livePoints, setLivePoints] = useState([])
+  const [firstStatAt, setFirstStatAt] = useState(null)
   const wsRef = useRef(null)
   const logEndRef = useRef(null)
   const liveMatchedRef = useRef(false)
@@ -88,9 +89,30 @@ export default function RunDetailPage() {
     }
   }
 
+  // After the WebSocket signals completion the backend _finish_run task may
+  // still be writing to the DB (it polls every 2 s).  Poll until the status
+  // leaves "running" so the UI reflects the final result without a manual
+  // refresh.
+  async function pollUntilFinished() {
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 500))
+      try {
+        const data = await getRun(id)
+        setRun(data)
+        if (data.status !== 'running') {
+          if (data.status === 'completed') {
+            getPrometheusSamples(id).then(setPromSamples).catch(() => {})
+          }
+          return
+        }
+      } catch { return }
+    }
+  }
+
   useEffect(() => {
     // Reset live state when navigating to a new run
     setLivePoints([])
+    setFirstStatAt(null)
     liveMatchedRef.current = false
     setLogs([])
     setLogDone(false)
@@ -113,7 +135,7 @@ export default function RunDetailPage() {
         const msg = JSON.parse(evt.data)
         if (msg.type === 'done') {
           setLogDone(true)
-          loadRun()
+          pollUntilFinished()
           return
         }
       } catch { /* not JSON — it's a log line */ }
@@ -123,6 +145,7 @@ export default function RunDetailPage() {
         const p = parseLiveMetric(line, prev.length)
         if (!p) return prev
         liveMatchedRef.current = true
+        if (prev.length === 0) setFirstStatAt(Date.now())
         return [...prev, p]
       })
       // Patch e2e latency onto the most recent point when E2E line arrives
@@ -139,7 +162,7 @@ export default function RunDetailPage() {
     ws.onerror = () => setLogDone(true)
     ws.onclose = () => {
       setLogDone(true)
-      loadRun()
+      pollUntilFinished()
     }
 
     return () => {
@@ -224,6 +247,7 @@ export default function RunDetailPage() {
         messageSize={messageSize}
         warmupSamples={warmupSamples}
         totalSamples={totalSamples}
+        startedAt={firstStatAt}
       />
 
       {/* Log output */}

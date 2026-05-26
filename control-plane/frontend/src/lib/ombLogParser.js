@@ -42,7 +42,7 @@ export function parseLiveMetric(line, sampleIndex) {
     pubMBSec:   num(pubMatch[2]),
     consMsgSec: num(consMatch[1]),
     consMBSec:  num(consMatch[2]),
-    backlog:    num(backMatch[1]),
+    backlog:    num(backMatch[1]) * 1000,
     pubP50:     pubP50Match   ? num(pubP50Match[1])   : null,
     pubP99:     pubP99Match   ? num(pubP99Match[1])   : null,
     pubP999:    pubP999Match  ? num(pubP999Match[1])  : null,
