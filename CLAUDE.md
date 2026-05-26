@@ -241,11 +241,37 @@ creates Redpanda broker nodes or interacts with the Redpanda Cloud API, stop.
 2. Control plane stores driver + workload YAML as text in SQLite
 3. SE clicks Run
 4. Control plane writes driver + workload YAML into a k8s ConfigMap
-5. Control plane creates a k8s Job mounting the ConfigMap:
-   bin/benchmark --drivers /etc/omb/driver.yaml /etc/omb/workload.yaml \
-     --workers http://omb-worker-0.omb-worker:8080,...
+5. Control plane creates a k8s Job with:
+   - An init container (busybox) that generates `/payload/payload.data` with
+     exactly `messageSize` random bytes via `dd if=/dev/urandom`
+   - The driver container mounting both the ConfigMap and the payload emptyDir:
+     bin/benchmark --drivers /etc/omb/driver.yaml /etc/omb/workload.yaml \
+       --workers http://omb-worker-0.omb-worker:8080,... --output /tmp/omb-results
 6. UI streams Job logs via websocket
 7. On completion, results parsed and stored in SQLite, run record finalized
+
+## OMB runtime quirks — do not remove these workarounds
+
+**`--output` is required.** This OMB build calls `new File(output)` unconditionally
+in `WorkloadGenerator.run()` before checking for null. Omitting `--output` causes
+an immediate NPE. The value `/tmp/omb-results` is a throwaway path — results are
+parsed from logs, not from this file.
+
+**`topicConfig: ""` is required in driver YAML.** `Config.topicConfig` has no Java
+default value. If absent from the driver YAML, Jackson leaves it null and
+`new StringReader(null)` NPEs at driver init. Always emit `topicConfig: ""`.
+
+**`payloadFile` must always be set and point to a file with exactly `messageSize`
+bytes.** This OMB build calls `new File(payloadFile)` unconditionally and then
+enforces an exact byte-count match. The init container generates the file at
+`/payload/payload.data` so any arbitrary `messageSize` works. Do not remove the
+init container or change the path without understanding this constraint.
+
+**SASL password is stored plaintext in SQLite.** Encryption was removed because
+the password ends up in a k8s ConfigMap anyway — encryption provided no real
+security benefit and caused runs to break silently after pod restarts due to
+ephemeral key rotation. The settings API returns `sasl_password` in GET responses
+so `DriverForm` can embed it directly in the generated YAML.
 
 ## Who uses this
 
