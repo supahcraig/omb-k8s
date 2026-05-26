@@ -191,12 +191,16 @@ export default function WorkloadForm({ initialYaml, onChange }) {
         + Add field
       </button>
 
+      <hr className="divider" />
+
       <details open style={{ width: '100%' }}>
         <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600, marginBottom: 8, userSelect: 'none' }}>
           YAML Preview {isOverride && <span style={{ color: 'var(--color-warning)', fontSize: 11 }}>(manually overridden)</span>}
         </summary>
         <textarea
-          className="form-textarea tall"
+          className="form-textarea"
+          style={{ minHeight: 'unset' }}
+          rows={Math.max(8, previewYaml.split('\n').length + 1)}
           value={previewYaml}
           onChange={e => setYamlOverride(e.target.value)}
         />

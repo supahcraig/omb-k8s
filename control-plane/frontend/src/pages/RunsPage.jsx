@@ -99,12 +99,12 @@ function RunCreateForm({ onCreated, initialWorkloadContent, initialWorkloadName,
               <span>{projectedLoad.perProducerMBSec.toFixed(1)} MB/s</span>
             </div>
           </div>
-          <div className="form-row" style={{ alignItems: 'start' }}>
-            <div>
+          <div className="form-row" style={{ alignItems: 'start', gap: 24 }}>
+            <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', padding: '16px' }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Driver</div>
               <DriverForm onChange={setDriverYaml} initialYaml={initialDriverContent} />
             </div>
-            <div>
+            <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', padding: '16px' }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Workload</div>
               <WorkloadForm initialYaml={initialWorkloadContent} onChange={setWorkloadYaml} />
             </div>
