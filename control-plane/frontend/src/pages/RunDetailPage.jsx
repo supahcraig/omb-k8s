@@ -92,6 +92,8 @@ export default function RunDetailPage() {
     // Reset live state when navigating to a new run
     setLivePoints([])
     liveMatchedRef.current = false
+    setLogs([])
+    setLogDone(false)
 
     loadRun()
     // WebSocket log streaming
