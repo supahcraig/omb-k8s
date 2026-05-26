@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { listRuns, createRun } from '../api.js'
+import { listRuns, createRun, getRun } from '../api.js'
 import { useWorker } from '../context/WorkerContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import DriverForm from '../components/DriverForm.jsx'
@@ -15,7 +15,7 @@ function fmt(n, unit = '') {
   return n.toLocaleString(undefined, { maximumFractionDigits: 1 }) + (unit ? ' ' + unit : '')
 }
 
-function RunCreateForm({ onCreated, initialWorkloadContent, initialWorkloadName }) {
+function RunCreateForm({ onCreated, initialWorkloadContent, initialWorkloadName, initialDriverContent }) {
   const { workersReady, status } = useWorker()
   const { hasClusterConfig } = useSettings()
   const [name, setName] = useState(initialWorkloadName ? `Run — ${initialWorkloadName}` : '')
@@ -73,7 +73,7 @@ function RunCreateForm({ onCreated, initialWorkloadContent, initialWorkloadName 
           <div className="form-row" style={{ alignItems: 'start' }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Driver</div>
-              <DriverForm onChange={setDriverYaml} />
+              <DriverForm onChange={setDriverYaml} initialYaml={initialDriverContent} />
             </div>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Workload</div>
@@ -99,6 +99,7 @@ export default function RunsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showForm, setShowForm] = useState(!!location.state?.workloadContent)
+  const [lastRun, setLastRun] = useState(null)
 
   const initialWorkloadContent = location.state?.workloadContent || ''
   const initialWorkloadName = location.state?.workloadName || ''
@@ -117,16 +118,33 @@ export default function RunsPage() {
 
   useEffect(() => { loadRuns() }, [])
 
+  async function handleShowForm() {
+    setShowForm(f => {
+      if (f) return false  // toggling off — no fetch needed
+      return true
+    })
+    if (!showForm && runs.length > 0 && !lastRun) {
+      try {
+        const run = await getRun(runs[0].id)
+        setLastRun(run)
+      } catch { /* ignore — form still works with defaults */ }
+    }
+  }
+
   function handleCreated(run) {
     setShowForm(false)
+    setLastRun(null)
     loadRuns()
   }
+
+  const defaultDriverContent  = initialWorkloadContent ? '' : (lastRun?.driver_config  || '')
+  const defaultWorkloadContent = initialWorkloadContent || lastRun?.workload_config || ''
 
   return (
     <div>
       <div className="page-header">
         <h1 className="page-title">Benchmark Runs</h1>
-        <button className="btn btn-primary" onClick={() => setShowForm(f => !f)}>
+        <button className="btn btn-primary" onClick={handleShowForm}>
           {showForm ? 'Cancel' : '+ New Run'}
         </button>
       </div>
@@ -134,8 +152,9 @@ export default function RunsPage() {
       {showForm && (
         <RunCreateForm
           onCreated={handleCreated}
-          initialWorkloadContent={initialWorkloadContent}
+          initialWorkloadContent={defaultWorkloadContent}
           initialWorkloadName={initialWorkloadName}
+          initialDriverContent={defaultDriverContent}
         />
       )}
 

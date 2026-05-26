@@ -73,13 +73,13 @@ export function buildDriverYaml(values, customFields, cluster) {
   return out.join('\n')
 }
 
-export default function DriverForm({ onChange }) {
+export default function DriverForm({ onChange, initialYaml }) {
   const { settings, hasClusterConfig } = useSettings()
   const cluster = settings?.cluster
 
   const [values, setValues] = useState({ ...DEFAULTS })
   const [customFields, setCustomFields] = useState([])
-  const [yamlOverride, setYamlOverride] = useState(null)
+  const [yamlOverride, setYamlOverride] = useState(initialYaml || null)
 
   useEffect(() => {
     const yaml = yamlOverride !== null ? yamlOverride : buildDriverYaml(values, customFields, cluster)
