@@ -48,46 +48,56 @@ async def create_sweep(
     sweep = Sweep(
         name=body.name,
         status="running",
-        parameter_axes=json.dumps(body.parameter_axes),
+        parameter_axes=json.dumps(body.effective_workload_axes),
         cooldown_seconds=body.cooldown_seconds,
     )
     db.add(sweep)
     await db.commit()
     await db.refresh(sweep)
 
-    # Build all parameter combinations
-    param_names = list(body.parameter_axes.keys())
-    param_values = [body.parameter_axes[k] for k in param_names]
-    combinations = list(itertools.product(*param_values))
+    # Build cartesian product across workload axes and driver axes combined.
+    param_names_workload = list(body.effective_workload_axes.keys())
+    param_values_workload = [body.effective_workload_axes[k] for k in param_names_workload]
+    param_names_driver = list(body.driver_parameter_axes.keys())
+    param_values_driver = [body.driver_parameter_axes[k] for k in param_names_driver]
 
-    # Pre-compute all per-run workload YAMLs once — used both for DB storage
-    # and for passing to the background task (avoids double _apply_params calls).
+    all_param_names = param_names_workload + param_names_driver
+    all_param_values = param_values_workload + param_values_driver
+    combinations = list(itertools.product(*all_param_values)) if all_param_values else [()]
+
     workload_contents: list[str] = []
+    driver_contents: list[str] = []
     run_ids: list[int] = []
+
     for combo in combinations:
-        params = dict(zip(param_names, combo))
-        workload_content = _apply_params(body.workload_content, params)
+        params = dict(zip(all_param_names, combo))
+        workload_params = {k: v for k, v in params.items() if k in param_names_workload}
+        driver_params = {k: v for k, v in params.items() if k in param_names_driver}
+
+        workload_content = _apply_params(body.workload_content, workload_params)
+        driver_content = _apply_params(body.driver_base_content, driver_params)
         workload_contents.append(workload_content)
+        driver_contents.append(driver_content)
+
         run = Run(
             name=f"{body.name} — {_combo_label(params)}",
             status="pending",
-            driver_config=body.driver_base_content,
+            driver_config=driver_content,
             workload_config=workload_content,
             sweep_id=sweep.id,
             sweep_params=json.dumps(params),
         )
         db.add(run)
-        await db.flush()   # populate run.id before commit
+        await db.flush()
         run_ids.append(run.id)
 
     await db.commit()
 
-    # Execute runs sequentially in background, reusing pre-computed contents
     background_tasks.add_task(
         _execute_sweep,
         sweep.id,
         run_ids,
-        body.driver_base_content,
+        driver_contents,
         workload_contents,
         body.cooldown_seconds,
     )
@@ -183,19 +193,20 @@ def _combo_label(params: dict) -> str:
 async def _execute_sweep(
     sweep_id: int,
     run_ids: list[int],
-    driver_base_content: str,
+    driver_contents: list[str],
     workload_contents: list[str],
     cooldown_seconds: int,
 ) -> None:
     """
     Execute sweep runs sequentially with cooldown between them.
 
-    Each run is started, waited to completion (via _finish_run), and then
-    the cooldown delay is observed before the next run starts.
-    workload_contents contains pre-computed per-run YAML (same list used when
-    creating the Run records, so DB storage and actual execution are identical).
+    driver_contents and workload_contents are parallel lists — each index
+    corresponds to the same run_id.  Both lists contain pre-computed per-run
+    YAML matching what was stored in the DB at creation time.
     """
-    for idx, (run_id, workload_content) in enumerate(zip(run_ids, workload_contents)):
+    for idx, (run_id, driver_content, workload_content) in enumerate(
+        zip(run_ids, driver_contents, workload_contents)
+    ):
 
         # Mark run as running
         async with AsyncSessionLocal() as db:
@@ -210,7 +221,7 @@ async def _execute_sweep(
             await db.commit()
 
         try:
-            await runner.start(run_id, driver_base_content, workload_content)
+            await runner.start(run_id, driver_content, workload_content)
         except Exception as exc:
             logger.error("Sweep %d: failed to start run %d: %s", sweep_id, run_id, exc)
             async with AsyncSessionLocal() as db:

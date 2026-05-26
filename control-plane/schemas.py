@@ -99,10 +99,19 @@ class RunOut(BaseModel):
 
 class SweepCreate(BaseModel):
     name: str
-    parameter_axes: Dict[str, Any]
+    workload_parameter_axes: Dict[str, Any] = {}
+    driver_parameter_axes: Dict[str, Any] = {}
+    parameter_axes: Optional[Dict[str, Any]] = None  # deprecated: treated as workload_parameter_axes
     cooldown_seconds: int = 60
     workload_content: str
     driver_base_content: str
+
+    @property
+    def effective_workload_axes(self) -> Dict[str, Any]:
+        """Return workload axes, falling back to deprecated parameter_axes."""
+        if self.workload_parameter_axes:
+            return self.workload_parameter_axes
+        return self.parameter_axes or {}
 
 
 class SweepOut(BaseModel):
@@ -167,10 +176,9 @@ class ClusterConfig(BaseModel):
 
 class PrometheusConfig(BaseModel):
     mode: str  # "byoc" | "self-hosted"
-    remote_write_url: Optional[str] = None
-    remote_write_username: Optional[str] = None
-    remote_write_password: Optional[str] = None   # never returned in GET responses
-    scrape_targets: Optional[List[str]] = None
+    scrape_yaml: Optional[str] = None           # BYOC: full scrape job YAML (password stored as __REDACTED__)
+    scrape_yaml_password: Optional[str] = None  # BYOC: encrypted password extracted from scrape_yaml
+    scrape_targets: Optional[List[str]] = None  # self-hosted, comma-separated
 
 
 class SettingsOut(BaseModel):
