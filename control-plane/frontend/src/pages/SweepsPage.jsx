@@ -8,7 +8,7 @@ import WorkloadForm from '../components/WorkloadForm.jsx'
 
 const WORKLOAD_AXIS_FIELDS = [
   'partitionsPerTopic', 'messageSize', 'producerRate', 'producersPerTopic',
-  'topics', 'subscriptionCount', 'consumerPerSubscription',
+  'topics', 'subscriptionsPerTopic', 'consumerPerSubscription',
   'consumerBacklogSizeGB', 'testDurationMinutes', 'warmupDurationMinutes',
 ]
 

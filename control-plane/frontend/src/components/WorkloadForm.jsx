@@ -4,13 +4,15 @@ const DEFAULTS = {
   topics: 1,
   partitionsPerTopic: 100,
   messageSize: 1024,
-  subscriptionCount: 1,
+  subscriptionsPerTopic: 1,
   producersPerTopic: 4,
   consumerPerSubscription: 1,
   producerRate: 100000,
   consumerBacklogSizeGB: 0,
   testDurationMinutes: 5,
   warmupDurationMinutes: 1,
+  useRandomizedPayloads: false,
+  randomizedPayloadPoolSize: '',
 }
 
 const KNOWN_KEYS = Object.keys(DEFAULTS)
@@ -25,8 +27,10 @@ export function parseWorkloadYaml(yamlStr) {
     if (!match) continue
     const [, key, rawVal] = match
     const val = rawVal.trim()
-    const num = Number(val)
-    const parsed = !isNaN(num) && val !== '' ? num : val
+    let parsed
+    if (val === 'true') parsed = true
+    else if (val === 'false') parsed = false
+    else { const num = Number(val); parsed = !isNaN(num) && val !== '' ? num : val }
     if (KNOWN_KEYS.includes(key)) {
       values[key] = parsed
     } else {
@@ -38,7 +42,13 @@ export function parseWorkloadYaml(yamlStr) {
 
 export function buildWorkloadYaml(values, customFields) {
   const lines = KNOWN_KEYS
-    .filter(k => values[k] !== '' && values[k] !== undefined)
+    .filter(k => {
+      const v = values[k]
+      if (v === '' || v === undefined) return false
+      if (k === 'useRandomizedPayloads' && v === false) return false
+      if (k === 'randomizedPayloadPoolSize' && !values.useRandomizedPayloads) return false
+      return true
+    })
     .map(k => `${k}: ${values[k]}`)
 
   for (const { key, value } of customFields) {
@@ -60,7 +70,14 @@ export default function WorkloadForm({ initialYaml, onChange }) {
 
   function setField(key, val) {
     setYamlOverride(null)
-    setValues(prev => ({ ...prev, [key]: val === '' ? '' : (isNaN(Number(val)) ? val : Number(val)) }))
+    setValues(prev => {
+      const coerced = typeof val === 'boolean' ? val : (val === '' ? '' : (isNaN(Number(val)) ? val : Number(val)))
+      const next = { ...prev, [key]: coerced }
+      if (key === 'useRandomizedPayloads' && val === true && !prev.randomizedPayloadPoolSize) {
+        next.randomizedPayloadPoolSize = 1000
+      }
+      return next
+    })
   }
 
   function addCustomField() {
@@ -112,7 +129,7 @@ export default function WorkloadForm({ initialYaml, onChange }) {
         {numInput('producersPerTopic', 'Producers / Topic')}
         {numInput('consumerPerSubscription', 'Consumers / Subscription')}
       </div>
-      {numInput('subscriptionCount', 'Subscription Count')}
+      {numInput('subscriptionsPerTopic', 'Subscriptions / Topic')}
 
       <div className="section-label" style={{ marginTop: 8 }}>Load</div>
       <div className="form-row">
@@ -126,6 +143,34 @@ export default function WorkloadForm({ initialYaml, onChange }) {
         {numInput('warmupDurationMinutes', 'Warmup', 'min')}
         {numInput('testDurationMinutes', 'Test Duration', 'min')}
       </div>
+
+      <div className="section-label" style={{ marginTop: 8 }}>Payload</div>
+      <div className="form-group" style={{ marginBottom: 12 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: isOverride ? 'default' : 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={!!values.useRandomizedPayloads}
+            onChange={e => setField('useRandomizedPayloads', e.target.checked)}
+            disabled={isOverride}
+          />
+          <span className="form-label" style={{ marginBottom: 0 }}>Randomize payload per message</span>
+        </label>
+        <span className="form-hint">When off, OMB reuses a single random byte array for every message.</span>
+      </div>
+      {values.useRandomizedPayloads && (
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Payload pool size</label>
+          <input
+            type="number"
+            className="form-input"
+            value={values.randomizedPayloadPoolSize}
+            onChange={e => setField('randomizedPayloadPoolSize', e.target.value)}
+            disabled={isOverride}
+            min={1}
+          />
+          <span className="form-hint">Number of distinct payload buffers to generate at startup.</span>
+        </div>
+      )}
 
       <div className="projected-load">
         <div className="projected-load-title">Projected Load</div>
