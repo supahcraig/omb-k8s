@@ -172,7 +172,7 @@ export default function RunsPage() {
     <div>
       <div className="page-header">
         <h1 className="page-title">Benchmark Runs</h1>
-        <button className="btn btn-secondary" onClick={handleShowForm}>
+        <button className="btn btn-primary" onClick={handleShowForm}>
           + New Run
         </button>
       </div>

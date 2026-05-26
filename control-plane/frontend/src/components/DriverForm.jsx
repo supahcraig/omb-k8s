@@ -10,12 +10,66 @@ const DRIVER_OPTIONS = [
 const DEFAULTS = {
   driver: 'redpanda',
   replicationFactor: 3,
-  retentionMs: '',
+  retentionMs: 3600000,
   acks: 'all',
   lingerMs: 1,
   batchSize: 131072,
   autoOffsetReset: 'earliest',
   autoCommit: false,
+}
+
+const KNOWN_TOP = new Set(['name', 'driverClass', 'replicationFactor', 'commonConfig', 'topicConfig', 'producerConfig', 'consumerConfig'])
+
+function parseDriverYaml(yamlStr) {
+  if (!yamlStr) return { values: {}, customFields: [] }
+  const values = {}
+  const customFields = []
+  const sections = {}
+  let currentSection = null
+
+  for (const line of yamlStr.split('\n')) {
+    const topMatch = line.match(/^([\w.]+):\s*(.*)$/)
+    if (topMatch) {
+      const [, key, rest] = topMatch
+      currentSection = null
+      const val = rest.trim()
+      if (key === 'name') {
+        const opt = DRIVER_OPTIONS.find(d => d.label === val)
+        if (opt) values.driver = opt.value
+      } else if (key === 'replicationFactor') {
+        values.replicationFactor = Number(val)
+      } else if (KNOWN_TOP.has(key)) {
+        if (val === '|') { sections[key] = []; currentSection = key }
+        else sections[key] = val
+      } else {
+        customFields.push({ key, value: val })
+      }
+      continue
+    }
+    const indented = line.match(/^  (.+)$/)
+    if (indented && currentSection) sections[currentSection].push(indented[1])
+    else currentSection = null
+  }
+
+  for (const item of sections.producerConfig || []) {
+    const m = item.match(/^([\w.]+)=(.+)$/)
+    if (!m) continue
+    if (m[1] === 'acks')      values.acks     = m[2]
+    if (m[1] === 'linger.ms') values.lingerMs = Number(m[2])
+    if (m[1] === 'batch.size') values.batchSize = Number(m[2])
+  }
+  for (const item of sections.consumerConfig || []) {
+    const m = item.match(/^([\w.]+)=(.+)$/)
+    if (!m) continue
+    if (m[1] === 'auto.offset.reset')  values.autoOffsetReset = m[2]
+    if (m[1] === 'enable.auto.commit') values.autoCommit = m[2] === 'true'
+  }
+  for (const item of sections.topicConfig || []) {
+    const m = item.match(/^retention\.ms=(.+)$/)
+    if (m) values.retentionMs = m[1]
+  }
+
+  return { values, customFields }
 }
 
 function fmtRetentionMs(val) {
@@ -94,9 +148,10 @@ export default function DriverForm({ onChange, initialYaml }) {
   const { settings, hasClusterConfig } = useSettings()
   const cluster = settings?.cluster
 
-  const [values, setValues] = useState({ ...DEFAULTS })
-  const [customFields, setCustomFields] = useState([])
-  const [yamlOverride, setYamlOverride] = useState(initialYaml || null)
+  const { values: parsedValues, customFields: parsedFields } = parseDriverYaml(initialYaml)
+  const [values, setValues] = useState({ ...DEFAULTS, ...parsedValues })
+  const [customFields, setCustomFields] = useState(parsedFields)
+  const [yamlOverride, setYamlOverride] = useState(null)
 
   useEffect(() => {
     const yaml = yamlOverride !== null ? yamlOverride : buildDriverYaml(values, customFields, cluster)
