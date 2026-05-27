@@ -10,8 +10,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from config import settings
-from schemas import WorkerPod, WorkerStatus
+from schemas import WorkerPod, WorkerResources, WorkerStatus
 from services.k8s_client import load_incluster_once, run_sync
+from services.k8s_resources import read_worker_resources
 
 logger = logging.getLogger(__name__)
 
@@ -106,3 +107,13 @@ async def scale_workers(body: ScaleRequest) -> dict:
         )
 
     return {"desired": body.replicas}
+
+
+@router.get("/resources", response_model=WorkerResources)
+async def get_worker_resources() -> WorkerResources:
+    """
+    Return the worker pod CPU request (cores) and memory limit (MiB)
+    by reading the live omb-worker StatefulSet spec.
+    """
+    cpu_cores, mem_mib = await read_worker_resources(settings.omb_namespace)
+    return WorkerResources(cpu_request_cores=cpu_cores, memory_limit_mib=mem_mib)

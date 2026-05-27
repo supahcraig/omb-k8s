@@ -201,3 +201,8 @@ class WorkerStatus(BaseModel):
     desired: int
     ready: int
     pods: List[WorkerPod]
+
+
+class WorkerResources(BaseModel):
+    cpu_request_cores: float
+    memory_limit_mib: int
