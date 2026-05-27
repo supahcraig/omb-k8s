@@ -487,14 +487,14 @@ The SQLite database file is at `/data/omb_ui.db` inside the control-plane pod
 
 ## Build order for implementation
 
-Sessions 1–6 are complete. CI/CD and further docs work remain optional.
+Sessions 1–5 are complete. Session 6 (CI/CD + docs) is pending.
 
 1. ~~Session 1: Repo scaffold + worker image~~ ✓
 2. ~~Session 2: Terraform modules~~ ✓
 3. ~~Session 3: Helm chart~~ ✓
 4. ~~Session 4: Control plane migration~~ ✓
 5. ~~Session 5: UI changes~~ ✓
-6. ~~Session 6: Sweep UX overhaul, status badges, navigation fixes~~ ✓
+6. Session 6: CI/CD + docs
 
 ## Reference docs
 
