@@ -39,9 +39,49 @@ async def _query(client: httpx.AsyncClient, base_url: str, query: str) -> Option
         return None
 
 
+async def _collect_sample(client: httpx.AsyncClient, prom_url: str, namespace: str, run_id: int, t: int) -> None:
+    """Query Prometheus and write one PrometheusSample row."""
+    worker_selector = f'namespace="{namespace}",pod=~"omb-worker-.*",container="worker"'
+
+    cpu_pct = await _query(client, prom_url,
+        f'100 * avg(rate(container_cpu_usage_seconds_total{{{worker_selector}}}[2m]))'
+        f' / {CPU_LIMIT_CORES}')
+
+    memory_mib = await _query(client, prom_url,
+        f'avg(container_memory_working_set_bytes{{{worker_selector}}}) / 1048576')
+
+    # Throttle: fraction of CFS periods that were throttled (→ %)
+    # Returns NaN early in the run before the rate window fills;
+    # _query() converts NaN → None automatically.
+    throttle_pct = await _query(client, prom_url,
+        f'100 * max('
+        f'  rate(container_cpu_cfs_throttled_periods_total{{{worker_selector}}}[2m])'
+        f'  / rate(container_cpu_cfs_periods_total{{{worker_selector}}}[2m])'
+        f')')
+
+    async with AsyncSessionLocal() as db:
+        sample = PrometheusSample(
+            run_id=run_id,
+            t=t,
+            bytes_in_per_sec=None,
+            bytes_out_per_sec=None,
+            records_per_sec=None,
+            worker_cpu_pct=cpu_pct,
+            worker_memory_mib=memory_mib,
+            worker_throttle_pct=throttle_pct,
+        )
+        db.add(sample)
+        try:
+            await db.commit()
+        except Exception as exc:
+            await db.rollback()
+            logger.warning("Failed to save Prometheus sample for run %d t=%d: %s", run_id, t, exc)
+
+
 async def collect_prometheus(run_id: int, namespace: str, prom_url: str) -> None:
     """
     Poll Prometheus every POLL_INTERVAL seconds until the run finishes.
+    Takes an immediate sample on start, then continues at POLL_INTERVAL cadence.
     Writes one PrometheusSample row per interval.
     """
     if not prom_url:
@@ -52,6 +92,9 @@ async def collect_prometheus(run_id: int, namespace: str, prom_url: str) -> None
     t = 0
 
     async with httpx.AsyncClient() as client:
+        # Immediate first sample so charts populate as soon as the run starts
+        await _collect_sample(client, prom_url, namespace, run_id, t)
+
         while not runner.is_done(run_id):
             await asyncio.sleep(POLL_INTERVAL)
             t += POLL_INTERVAL
@@ -59,41 +102,6 @@ async def collect_prometheus(run_id: int, namespace: str, prom_url: str) -> None
             if runner.is_done(run_id):
                 break
 
-            ns = namespace
-            worker_selector = f'namespace="{ns}",pod=~"omb-worker-.*",container="worker"'
-
-            cpu_pct = await _query(client, prom_url,
-                f'100 * avg(rate(container_cpu_usage_seconds_total{{{worker_selector}}}[2m]))'
-                f' / {CPU_LIMIT_CORES}')
-
-            memory_mib = await _query(client, prom_url,
-                f'avg(container_memory_working_set_bytes{{{worker_selector}}}) / 1048576')
-
-            # Throttle: fraction of CFS periods that were throttled (→ %)
-            # Returns NaN early in the run before the rate window fills;
-            # _query() converts NaN → None automatically.
-            throttle_pct = await _query(client, prom_url,
-                f'100 * max('
-                f'  rate(container_cpu_cfs_throttled_periods_total{{{worker_selector}}}[2m])'
-                f'  / rate(container_cpu_cfs_periods_total{{{worker_selector}}}[2m])'
-                f')')
-
-            async with AsyncSessionLocal() as db:
-                sample = PrometheusSample(
-                    run_id=run_id,
-                    t=t,
-                    bytes_in_per_sec=None,
-                    bytes_out_per_sec=None,
-                    records_per_sec=None,
-                    worker_cpu_pct=cpu_pct,
-                    worker_memory_mib=memory_mib,
-                    worker_throttle_pct=throttle_pct,
-                )
-                db.add(sample)
-                try:
-                    await db.commit()
-                except Exception as exc:
-                    await db.rollback()
-                    logger.warning("Failed to save Prometheus sample for run %d t=%d: %s", run_id, t, exc)
+            await _collect_sample(client, prom_url, namespace, run_id, t)
 
     logger.info("Prometheus collection done for run %d (%d samples)", run_id, t // POLL_INTERVAL)
