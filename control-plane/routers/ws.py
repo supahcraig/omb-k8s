@@ -26,6 +26,15 @@ async def ws_run_logs(websocket: WebSocket, run_id: int):
     await websocket.accept()
     sent = 0
     try:
+        # Wait up to 10 s for runner.start() to register the run.
+        # For sweep runs the WS may connect before _execute_sweep calls
+        # runner.start(), and is_done() returns True for unregistered IDs,
+        # which would immediately close the socket with no logs.
+        for _ in range(100):
+            if runner.is_started(run_id):
+                break
+            await asyncio.sleep(0.1)
+
         while True:
             lines = runner.get_lines(run_id)
 

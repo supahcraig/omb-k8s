@@ -220,9 +220,14 @@ creates Redpanda broker nodes or interacts with the Redpanda Cloud API, stop.
 FastAPI's `BackgroundTasks` awaits each task sequentially. `_finish_run` polls for
 the entire benchmark duration (up to 4 hours), so if it is registered as a
 `BackgroundTask`, any task registered after it will never start until the run
-finishes. Both `_finish_run` and `collect_prometheus` are launched via
-`asyncio.create_task()` in `routers/runs.py` so they run concurrently. Do not
-change these back to `background_tasks.add_task()`.
+finishes. Do not change this back to `background_tasks.add_task()`.
+
+**`launch_run()` in `routers/runs.py` is the single entry point for starting any run.**
+It calls `runner.start()`, fires `collect_prometheus` as a non-blocking background
+task, then either fires `_finish_run` as a background task (`await_finish=False`,
+used by single runs) or awaits it inline (`await_finish=True`, used by sweeps for
+sequential execution). Both `create_run` and `_execute_sweep` call `launch_run` —
+do not duplicate the three-step sequence elsewhere.
 
 ## Target clouds
 
@@ -286,12 +291,14 @@ init container or change the path without understanding this constraint.
 
 **Worker pods can get stuck after a cancelled run.** When a run is cancelled
 mid-flight, the OMB worker's internal Java process may be left in an error state.
-The next run will fail immediately when OMB sends `/stop-all` to initialize
-workers — the stuck worker returns HTTP 500. The Cluster tab shows a red health
-dot on unreachable workers and provides a ↺ restart button on every pod row.
-Restarting the worker pod clears the state; the StatefulSet controller recreates
-it immediately. If a run fails with a 500 error on `/stop-all` at startup, go to
-the Cluster tab and restart the worker pods before retrying.
+`OmbRunner.start()` probes every worker via `POST /stop-all` before creating the
+ConfigMap or Job. A healthy idle worker returns 200; a stuck worker returns 500.
+If any worker fails the probe, `start()` raises a `RuntimeError` with a clear
+message naming the worker, which surfaces as an HTTP 503 to the UI for single runs
+or a failed run entry for sweeps. The Cluster tab shows a red health dot on
+unreachable workers and provides a ↺ restart button on every pod row. Restarting
+the worker pod clears the state; the StatefulSet controller recreates it
+immediately.
 
 **SASL password is stored plaintext in SQLite.** Encryption was removed because
 the password ends up in a k8s ConfigMap anyway — encryption provided no real
@@ -363,15 +370,16 @@ handles all navigation. Routes and pages:
 |-------|------|---------|
 | `/` | RunsPage | Results-only list of completed and active runs |
 | `/runs/new` | NewRunPage | Configure and launch a run; prefills from last run on mount |
-| `/runs/:id` | RunDetailPage | Live log streaming, real-time charts, final metrics |
+| `/runs/:id` | RunDetailPage | Live log streaming, real-time charts, final metrics; sweep nav bar when run belongs to a sweep |
 | `/sweeps` | SweepsPage | Parameter sweep list |
-| `/sweeps/:id` | SweepDetailPage | Sweep detail and results |
+| `/sweeps/new` | NewSweepPage | Configure and launch a sweep; navigates to first run on success |
+| `/sweeps/:id` | SweepDetailPage | Sweep overview — run comparison table with links to individual runs |
 | `/workloads` | WorkloadLibraryPage | Saved workload configs; "Use" navigates to `/runs/new` |
 | `/settings` | SettingsPage | Cluster connectivity (BYOC/self-hosted) + Prometheus config |
 | `/cluster` | ClusterPage | k8s cluster status, worker health, pod restart |
 
 Sidebar nav groups:
-- **Main:** New Run / Benchmark Runs / Sweeps / Workload Library
+- **Main:** Benchmark Runs → (sub) + New Run / Sweeps → (sub) + New Sweep / Workload Library
 - **Infrastructure** (below divider): OMB Cluster / Settings
 - **Bottom:** Worker scaling control (label + readiness badge + input + Scale button)
 
@@ -388,6 +396,26 @@ override/lock mechanism back into these components — it was removed because
 the form; `/` (RunsPage) is the results list. They were split because having
 the form toggle on the results page created confusing UX. WorkloadLibrary
 navigates to `/runs/new` with `location.state` to prefill the workload.
+
+**New Sweep is a separate page at `/sweeps/new`.** Mirrors the run pattern —
+`NewSweepPage` is the form, `/sweeps` is the list. The create form was extracted
+from `SweepsPage` (where it was an inline toggle) to remove the duplication and
+give sweeps a consistent entry point in the sidebar.
+
+**Launching a run or sweep navigates immediately to the execution page.**
+`NewRunPage` navigates to `/runs/:id` after `createRun` returns. `NewSweepPage`
+calls `getSweepRuns(sweep.id)` after `createSweep` and navigates to the first
+run's `/runs/:id` (or `/sweeps/:id` if no runs exist yet).
+
+**`RunDetailPage` shows a sweep nav bar when the run belongs to a sweep.**
+If `run.sweep_id` is set, the page fetches sibling runs via `getSweepRuns` and
+renders a horizontal pill strip above the page header. Each pill is colored by
+status (green/blue/gray/red) and numbered by position in the sweep; hovering
+shows the sweep parameter values. The pills poll every 3 s while any sibling is
+still running or pending. When the current run transitions out of `running`, the
+page automatically navigates to the next sibling run. Do not add per-run detail
+logic to `SweepDetailPage` — it is a comparison table only; `RunDetailPage` is
+the shared execution view for both single runs and sweep runs.
 
 **NewRunPage prefills from the most recent run.** On mount it calls `listRuns`
 then `getRun(runs[0].id)` to seed `initialDriverContent` and

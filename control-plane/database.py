@@ -43,6 +43,7 @@ async def init_db() -> None:
             "ALTER TABLE prometheus_samples ADD COLUMN worker_cpu_pct REAL",
             "ALTER TABLE prometheus_samples ADD COLUMN worker_memory_mib REAL",
             "ALTER TABLE prometheus_samples ADD COLUMN worker_throttle_pct REAL",
+            "ALTER TABLE runs ADD COLUMN error_message TEXT",
         ):
             try:
                 await conn.execute(text(col_ddl))

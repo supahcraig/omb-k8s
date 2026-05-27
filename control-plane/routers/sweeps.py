@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from database import AsyncSessionLocal, get_db
 from models import Run, Sweep
-from routers.runs import _finish_run
+from routers.runs import launch_run
 from schemas import RunOut, RunStatus, SweepCreate, SweepOut
 from services.omb_runner import runner
 
@@ -46,7 +46,7 @@ async def create_sweep(
     db: AsyncSession = Depends(get_db),
 ):
     sweep = Sweep(
-        name=body.name,
+        name=body.name or '',
         status="running",
         parameter_axes=json.dumps(body.effective_workload_axes),
         cooldown_seconds=body.cooldown_seconds,
@@ -80,7 +80,7 @@ async def create_sweep(
         driver_contents.append(driver_content)
 
         run = Run(
-            name=f"{body.name} — {_combo_label(params)}",
+            name=_combo_label(params),
             status="pending",
             driver_config=driver_content,
             workload_config=workload_content,
@@ -161,28 +161,61 @@ async def delete_sweep(sweep_id: int, db: AsyncSession = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 
+_PROPERTIES_FIELDS = {"producerConfig", "consumerConfig", "topicConfig"}
+
+
 def _apply_params(workload_yaml: str, params: dict) -> str:
     """
-    Apply parameter overrides to a workload YAML string.
+    Apply parameter overrides to a YAML string.
 
-    Supports simple top-level keys and dot-separated nested keys,
-    e.g. "partitionsPerTopic" or "producerConfig.batchSize".
+    Supports simple top-level keys and dot-separated nested keys.  For driver
+    YAML fields that OMB expects as Java Properties strings (producerConfig,
+    consumerConfig, topicConfig), dot-separated keys like
+    "producerConfig.acks" are handled as property updates inside that string
+    rather than YAML nesting — preserving the string type Jackson requires.
     """
     data = yaml.safe_load(workload_yaml) or {}
     for key, value in params.items():
         parts = key.split(".")
-        target = data
-        for part in parts[:-1]:
-            if part not in target or not isinstance(target[part], dict):
-                target[part] = {}
-            target = target[part]
-        target[parts[-1]] = value
+        if parts[0] in _PROPERTIES_FIELDS and len(parts) > 1:
+            prop_field = parts[0]
+            prop_key = ".".join(parts[1:])
+            existing = data.get(prop_field) or ""
+            props = _parse_properties(existing)
+            props[prop_key] = str(value)
+            data[prop_field] = _dump_properties(props)
+        else:
+            target = data
+            for part in parts[:-1]:
+                if part not in target or not isinstance(target[part], dict):
+                    target[part] = {}
+                target = target[part]
+            target[parts[-1]] = value
     return yaml.dump(data, default_flow_style=False)
+
+
+def _parse_properties(s: str) -> dict:
+    result = {}
+    for line in (s or "").splitlines():
+        line = line.strip()
+        if "=" in line:
+            k, _, v = line.partition("=")
+            result[k.strip()] = v.strip()
+    return result
+
+
+def _dump_properties(props: dict) -> str:
+    return "\n".join(f"{k}={v}" for k, v in props.items())
 
 
 def _combo_label(params: dict) -> str:
     """Build a short human-readable label for a parameter combination."""
-    return ", ".join(f"{k}={v}" for k, v in params.items())
+    def _short_key(k: str) -> str:
+        for prefix in ("producerConfig.", "consumerConfig.", "topicConfig."):
+            if k.startswith(prefix):
+                return k[len(prefix):]
+        return k
+    return ", ".join(f"{_short_key(k)}={v}" for k, v in params.items())
 
 
 # ---------------------------------------------------------------------------
@@ -221,19 +254,17 @@ async def _execute_sweep(
             await db.commit()
 
         try:
-            await runner.start(run_id, driver_content, workload_content)
+            await launch_run(run_id, driver_content, workload_content, await_finish=True)
         except Exception as exc:
             logger.error("Sweep %d: failed to start run %d: %s", sweep_id, run_id, exc)
             async with AsyncSessionLocal() as db:
                 run = await db.get(Run, run_id)
                 if run:
                     run.status = RunStatus.failed.value
+                    run.error_message = str(exc)
                     run.completed_at = datetime.utcnow()
                     await db.commit()
             continue
-
-        # Wait for this run to complete before starting next
-        await _finish_run(run_id)
 
         # Cooldown between runs (not after the last one)
         if idx < len(run_ids) - 1:

@@ -30,6 +30,7 @@ class Run(Base):
     workload_config = Column(Text, nullable=True)
     sweep_id = Column(Integer, nullable=True)  # not FK-constrained intentionally
     sweep_params = Column(Text, nullable=True)  # stored as JSON text
+    error_message = Column(Text, nullable=True)
 
     metrics = relationship(
         "Metrics",

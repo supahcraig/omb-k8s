@@ -10,10 +10,12 @@ const DRIVER_OPTIONS = [
 const DEFAULTS = {
   driver: 'redpanda',
   replicationFactor: 3,
+  reset: true,
   retentionMs: 3600000,
   acks: 'all',
   lingerMs: 1,
   batchSize: 131072,
+  compression: 'none',
   autoOffsetReset: 'earliest',
   autoCommit: false,
 }
@@ -38,6 +40,8 @@ function parseDriverYaml(yamlStr) {
         if (opt) values.driver = opt.value
       } else if (key === 'replicationFactor') {
         values.replicationFactor = Number(val)
+      } else if (key === 'reset') {
+        values.reset = val !== 'false'
       } else if (KNOWN_TOP.has(key)) {
         if (val === '|') { sections[key] = []; currentSection = key }
         else sections[key] = val
@@ -54,9 +58,10 @@ function parseDriverYaml(yamlStr) {
   for (const item of sections.producerConfig || []) {
     const m = item.match(/^([\w.]+)=(.+)$/)
     if (!m) continue
-    if (m[1] === 'acks')      values.acks     = m[2]
-    if (m[1] === 'linger.ms') values.lingerMs = Number(m[2])
-    if (m[1] === 'batch.size') values.batchSize = Number(m[2])
+    if (m[1] === 'acks')             values.acks        = m[2]
+    if (m[1] === 'linger.ms')        values.lingerMs    = Number(m[2])
+    if (m[1] === 'batch.size')       values.batchSize   = Number(m[2])
+    if (m[1] === 'compression.type') values.compression = m[2]
   }
   for (const item of sections.consumerConfig || []) {
     const m = item.match(/^([\w.]+)=(.+)$/)
@@ -115,6 +120,7 @@ export function buildDriverYaml(values, customFields, cluster) {
     `driverClass: ${driverOpt.driverClass}`,
     ``,
     `replicationFactor: ${values.replicationFactor}`,
+    `reset: ${values.reset}`,
   ]
 
   if (commonLines.length) {
@@ -132,6 +138,9 @@ export function buildDriverYaml(values, customFields, cluster) {
   out.push(`  acks=${values.acks}`)
   out.push(`  linger.ms=${values.lingerMs}`)
   out.push(`  batch.size=${values.batchSize}`)
+  if (values.compression && values.compression !== 'none') {
+    out.push(`  compression.type=${values.compression}`)
+  }
 
   out.push(``, `consumerConfig: |`)
   out.push(`  auto.offset.reset=${values.autoOffsetReset}`)
@@ -254,12 +263,41 @@ export default function DriverForm({ onChange, initialYaml }) {
             onChange={e => setField('batchSize', Number(e.target.value))} />
         </div>
         <div className="form-group">
+          <label className="form-label">compression.type</label>
+          <select className="form-select" value={values.compression}
+            onChange={e => setField('compression', e.target.value)}>
+            <option value="none">none</option>
+            <option value="snappy">snappy</option>
+            <option value="lz4">lz4</option>
+            <option value="zstd">zstd</option>
+            <option value="gzip">gzip</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
           <label className="form-label">auto.offset.reset</label>
           <select className="form-select" value={values.autoOffsetReset}
             onChange={e => setField('autoOffsetReset', e.target.value)}>
             <option value="earliest">earliest</option>
             <option value="latest">latest</option>
           </select>
+        </div>
+      </div>
+
+      <div className="form-group">
+        <div className="toggle-row">
+          <label className="toggle">
+            <input type="checkbox" checked={values.reset}
+              onChange={e => setField('reset', e.target.checked)} />
+            <span className="toggle-slider" />
+          </label>
+          <span className="toggle-label">Topic Reset</span>
+          <span
+            className="chart-info-icon"
+            title="When enabled, OMB deletes and recreates the benchmark topic before each run. This ensures a clean slate with no residual messages or offsets. Disable to reuse an existing topic — useful for consumer backlog tests or when you want to avoid topic recreation overhead between sweep runs."
+          >i</span>
         </div>
       </div>
 

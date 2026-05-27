@@ -14,6 +14,7 @@ import asyncio
 import logging
 from typing import Optional
 
+import httpx
 from kubernetes import client as k8s_client
 from kubernetes import watch as k8s_watch
 
@@ -60,6 +61,17 @@ class OmbRunner:
         configmap_name = f"omb-run-{run_id}"
         namespace = settings.omb_namespace
 
+        # 0. Query replica count and probe workers before touching anything.
+        #    /stop-all is safe on healthy idle workers (200 OK) but returns 500
+        #    on workers stuck from a prior cancelled run.
+        apps_api = k8s_client.AppsV1Api()
+        sts = await run_sync(
+            apps_api.read_namespaced_stateful_set, "omb-worker", namespace
+        )
+        replica_count: int = sts.spec.replicas or 1
+        logger.info("omb-worker StatefulSet has %d replica(s)", replica_count)
+        await self._probe_workers(replica_count, namespace)
+
         # 1. Create ConfigMap
         core_api = k8s_client.CoreV1Api()
         cm = k8s_client.V1ConfigMap(
@@ -75,13 +87,7 @@ class OmbRunner:
         await run_sync(core_api.create_namespaced_config_map, namespace, cm)
         logger.info("Created ConfigMap %s in namespace %s", configmap_name, namespace)
 
-        # 2. Query StatefulSet replica count
-        apps_api = k8s_client.AppsV1Api()
-        sts = await run_sync(
-            apps_api.read_namespaced_stateful_set, "omb-worker", namespace
-        )
-        replica_count: int = sts.spec.replicas or 1
-        logger.info("omb-worker StatefulSet has %d replica(s)", replica_count)
+        # 2. (replica_count already known from step 0)
 
         # 3. Construct --workers argument
         workers_arg = ",".join(
@@ -175,6 +181,37 @@ class OmbRunner:
         self._active[run_id] = {"lines": [], "done": False, "success": False}
         asyncio.create_task(self._stream_logs(run_id, job_name))
 
+    async def _probe_workers(self, replica_count: int, namespace: str) -> None:
+        """
+        POST /stop-all to every worker pod concurrently.
+
+        A healthy idle worker returns 200. A worker stuck from a prior cancelled
+        run returns 500. Raises RuntimeError listing every unhealthy worker so
+        the caller can surface a clear message to the SE.
+        """
+        async def _probe_one(idx: int) -> Optional[str]:
+            url = f"http://omb-worker-{idx}.omb-worker.{namespace}.svc.cluster.local:8080/stop-all"
+            try:
+                async with httpx.AsyncClient(timeout=3.0) as client:
+                    resp = await client.post(url)
+                if resp.status_code != 200:
+                    return (
+                        f"omb-worker-{idx} is not ready (HTTP {resp.status_code}) — "
+                        "it may be stuck from a previous cancelled run. "
+                        "Go to the Cluster tab and restart it before running."
+                    )
+            except Exception as exc:
+                return (
+                    f"omb-worker-{idx} is unreachable ({exc}) — "
+                    "verify the worker pod is Running in the Cluster tab."
+                )
+            return None
+
+        results = await asyncio.gather(*[_probe_one(i) for i in range(replica_count)])
+        errors = [r for r in results if r is not None]
+        if errors:
+            raise RuntimeError("; ".join(errors))
+
     async def stop(self, run_id: int) -> None:
         """Delete the k8s Job (and its pods) for the given run."""
         job_name = f"omb-run-{run_id}"
@@ -202,6 +239,10 @@ class OmbRunner:
         if state is None:
             return []
         return list(state["lines"])
+
+    def is_started(self, run_id: int) -> bool:
+        """Return True once runner.start() has registered this run."""
+        return run_id in self._active
 
     def is_done(self, run_id: int) -> bool:
         """Return True if the run's Job has completed or failed."""

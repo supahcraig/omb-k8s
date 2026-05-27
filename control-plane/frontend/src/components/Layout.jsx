@@ -17,13 +17,13 @@ export default function Layout({ children }) {
         </NavLink>
 
         <div className="nav-links">
-          <NavLink to="/runs/new" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
-            New Run
-          </NavLink>
           <NavLink to="/" end className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
             Benchmark Runs
           </NavLink>
-          <NavLink to="/sweeps" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+          <NavLink to="/runs/new" className={({ isActive }) => 'nav-link-sub' + (isActive ? ' active' : '')}>
+            + New Run
+          </NavLink>
+          <NavLink to="/sweeps" end className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
             Sweeps
           </NavLink>
           <NavLink to="/workloads" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>

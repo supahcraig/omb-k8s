@@ -138,7 +138,10 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
         </div>
         <div className="run-progress-labels">
           <span>warmup {warmupSamples}s</span>
-          <span>{currentSamples}s / {totalSamples}s</span>
+          <span>{Math.floor(currentSamples)}s / {totalSamples}s</span>
+          {isLive && warmupStartedAt && currentSamples < totalSamples && (
+            <span className="text-muted">{Math.ceil(totalSamples - currentSamples)}s remaining</span>
+          )}
         </div>
       </div>
 

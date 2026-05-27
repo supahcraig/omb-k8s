@@ -86,27 +86,21 @@ async def create_run(
     await db.commit()
     await db.refresh(run)
 
-    # Start the k8s Job — if this fails, mark the run failed immediately
     try:
-        await runner.start(run.id, body.driver_content, body.workload_content)
+        await launch_run(run.id, body.driver_content, body.workload_content)
     except Exception as exc:
         logger.error("Failed to start k8s Job for run %d: %s", run.id, exc)
         async with AsyncSessionLocal() as fail_db:
             fail_run = await fail_db.get(Run, run.id)
             if fail_run:
                 fail_run.status = RunStatus.failed.value
+                fail_run.error_message = str(exc)
                 fail_run.completed_at = datetime.utcnow()
                 await fail_db.commit()
         raise HTTPException(
             status_code=503,
             detail=f"Failed to start benchmark job: {exc}",
         )
-
-    # Both tasks are long-running coroutines that must run concurrently —
-    # BackgroundTasks awaits sequentially so we use asyncio.create_task() instead.
-    prom_url = f"http://omb-kube-prometheus-stack-prometheus.{settings.omb_namespace}.svc.cluster.local:9090"
-    asyncio.create_task(_finish_run(run.id))
-    asyncio.create_task(collect_prometheus(run.id, settings.omb_namespace, prom_url))
 
     # Re-query with selectinload so Pydantic can access the metrics relationship
     # without hitting the lazy-load greenlet restriction.
@@ -140,6 +134,42 @@ async def delete_run(run_id: int, db: AsyncSession = Depends(get_db)):
     run.status = RunStatus.cancelled.value
     run.completed_at = datetime.utcnow()
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Shared run lifecycle — used by single runs and sweeps
+# ---------------------------------------------------------------------------
+
+
+async def launch_run(
+    run_id: int,
+    driver_content: str,
+    workload_content: str,
+    *,
+    await_finish: bool = False,
+) -> None:
+    """
+    Start a k8s Job, kick off the Prometheus collector, and handle completion.
+
+    await_finish=False (default): _finish_run runs as a background task so the
+    caller returns immediately. Used by single runs via create_run.
+
+    await_finish=True: _finish_run is awaited inline so the caller blocks until
+    the run completes. Used by _execute_sweep to enforce sequential execution.
+
+    Raises on runner.start() failure — callers mark the run failed and surface
+    the error as appropriate for their context (HTTP 503 vs sweep continue).
+    """
+    await runner.start(run_id, driver_content, workload_content)
+    prom_url = (
+        f"http://omb-kube-prometheus-stack-prometheus"
+        f".{settings.omb_namespace}.svc.cluster.local:9090"
+    )
+    asyncio.create_task(collect_prometheus(run_id, settings.omb_namespace, prom_url))
+    if await_finish:
+        await _finish_run(run_id)
+    else:
+        asyncio.create_task(_finish_run(run_id))
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +216,11 @@ async def _finish_run(run_id: int) -> None:
             db.add(metrics)
         else:
             run.status = RunStatus.failed.value
+            run.error_message = (
+                f"Benchmark completed without producing results "
+                f"({len(lines)} log line(s) captured). "
+                "Check the run log for initialization errors or OMB exceptions."
+            )
             logger.warning(
                 "_finish_run: run %d — no parseable metrics (success=%s, lines=%d)",
                 run_id, success, len(lines),

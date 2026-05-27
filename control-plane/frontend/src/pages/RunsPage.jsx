@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listRuns } from '../api.js'
 
+const BADGE_LABELS = { completed: '✓ completed', failed: '✗ failed' }
 function StatusBadge({ status }) {
-  return <span className={`badge badge-${status}`}>{status}</span>
+  return <span className={`badge badge-${status}`}>{BADGE_LABELS[status] ?? status}</span>
 }
 
 function fmt(n, unit = '') {

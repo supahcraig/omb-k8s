@@ -87,6 +87,7 @@ class RunOut(BaseModel):
     workload_config: Optional[str] = None
     sweep_id: Optional[int] = None
     sweep_params: Optional[str] = None
+    error_message: Optional[str] = None
     metrics: Optional[MetricsOut] = None
 
     model_config = {"from_attributes": True}
@@ -98,7 +99,7 @@ class RunOut(BaseModel):
 
 
 class SweepCreate(BaseModel):
-    name: str
+    name: Optional[str] = None
     workload_parameter_axes: Dict[str, Any] = {}
     driver_parameter_axes: Dict[str, Any] = {}
     parameter_axes: Optional[Dict[str, Any]] = None  # deprecated: treated as workload_parameter_axes
@@ -116,7 +117,7 @@ class SweepCreate(BaseModel):
 
 class SweepOut(BaseModel):
     id: int
-    name: str
+    name: Optional[str] = None
     status: str
     parameter_axes: Optional[str] = None   # JSON text from DB
     cooldown_seconds: int
