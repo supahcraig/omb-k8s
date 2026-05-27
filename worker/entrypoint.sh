@@ -6,8 +6,8 @@ set -euo pipefail
 # Calling java directly (not bin/benchmark-worker) so these flags are
 # authoritative and not overridden by HEAP_OPTS in the upstream script.
 JVM_OPTS="\
--Xms4G \
--Xmx4G \
+-XX:InitialRAMPercentage=75.0 \
+-XX:MaxRAMPercentage=75.0 \
 -XX:+UseContainerSupport \
 -XX:+UseG1GC \
 -XX:MaxGCPauseMillis=10 \
