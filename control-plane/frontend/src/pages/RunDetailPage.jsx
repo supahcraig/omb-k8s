@@ -180,12 +180,13 @@ export default function RunDetailPage() {
     }
   }, [id])
 
-  // Poll Prometheus samples every 15s while run is live
+  // Fetch Prometheus samples immediately and then every 5s while run is live
   useEffect(() => {
     if (run?.status !== 'running') return
+    getPrometheusSamples(id).then(setPromSamples).catch(() => {})
     const interval = setInterval(() => {
       getPrometheusSamples(id).then(setPromSamples).catch(() => {})
-    }, 15000)
+    }, 5000)
     return () => clearInterval(interval)
   }, [id, run?.status])
 
