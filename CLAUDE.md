@@ -300,6 +300,15 @@ unreachable workers and provides a ↺ restart button on every pod row. Restarti
 the worker pod clears the state; the StatefulSet controller recreates it
 immediately.
 
+**`producerConfig`, `consumerConfig`, and `topicConfig` in driver YAML must remain
+Java Properties strings, not YAML objects.** Jackson deserializes these fields as
+`String`, not `Map`. If sweep parameter overrides (e.g. `producerConfig.acks`)
+are applied by converting them to YAML nested keys, Jackson throws
+`MismatchedInputException` at driver init. `_apply_params` in `routers/sweeps.py`
+special-cases these three fields: dot-separated keys like `producerConfig.acks`
+are parsed as `key=value` property lines within the existing string value rather
+than being set as nested YAML keys. Do not change this to YAML nesting.
+
 **SASL password is stored plaintext in SQLite.** Encryption was removed because
 the password ends up in a k8s ConfigMap anyway — encryption provided no real
 security benefit and caused runs to break silently after pod restarts due to
@@ -369,17 +378,17 @@ handles all navigation. Routes and pages:
 | Route | Page | Purpose |
 |-------|------|---------|
 | `/` | RunsPage | Results-only list of completed and active runs |
-| `/runs/new` | NewRunPage | Configure and launch a run; prefills from last run on mount |
+| `/runs/new` | NewRunPage | Configure and launch a run or sweep; prefills from last run on mount |
 | `/runs/:id` | RunDetailPage | Live log streaming, real-time charts, final metrics; sweep nav bar when run belongs to a sweep |
 | `/sweeps` | SweepsPage | Parameter sweep list |
-| `/sweeps/new` | NewSweepPage | Configure and launch a sweep; navigates to first run on success |
+| `/sweeps/new` | NewSweepPage | Redirects to `/runs/new` with `state={{ enableSweep: true }}` |
 | `/sweeps/:id` | SweepDetailPage | Sweep overview — run comparison table with links to individual runs |
 | `/workloads` | WorkloadLibraryPage | Saved workload configs; "Use" navigates to `/runs/new` |
 | `/settings` | SettingsPage | Cluster connectivity (BYOC/self-hosted) + Prometheus config |
 | `/cluster` | ClusterPage | k8s cluster status, worker health, pod restart |
 
 Sidebar nav groups:
-- **Main:** Benchmark Runs → (sub) + New Run / Sweeps → (sub) + New Sweep / Workload Library
+- **Main:** Benchmark Runs → (sub) + New Run / Sweeps / Workload Library
 - **Infrastructure** (below divider): OMB Cluster / Settings
 - **Bottom:** Worker scaling control (label + readiness badge + input + Scale button)
 
@@ -397,36 +406,79 @@ the form; `/` (RunsPage) is the results list. They were split because having
 the form toggle on the results page created confusing UX. WorkloadLibrary
 navigates to `/runs/new` with `location.state` to prefill the workload.
 
-**New Sweep is a separate page at `/sweeps/new`.** Mirrors the run pattern —
-`NewSweepPage` is the form, `/sweeps` is the list. The create form was extracted
-from `SweepsPage` (where it was an inline toggle) to remove the duplication and
-give sweeps a consistent entry point in the sidebar.
+**New Run and New Sweep share a single page at `/runs/new`.** `NewRunPage` has a
+pill toggle switch that enables the Parameter Sweep section. When the toggle is
+off, submit creates a single run. When on and at least one axis has values, submit
+creates a sweep. The sweep section sits above the driver/workload panels and
+auto-expands when localStorage contains saved axes with values. `/sweeps/new` is
+kept as a redirect to `/runs/new?state={enableSweep:true}` for backward
+compatibility (bookmarks). Do not add a separate sweep form page.
+
+**Parameter Sweep axes are split into Workload and Driver panels.** Each panel
+has its own field dropdown (from a fixed list + "Custom…" escape hatch) and chip
+inputs. There is no per-row type dropdown. Axes are stored separately in
+localStorage as `workloadAxes` and `driverAxes`. The old format (single `axes`
+array with a `type` field) is migrated on first read.
 
 **Launching a run or sweep navigates immediately to the execution page.**
-`NewRunPage` navigates to `/runs/:id` after `createRun` returns. `NewSweepPage`
-calls `getSweepRuns(sweep.id)` after `createSweep` and navigates to the first
-run's `/runs/:id` (or `/sweeps/:id` if no runs exist yet).
+`NewRunPage` navigates to `/runs/:id` after `createRun` returns, or fetches
+`getSweepRuns(sweep.id)` after `createSweep` and navigates to the first run's
+`/runs/:id` (or `/sweeps/:id` if no runs exist yet).
 
 **`RunDetailPage` shows a sweep nav bar when the run belongs to a sweep.**
 If `run.sweep_id` is set, the page fetches sibling runs via `getSweepRuns` and
-renders a horizontal pill strip above the page header. Each pill is colored by
-status (green/blue/gray/red) and numbered by position in the sweep; hovering
-shows the sweep parameter values. The pills poll every 3 s while any sibling is
-still running or pending. When the current run transitions out of `running`, the
-page automatically navigates to the next sibling run. Do not add per-run detail
-logic to `SweepDetailPage` — it is a comparison table only; `RunDetailPage` is
-the shared execution view for both single runs and sweep runs.
+renders a horizontal pill strip above the page header. Each pill shows the sweep
+parameter values for that run (e.g. `acks=0`) and is colored by status. Pills
+poll every 3 s while any sibling is still running or pending. When the current
+run transitions out of `running` AND the WebSocket signaled completion
+(`wsSignaledDoneRef`), the page auto-advances to the next sibling run. Do not
+add per-run detail logic to `SweepDetailPage` — it is a comparison table only;
+`RunDetailPage` is the shared execution view for both single runs and sweep runs.
+
+**Sweep nav chips stay visible during same-sweep navigation.** The reset effect
+(`useEffect([id])`) deliberately does NOT clear `run`, `sweepRuns`, or `sweep`
+state, so chips remain rendered while the new run loads. A stale-run guard in the
+WS effect (`if (run.id !== Number(id)) return`) prevents the old run's WebSocket
+from opening. `sweepRuns`/`sweep` are cleared only when `run.sweep_id` goes
+falsy (user leaves the sweep entirely).
+
+**`activeRunIdRef` prevents stale async callbacks from contaminating navigation.**
+Every `loadRun` and `pollUntilFinished` call captures `expectedId = Number(id)`
+at call time and checks `activeRunIdRef.current !== expectedId` after every
+`await`. The reset effect sets `activeRunIdRef.current = Number(id)` before
+calling `loadRun`. This prevents the WebSocket `onclose` handler of a prior run
+from calling `setRun` on the new run's page, which was the root cause of
+auto-advance misfires when navigating between sweep runs.
+
+**`RunDetailPage` shows a cooldown countdown between sweep runs.** When the
+current run is completed and the next run is pending, or when the current run is
+pending and the previous run just completed, a 🧊 countdown badge appears in the
+sweep nav bar. The timer is anchored to `run.completed_at + sweep.cooldown_seconds`
+from the server, so it is accurate after navigation. SQLite stores naive UTC
+datetimes without 'Z'; always append 'Z' before `new Date(ts)` in JavaScript to
+avoid local-timezone misinterpretation.
+
+**Status badges in `RunDetailPage` reflect live run sub-phases.** While
+`run.status === 'running'`, a finer-grained `displayStatus` is derived from live
+log parse state: `initializing` (purple, before warmup traffic log line), `warmup`
+(blue, after "Starting warm-up traffic"), `running` (green, after "Starting
+benchmark traffic"). During cooldown: `cooldown` (cyan). Pending sweep runs:
+`queued` (gray). Do NOT seed `warmupStartedAt` from `run.started_at` in
+`loadRun` — `started_at` is the Job creation time (JVM init), not the moment
+warmup traffic begins, which would incorrectly show "warming up" during
+initializing.
 
 **NewRunPage prefills from the most recent run.** On mount it calls `listRuns`
 then `getRun(runs[0].id)` to seed `initialDriverContent` and
 `initialWorkload`. If navigating from WorkloadLibrary (`location.state?.workloadContent`),
 the prefill fetch is skipped and the library content is used instead.
 
-**4-panel layout in NewRunPage.** The new run form uses a 2×2 CSS grid sitting
-directly on the page background (not inside a card), so the dark page color
-shows in the gaps. Top row: Driver form panel (blue accent) + Workload form
-panel (green accent). Bottom row: Driver YAML panel + Workload YAML panel
-(darker `#0d1018` background to read as code).
+**NewRunPage layout: sweep section above the 2×2 panel grid.** The page renders
+top-to-bottom: (1) header card with name, launch button, and projected load;
+(2) Parameter Sweep card with toggle, cooldown input, and workload/driver axis
+panels; (3) 2×2 CSS grid sitting directly on the page background — top row:
+Driver form panel (blue accent) + Workload form panel (green accent); bottom row:
+Driver YAML panel + Workload YAML panel (darker `#0d1018` to read as code).
 
 ## SQLite database
 
@@ -435,14 +487,14 @@ The SQLite database file is at `/data/omb_ui.db` inside the control-plane pod
 
 ## Build order for implementation
 
-Sessions 1–5 are complete. Session 6 (CI/CD + docs) is pending.
+Sessions 1–6 are complete. CI/CD and further docs work remain optional.
 
 1. ~~Session 1: Repo scaffold + worker image~~ ✓
 2. ~~Session 2: Terraform modules~~ ✓
 3. ~~Session 3: Helm chart~~ ✓
 4. ~~Session 4: Control plane migration~~ ✓
 5. ~~Session 5: UI changes~~ ✓
-6. Session 6: CI/CD + docs
+6. ~~Session 6: Sweep UX overhaul, status badges, navigation fixes~~ ✓
 
 ## Reference docs
 
