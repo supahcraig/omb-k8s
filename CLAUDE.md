@@ -92,10 +92,13 @@ lives on disk permanently except the SQLite file itself on the PV.
 SQLite is sufficient, requires zero migration from the existing codebase, and
 survives pod restarts via the PV. Do not introduce Postgres.
 
-**JVM heap is fixed in the Dockerfile entrypoint, not configurable.** Worker pods
-are standardized at 4 vCPU / 8GB. Heap is set to -Xms4G -Xmx4G. Scaling is
-horizontal (more pods) not vertical (bigger pods or more heap). Do not expose JVM
-settings as Helm values.
+**JVM heap is computed from container memory at startup, not hardcoded.** Worker pod
+container memory is driven by `worker.resources.memory` in the Helm values. At pod start,
+`-XX:MaxRAMPercentage=75.0` combined with `-XX:+UseContainerSupport` causes the JVM to
+read its cgroup memory limit and set heap = 75% of that value automatically. Do not add
+`-Xms`/`-Xmx` fixed heap flags — they would override the percentage and break dynamic
+sizing. Do not expose JVM heap percentage as a Helm value — 75% is correct for all OMB
+worker workloads.
 
 **The entrypoint calls java directly, not bin/benchmark-worker.** The upstream
 bin/benchmark-worker script hardcodes HEAP_OPTS="-Xms4G -Xmx8G" and appends its
@@ -343,13 +346,17 @@ operations after initial deployment.
 
 ## Worker memory and JVM settings
 
-Worker pods are standardized at 4 vCPU / 8GB memory. This is fixed — do not
-make it configurable. JVM heap flags are set in the worker Dockerfile entrypoint
-as fixed values. These are not Helm values, not env vars, not configurable by
-the SE.
+Worker pod CPU and memory are set via `worker.resources.cpu` and `worker.resources.memory`
+in the Helm values. Per-cloud defaults are in `values-aws.yaml`, `values-gcp.yaml`, and
+`values-aks.yaml`. To use a different instance type, update the Terraform instance type and
+these two Helm values — nothing else needs to change.
 
-Required JVM flags in the entrypoint script:
-  -Xms4G -Xmx4G
+No CPU *limit* is set on worker pods (only a request). This prevents cgroup CPU throttling
+architecturally. The memory limit equals the memory request.
+
+Required JVM flags in the entrypoint script (do not add -Xms/-Xmx):
+  -XX:InitialRAMPercentage=75.0
+  -XX:MaxRAMPercentage=75.0
   -XX:+UseContainerSupport
   -XX:+UseG1GC
   -XX:MaxGCPauseMillis=10
@@ -357,18 +364,10 @@ Required JVM flags in the entrypoint script:
   -XX:+PerfDisableSharedMem
   -XX:+DisableExplicitGC
 
--XX:+UseContainerSupport ensures the JVM respects container memory limits rather
-than seeing the full host memory (default on JDK 11+ but be explicit).
--XX:+PerfDisableSharedMem prevents GC pauses from shared memory operations,
-which matters on benchmark workloads.
-
-The correct response to needing more throughput is adding more worker pods via
-the UI scaling control, not changing instance types or JVM settings. Document
-this clearly. Node pools in each Terraform module use m5.4xlarge on AWS,
-n2-standard-16 on GCP, Standard_D16s_v3 on Azure — 4xlarge instances provide
-dedicated network interfaces which eliminates noisy neighbor network contention.
-Each node comfortably fits ~8 worker pods (leaving headroom for system pods)
-before the Cluster Autoscaler adds another node.
+-XX:+UseContainerSupport causes the JVM to read cgroup memory limits. Combined with
+MaxRAMPercentage=75.0 this produces heap = 75% of container memory automatically.
+The correct response to needing more throughput is adding more worker pods via the UI
+scaling control, not changing JVM settings or instance types.
 
 ## UI navigation structure
 
