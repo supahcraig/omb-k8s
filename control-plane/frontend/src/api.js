@@ -22,6 +22,7 @@ async function request(method, path, body) {
 // Workers
 export const getWorkerStatus = () => request('GET', '/workers/status')
 export const scaleWorkers = (replicas) => request('POST', '/workers/scale', { replicas })
+export const getWorkerResources = () => request('GET', '/workers/resources')
 
 // Settings
 export const getSettings = () => request('GET', '/settings')

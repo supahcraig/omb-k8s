@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { getRun, cancelRun, getPrometheusSamples, getSweepRuns, getSweep } from '../api.js'
+import { getRun, cancelRun, getPrometheusSamples, getSweepRuns, getSweep, getWorkerResources } from '../api.js'
 import RunCharts from '../components/RunCharts.jsx'
 import { parseLiveMetric, parseE2ELatency } from '../lib/ombLogParser.js'
 import { parseWorkloadYaml } from '../components/WorkloadForm.jsx'
@@ -86,6 +86,7 @@ export default function RunDetailPage() {
   const [sweepRuns, setSweepRuns] = useState(null)
   const [sweep, setSweep] = useState(null)
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
+  const [workerResources, setWorkerResources] = useState(null)
   const wsRef = useRef(null)
   const logEndRef = useRef(null)
   const liveMatchedRef = useRef(false)
@@ -165,6 +166,10 @@ export default function RunDetailPage() {
       if (wsRef.current) { wsRef.current.close(); wsRef.current = null }
     }
   }, [id])
+
+  useEffect(() => {
+    getWorkerResources().then(setWorkerResources).catch(() => {})
+  }, [])
 
   // Open WebSocket once the run is no longer pending.
   // Pending runs haven't been picked up by _execute_sweep yet — opening a WS
@@ -448,6 +453,8 @@ export default function RunDetailPage() {
         totalSamples={totalSamples}
         warmupStartedAt={warmupStartedAt}
         benchmarkStartedAt={benchmarkStartedAt}
+        workerMemLimitMiB={workerResources?.memory_limit_mib ?? null}
+        workerCpuCores={workerResources?.cpu_request_cores ?? null}
       />
 
       {/* Log output */}
