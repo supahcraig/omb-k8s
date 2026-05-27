@@ -20,7 +20,6 @@ from services.omb_runner import runner
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL = 15  # seconds between samples
-CPU_LIMIT_CORES = 4.0  # worker pods are always 4 vCPU per CLAUDE.md
 
 
 async def _query(client: httpx.AsyncClient, base_url: str, query: str) -> Optional[float]:
@@ -39,13 +38,20 @@ async def _query(client: httpx.AsyncClient, base_url: str, query: str) -> Option
         return None
 
 
-async def _collect_sample(client: httpx.AsyncClient, prom_url: str, namespace: str, run_id: int, t: int) -> None:
+async def _collect_sample(
+    client: httpx.AsyncClient,
+    prom_url: str,
+    namespace: str,
+    run_id: int,
+    t: int,
+    cpu_request_cores: float,
+) -> None:
     """Query Prometheus and write one PrometheusSample row."""
     worker_selector = f'namespace="{namespace}",pod=~"omb-worker-.*",container="worker"'
 
     cpu_pct = await _query(client, prom_url,
         f'100 * avg(rate(container_cpu_usage_seconds_total{{{worker_selector}}}[2m]))'
-        f' / {CPU_LIMIT_CORES}')
+        f' / {cpu_request_cores}')
 
     memory_mib = await _query(client, prom_url,
         f'avg(container_memory_working_set_bytes{{{worker_selector}}}) / 1048576')
@@ -78,7 +84,12 @@ async def _collect_sample(client: httpx.AsyncClient, prom_url: str, namespace: s
             logger.warning("Failed to save Prometheus sample for run %d t=%d: %s", run_id, t, exc)
 
 
-async def collect_prometheus(run_id: int, namespace: str, prom_url: str) -> None:
+async def collect_prometheus(
+    run_id: int,
+    namespace: str,
+    prom_url: str,
+    cpu_request_cores: float = 4.0,
+) -> None:
     """
     Poll Prometheus every POLL_INTERVAL seconds until the run finishes.
     Takes an immediate sample on start, then continues at POLL_INTERVAL cadence.
@@ -93,7 +104,7 @@ async def collect_prometheus(run_id: int, namespace: str, prom_url: str) -> None
 
     async with httpx.AsyncClient() as client:
         # Immediate first sample so charts populate as soon as the run starts
-        await _collect_sample(client, prom_url, namespace, run_id, t)
+        await _collect_sample(client, prom_url, namespace, run_id, t, cpu_request_cores)
 
         while not runner.is_done(run_id):
             await asyncio.sleep(POLL_INTERVAL)
@@ -102,6 +113,6 @@ async def collect_prometheus(run_id: int, namespace: str, prom_url: str) -> None
             if runner.is_done(run_id):
                 break
 
-            await _collect_sample(client, prom_url, namespace, run_id, t)
+            await _collect_sample(client, prom_url, namespace, run_id, t, cpu_request_cores)
 
     logger.info("Prometheus collection done for run %d (%d samples)", run_id, t // POLL_INTERVAL)

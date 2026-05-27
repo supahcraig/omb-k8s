@@ -16,6 +16,7 @@ from config import settings
 from database import AsyncSessionLocal, get_db
 from models import Metrics, Run
 from schemas import RunListItem, RunOut, RunStatus
+from services.k8s_resources import read_worker_resources
 from services.omb_runner import runner
 from services.prometheus_collector import collect_prometheus
 from services.result_parser import parse_result_from_logs
@@ -165,7 +166,10 @@ async def launch_run(
         f"http://omb-kube-prometheus-stack-prometheus"
         f".{settings.omb_namespace}.svc.cluster.local:9090"
     )
-    asyncio.create_task(collect_prometheus(run_id, settings.omb_namespace, prom_url))
+    cpu_request_cores, _ = await read_worker_resources(settings.omb_namespace)
+    asyncio.create_task(
+        collect_prometheus(run_id, settings.omb_namespace, prom_url, cpu_request_cores)
+    )
     if await_finish:
         await _finish_run(run_id)
     else:
