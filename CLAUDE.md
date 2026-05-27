@@ -114,8 +114,8 @@ results. The control plane does not use hostNetwork.
 
 **k8s API calls use in-cluster service account credentials.** The control plane
 pod has a ServiceAccount with a Role that permits: create/delete Jobs,
-create/delete ConfigMaps, get/update StatefulSets, get Pods. Do not mount or
-reference external kubeconfig files.
+create/delete ConfigMaps, get/update StatefulSets, get/delete Pods. Do not mount
+or reference external kubeconfig files.
 
 **Cloud differences are isolated in per-cloud values files.** The Helm chart is
 cloud-agnostic. values-aws.yaml, values-gcp.yaml, values-aks.yaml contain only
@@ -216,6 +216,14 @@ correct way to use a separately managed node pool with Standard GKE clusters.
 **Cluster provisioning is out of scope.** If you find yourself writing code that
 creates Redpanda broker nodes or interacts with the Redpanda Cloud API, stop.
 
+**Long-running background tasks must use `asyncio.create_task()`, not FastAPI `BackgroundTasks`.**
+FastAPI's `BackgroundTasks` awaits each task sequentially. `_finish_run` polls for
+the entire benchmark duration (up to 4 hours), so if it is registered as a
+`BackgroundTask`, any task registered after it will never start until the run
+finishes. Both `_finish_run` and `collect_prometheus` are launched via
+`asyncio.create_task()` in `routers/runs.py` so they run concurrently. Do not
+change these back to `background_tasks.add_task()`.
+
 ## Target clouds
 
 - AWS — primary (~80% of usage)
@@ -248,7 +256,13 @@ creates Redpanda broker nodes or interacts with the Redpanda Cloud API, stop.
      bin/benchmark --drivers /etc/omb/driver.yaml /etc/omb/workload.yaml \
        --workers http://omb-worker-0.omb-worker:8080,... --output /tmp/omb-results
 6. UI streams Job logs via websocket
-7. On completion, results parsed and stored in SQLite, run record finalized
+7. Concurrently, `services/prometheus_collector.py` polls the in-cluster
+   kube-prometheus-stack Prometheus every 15 s for cAdvisor worker metrics
+   (CPU %, memory MiB, CFS throttle %) and writes them to `prometheus_samples`.
+   The Prometheus service is at:
+   `http://omb-kube-prometheus-stack-prometheus.{namespace}.svc.cluster.local:9090`
+   The collector silently no-ops if Prometheus is unreachable.
+8. On completion, results parsed and stored in SQLite, run record finalized
 
 ## OMB runtime quirks — do not remove these workarounds
 
@@ -260,12 +274,24 @@ parsed from logs, not from this file.
 **`topicConfig: ""` is required in driver YAML.** `Config.topicConfig` has no Java
 default value. If absent from the driver YAML, Jackson leaves it null and
 `new StringReader(null)` NPEs at driver init. Always emit `topicConfig: ""`.
+When setting actual topic config values, use Java Properties format (`key=value`),
+not YAML syntax (`key: value`). Example: `topicConfig: "retention.ms=600000"`.
+Using YAML key-value syntax causes a Jackson `MismatchedInputException`.
 
 **`payloadFile` must always be set and point to a file with exactly `messageSize`
 bytes.** This OMB build calls `new File(payloadFile)` unconditionally and then
 enforces an exact byte-count match. The init container generates the file at
 `/payload/payload.data` so any arbitrary `messageSize` works. Do not remove the
 init container or change the path without understanding this constraint.
+
+**Worker pods can get stuck after a cancelled run.** When a run is cancelled
+mid-flight, the OMB worker's internal Java process may be left in an error state.
+The next run will fail immediately when OMB sends `/stop-all` to initialize
+workers — the stuck worker returns HTTP 500. The Cluster tab shows a red health
+dot on unreachable workers and provides a ↺ restart button on every pod row.
+Restarting the worker pod clears the state; the StatefulSet controller recreates
+it immediately. If a run fails with a 500 error on `/stop-all` at startup, go to
+the Cluster tab and restart the worker pods before retrying.
 
 **SASL password is stored plaintext in SQLite.** Encryption was removed because
 the password ends up in a k8s ConfigMap anyway — encryption provided no real
