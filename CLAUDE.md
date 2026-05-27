@@ -328,23 +328,73 @@ dedicated network interfaces which eliminates noisy neighbor network contention.
 Each node comfortably fits ~8 worker pods (leaving headroom for system pods)
 before the Cluster Autoscaler adds another node.
 
+## UI navigation structure
+
+The frontend is a React SPA served by FastAPI. A sticky left sidebar (220px)
+handles all navigation. Routes and pages:
+
+| Route | Page | Purpose |
+|-------|------|---------|
+| `/` | RunsPage | Results-only list of completed and active runs |
+| `/runs/new` | NewRunPage | Configure and launch a run; prefills from last run on mount |
+| `/runs/:id` | RunDetailPage | Live log streaming, real-time charts, final metrics |
+| `/sweeps` | SweepsPage | Parameter sweep list |
+| `/sweeps/:id` | SweepDetailPage | Sweep detail and results |
+| `/workloads` | WorkloadLibraryPage | Saved workload configs; "Use" navigates to `/runs/new` |
+| `/settings` | SettingsPage | Cluster connectivity (BYOC/self-hosted) + Prometheus config |
+| `/cluster` | ClusterPage | k8s cluster status, worker health, pod restart |
+
+Sidebar nav groups:
+- **Main:** New Run / Benchmark Runs / Sweeps / Workload Library
+- **Infrastructure** (below divider): OMB Cluster / Settings
+- **Bottom:** Worker scaling control (label + readiness badge + input + Scale button)
+
+## Key frontend design decisions — do not reverse without discussion
+
+**DriverForm and WorkloadForm never own YAML display.** Both components are
+pure form inputs — they call `onChange` with the built YAML string whenever a
+field changes. The parent page (NewRunPage) holds `driverYaml`/`workloadYaml`
+state and renders the YAML textareas itself. Do not add a YAML preview or
+override/lock mechanism back into these components — it was removed because
+`isOverride = true` caused all fields to lock on re-open.
+
+**New Run and Benchmark Runs are separate pages.** `/runs/new` (NewRunPage) is
+the form; `/` (RunsPage) is the results list. They were split because having
+the form toggle on the results page created confusing UX. WorkloadLibrary
+navigates to `/runs/new` with `location.state` to prefill the workload.
+
+**NewRunPage prefills from the most recent run.** On mount it calls `listRuns`
+then `getRun(runs[0].id)` to seed `initialDriverContent` and
+`initialWorkload`. If navigating from WorkloadLibrary (`location.state?.workloadContent`),
+the prefill fetch is skipped and the library content is used instead.
+
+**4-panel layout in NewRunPage.** The new run form uses a 2×2 CSS grid sitting
+directly on the page background (not inside a card), so the dark page color
+shows in the gaps. Top row: Driver form panel (blue accent) + Workload form
+panel (green accent). Bottom row: Driver YAML panel + Workload YAML panel
+(darker `#0d1018` background to read as code).
+
+## SQLite database
+
+The SQLite database file is at `/data/omb_ui.db` inside the control-plane pod
+(mounted from the PersistentVolume). The path is **not** `/data/omb.db`.
+
 ## Build order for implementation
 
-Always implement in this order. Each session depends on the previous being
-done and validated before starting the next.
+Sessions 1–5 are complete. Session 6 (CI/CD + docs) is pending.
 
-1. Session 1: Repo scaffold + worker image
-2. Session 2: Terraform modules
-3. Session 3: Helm chart
-4. Session 4: Control plane migration
-5. Session 5: UI changes
+1. ~~Session 1: Repo scaffold + worker image~~ ✓
+2. ~~Session 2: Terraform modules~~ ✓
+3. ~~Session 3: Helm chart~~ ✓
+4. ~~Session 4: Control plane migration~~ ✓
+5. ~~Session 5: UI changes~~ ✓
 6. Session 6: CI/CD + docs
 
 ## Reference docs
 
-- claude/ui-guidance.md — detailed UI screen specifications
 - claude/terraform-notes.md — per-cloud Terraform specifics
-- Existing UI codebase: https://github.com/supahcraig/omb_ui
-  Read this carefully before touching control-plane/
+- claude/ui-guidance.md — original UI screen specs written before implementation;
+  the actual UI has evolved significantly from these specs. Read the code, not
+  this file, before making frontend changes.
 - OMB repo: https://github.com/redpanda-data/openmessaging-benchmark
   Worker image source and workload examples
