@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from config import settings
 from database import AsyncSessionLocal, get_db
 from models import Metrics, Run
 from schemas import RunListItem, RunOut, RunStatus
