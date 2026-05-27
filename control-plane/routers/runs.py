@@ -16,6 +16,7 @@ from database import AsyncSessionLocal, get_db
 from models import Metrics, Run
 from schemas import RunListItem, RunOut, RunStatus
 from services.omb_runner import runner
+from services.prometheus_collector import collect_prometheus
 from services.result_parser import parse_result_from_logs
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,8 @@ async def create_run(
 
     # Monitor until done in the background
     background_tasks.add_task(_finish_run, run.id)
+    prom_url = f"http://omb-kube-prometheus-stack-prometheus.{settings.omb_namespace}.svc.cluster.local:9090"
+    background_tasks.add_task(collect_prometheus, run.id, settings.omb_namespace, prom_url)
 
     # Re-query with selectinload so Pydantic can access the metrics relationship
     # without hitting the lazy-load greenlet restriction.

@@ -98,6 +98,9 @@ class PrometheusSample(Base):
     bytes_in_per_sec = Column(Float, nullable=True)
     bytes_out_per_sec = Column(Float, nullable=True)
     records_per_sec = Column(Float, nullable=True)
+    worker_cpu_pct = Column(Float, nullable=True)      # avg % of 4-core limit across workers
+    worker_memory_mib = Column(Float, nullable=True)   # avg memory working set in MiB
+    worker_throttle_pct = Column(Float, nullable=True) # max throttled-periods % across workers
 
     run = relationship("Run", back_populates="prometheus_samples")
 

@@ -180,6 +180,15 @@ export default function RunDetailPage() {
     }
   }, [id])
 
+  // Poll Prometheus samples every 15s while run is live
+  useEffect(() => {
+    if (run?.status !== 'running') return
+    const interval = setInterval(() => {
+      getPrometheusSamples(id).then(setPromSamples).catch(() => {})
+    }, 15000)
+    return () => clearInterval(interval)
+  }, [id, run?.status])
+
   // Auto-scroll log
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' })

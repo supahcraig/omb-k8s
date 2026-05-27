@@ -68,6 +68,9 @@ async def get_prometheus_samples(
             "bytes_in_per_sec": s.bytes_in_per_sec,
             "bytes_out_per_sec": s.bytes_out_per_sec,
             "records_per_sec": s.records_per_sec,
+            "worker_cpu_pct": s.worker_cpu_pct,
+            "worker_memory_mib": s.worker_memory_mib,
+            "worker_throttle_pct": s.worker_throttle_pct,
         }
         for s in samples
     ]

@@ -34,8 +34,20 @@ AsyncSessionLocal = async_sessionmaker(
 
 async def init_db() -> None:
     import models  # noqa: F401 — registers ORM classes with Base.metadata
+    from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Add worker metric columns to existing deployments where the table
+        # already exists — SQLAlchemy create_all won't add new columns.
+        for col_ddl in (
+            "ALTER TABLE prometheus_samples ADD COLUMN worker_cpu_pct REAL",
+            "ALTER TABLE prometheus_samples ADD COLUMN worker_memory_mib REAL",
+            "ALTER TABLE prometheus_samples ADD COLUMN worker_throttle_pct REAL",
+        ):
+            try:
+                await conn.execute(text(col_ddl))
+            except Exception:
+                pass  # column already exists
 
 
 async def get_db():

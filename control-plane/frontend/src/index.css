@@ -976,6 +976,11 @@ body {
   color: #f87171;
   border: 1px solid rgba(153,27,27,0.6);
 }
+.source-badge-worker {
+  background: rgba(124,58,237,0.2);
+  color: #a78bfa;
+  border: 1px solid rgba(124,58,237,0.4);
+}
 
 .run-charts {
   display: flex;
