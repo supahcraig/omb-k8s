@@ -1,2 +1,7 @@
 storage:
   storageClassName: managed-premium
+
+worker:
+  resources:
+    cpu: "15"
+    memory: "58Gi"

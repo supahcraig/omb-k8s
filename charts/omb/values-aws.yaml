@@ -12,3 +12,8 @@ clusterAutoscaler:
   clusterName: ""
   region: ""
   roleArn: ""
+
+worker:
+  resources:
+    cpu: "15"
+    memory: "60Gi"

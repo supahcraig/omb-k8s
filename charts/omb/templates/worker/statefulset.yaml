@@ -43,8 +43,7 @@ spec:
               name: worker
           resources:
             requests:
-              cpu: "4"
-              memory: 8Gi
+              cpu: {{ .Values.worker.resources.cpu | quote }}
+              memory: {{ .Values.worker.resources.memory | quote }}
             limits:
-              cpu: "4"
-              memory: 8Gi
+              memory: {{ .Values.worker.resources.memory | quote }}

@@ -3,6 +3,9 @@ worker:
   image:
     repository: ghcr.io/supahcraig/omb-worker
     tag: latest
+  resources:
+    cpu: "4"
+    memory: "8Gi"
 
 controlPlane:
   image:

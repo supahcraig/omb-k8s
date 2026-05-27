@@ -1,2 +1,7 @@
 storage:
   storageClassName: standard
+
+worker:
+  resources:
+    cpu: "15"
+    memory: "58Gi"
