@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { listPods, getPodLogs } from '../api.js'
+import { listPods, getPodLogs, restartPod } from '../api.js'
 
 const GROUPS = [
   { label: 'Control Plane',  match: n => n.startsWith('omb-control-plane') },
@@ -27,11 +27,31 @@ const PHASE_BADGE = {
 
 const TAIL_OPTIONS = [100, 500, 1000, 2000]
 
+function WorkerHealthDot({ healthy }) {
+  if (healthy === null || healthy === undefined) return null
+  return (
+    <span
+      title={healthy ? 'Worker HTTP reachable' : 'Worker HTTP unreachable — may be stuck'}
+      style={{
+        display: 'inline-block',
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        background: healthy ? '#4ade80' : '#ef4444',
+        marginRight: 6,
+        flexShrink: 0,
+        cursor: 'help',
+      }}
+    />
+  )
+}
+
 export default function ClusterPage() {
   const [namespace, setNamespace]           = useState('')
   const [pods, setPods]                     = useState([])
   const [podsLoading, setPodsLoading]       = useState(true)
   const [podsError, setPodsError]           = useState(null)
+  const [restartingPod, setRestartingPod]   = useState(null)
   const [selectedPod, setSelectedPod]       = useState(null)
   const [selectedContainer, setSelectedContainer] = useState('')
   const [tailLines, setTailLines]           = useState(500)
@@ -81,6 +101,21 @@ export default function ClusterPage() {
     fetchLogs(pod.name, container, tailLines)
   }
 
+  async function handleRestart(e, podName) {
+    e.stopPropagation()
+    if (!confirm(`Restart pod ${podName}? It will be deleted and recreated by its controller.`)) return
+    setRestartingPod(podName)
+    try {
+      await restartPod(podName)
+      await new Promise(r => setTimeout(r, 1500))
+      await fetchPods()
+    } catch (err) {
+      alert(`Failed to restart ${podName}: ${err.message}`)
+    } finally {
+      setRestartingPod(null)
+    }
+  }
+
   function handleContainerChange(e) {
     const c = e.target.value
     setSelectedContainer(c)
@@ -117,17 +152,18 @@ export default function ClusterPage() {
               <th className="num">Restarts</th>
               <th>Age</th>
               <th>Node</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {podsLoading && pods.length === 0 ? (
-              <tr><td colSpan={6} className="text-muted" style={{ textAlign: 'center', padding: '20px 0' }}>Loading pods…</td></tr>
+              <tr><td colSpan={7} className="text-muted" style={{ textAlign: 'center', padding: '20px 0' }}>Loading pods…</td></tr>
             ) : pods.length === 0 ? (
-              <tr><td colSpan={6} className="text-muted" style={{ textAlign: 'center', padding: '20px 0' }}>No pods found</td></tr>
+              <tr><td colSpan={7} className="text-muted" style={{ textAlign: 'center', padding: '20px 0' }}>No pods found</td></tr>
             ) : groupPods(pods).map(group => (
               <>
                 <tr key={`group-${group.label}`}>
-                  <td colSpan={6} style={{
+                  <td colSpan={7} style={{
                     background: 'var(--color-surface)',
                     color: 'var(--color-text-muted)',
                     fontSize: 10,
@@ -149,12 +185,25 @@ export default function ClusterPage() {
                       background: selectedPod?.name === pod.name ? 'rgba(96,165,250,0.08)' : undefined,
                     }}
                   >
-                    <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{pod.name}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: 13, display: 'flex', alignItems: 'center' }}>
+                      <WorkerHealthDot healthy={pod.worker_healthy} />
+                      {pod.name}
+                    </td>
                     <td><span className={`badge badge-${PHASE_BADGE[pod.phase] || 'pending'}`}>{pod.phase}</span></td>
                     <td>{pod.ready}</td>
                     <td className="num">{pod.restarts > 0 ? <span style={{ color: '#f59e0b' }}>{pod.restarts}</span> : pod.restarts}</td>
                     <td>{pod.age}</td>
                     <td className="text-muted text-small" style={{ fontFamily: 'monospace', fontSize: 11 }}>{pod.node}</td>
+                    <td onClick={e => e.stopPropagation()} style={{ textAlign: 'right', paddingRight: 8 }}>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={e => handleRestart(e, pod.name)}
+                        disabled={restartingPod === pod.name}
+                        title="Restart (delete + recreate)"
+                      >
+                        {restartingPod === pod.name ? '…' : '↺'}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </>

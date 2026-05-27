@@ -6,16 +6,18 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from config import settings
 from database import AsyncSessionLocal, get_db
 from models import Metrics, Run
 from schemas import RunListItem, RunOut, RunStatus
 from services.omb_runner import runner
+from services.prometheus_collector import collect_prometheus
 from services.result_parser import parse_result_from_logs
 
 logger = logging.getLogger(__name__)
@@ -72,7 +74,6 @@ async def list_runs(db: AsyncSession = Depends(get_db)):
 @router.post("", response_model=RunOut, status_code=201)
 async def create_run(
     body: RunCreate,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     run = Run(
@@ -101,8 +102,11 @@ async def create_run(
             detail=f"Failed to start benchmark job: {exc}",
         )
 
-    # Monitor until done in the background
-    background_tasks.add_task(_finish_run, run.id)
+    # Both tasks are long-running coroutines that must run concurrently —
+    # BackgroundTasks awaits sequentially so we use asyncio.create_task() instead.
+    prom_url = f"http://omb-kube-prometheus-stack-prometheus.{settings.omb_namespace}.svc.cluster.local:9090"
+    asyncio.create_task(_finish_run(run.id))
+    asyncio.create_task(collect_prometheus(run.id, settings.omb_namespace, prom_url))
 
     # Re-query with selectinload so Pydantic can access the metrics relationship
     # without hitting the lazy-load greenlet restriction.

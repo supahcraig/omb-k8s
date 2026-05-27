@@ -52,6 +52,7 @@ export const getPrometheusSamples = (runId) => request('GET', `/prometheus/runs/
 
 // Cluster / k8s
 export const listPods    = ()                              => request('GET', '/cluster/pods')
+export const restartPod  = (name)                         => request('DELETE', `/cluster/pods/${encodeURIComponent(name)}`)
 export const getPodLogs  = (name, container, tail = 500)  => {
   const params = new URLSearchParams({ tail })
   if (container) params.set('container', container)

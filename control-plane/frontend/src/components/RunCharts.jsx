@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
-  ReferenceArea,
+  ReferenceArea, ReferenceLine,
 } from 'recharts';
 import { normalizeTimeseries, promToChartData, computeLatencyStats } from '../lib/chartDataUtils.js';
 
@@ -18,18 +18,24 @@ const C = {
   e2eP50:   '#6ee7b7',
   e2eP99:   '#fcd34d',
   e2eP999:  '#fb923c',
-  bytesIn:  '#38bdf8',
-  bytesOut: '#7dd3fc',
-  records:  '#a78bfa',
+  bytesIn:       '#38bdf8',
+  bytesOut:      '#7dd3fc',
+  records:       '#a78bfa',
+  workerCpu:     '#f97316',
+  workerThrottle:'#ef4444',
+  workerMem:     '#818cf8',
   pubLatencyGrid: 'rgba(245,158,11,0.2)',
   e2eLatencyGrid: 'rgba(252,211,77,0.15)',
 };
 
-function ChartCard({ title, badge, children }) {
+function ChartCard({ title, badge, info, children }) {
   return (
     <div className="chart-card">
       <div className="chart-card-header">
         <span className="chart-card-title">{title}</span>
+        {info && (
+          <span className="chart-info-icon" title={info}>i</span>
+        )}
         {badge && <span className={`source-badge source-badge-${badge}`}>{badge}</span>}
       </div>
       {children}
@@ -81,7 +87,10 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
   // viewing a historical run (livePoints empty, e.g. after page reload).
   const chartPoints = livePoints.length > 0 ? livePoints : (metricsOut ? normalizeTimeseries(metricsOut, messageSize) : []);
   const promPoints  = promToChartData(promSamples);
-  const hasLatency  = chartPoints.some(p => p.pubP99 != null || p.pubP50 != null);
+  const hasLatency      = chartPoints.some(p => p.pubP99 != null || p.pubP50 != null);
+  const hasBrokerMetrics = promPoints.some(p => p.bytesInMBSec != null || p.bytesOutMBSec != null);
+  const hasWorkerMetrics = promPoints.some(p => p.workerCpuPct != null || p.workerMemMiB != null);
+  const maxThrottle      = promPoints.reduce((max, p) => Math.max(max, p.workerThrottlePct ?? 0), 0);
 
   // Progress bar driven by log-line timestamps: bar starts when warmup traffic
   // begins, green benchmark portion starts when benchmark traffic begins.
@@ -103,7 +112,7 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
   const statsWarmup = chartPoints.length > warmupSamples ? warmupSamples : 0;
   const latencyStats = computeLatencyStats(chartPoints, statsWarmup);
 
-  if (chartPoints.length === 0 && promPoints.length === 0) return null;
+  if (!isLive && chartPoints.length === 0 && promPoints.length === 0) return null;
 
   return (
     <div className="run-charts">
@@ -132,6 +141,22 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
           <span>{currentSamples}s / {totalSamples}s</span>
         </div>
       </div>
+
+      {/* Throttle alert */}
+      {maxThrottle > 10 && (
+        <div style={{
+          background: 'rgba(245,158,11,0.12)',
+          border: '1px solid rgba(245,158,11,0.35)',
+          borderRadius: 6,
+          padding: '10px 14px',
+          marginBottom: 12,
+          color: '#fbbf24',
+          fontSize: 13,
+          lineHeight: 1.5,
+        }}>
+          ⚠ CPU throttling detected (peak {maxThrottle.toFixed(0)}%) — workers are being rate-limited by cgroup CPU limits. Throughput may be lower than broker capacity supports. Consider scaling up the number of worker pods.
+        </div>
+      )}
 
       {/* Row 1: 3-column OMB throughput */}
       <div className="charts-row charts-row-3">
@@ -229,8 +254,8 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
         </div>
       )}
 
-      {/* Row 3: Prometheus data (only if available) */}
-      {promPoints.length > 0 && (
+      {/* Row 3: Broker Prometheus (only if broker metrics available) */}
+      {hasBrokerMetrics && (
         <div className="charts-row charts-row-2">
           <ChartCard title="Broker Bytes In/Out (MB/s)" badge="redpanda">
             <ResponsiveContainer width="100%" height={180}>
@@ -254,6 +279,40 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
                 <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
                 <Line type="monotone" dataKey="recordsPerSec" name="records/sec" stroke={C.records} dot={false} strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </div>
+      )}
+
+      {/* Row 4: Worker resource charts */}
+      {(hasWorkerMetrics || isLive) && (
+        <div className="charts-row charts-row-2">
+          <ChartCard title="Worker CPU (%)" badge="worker" info="CPU Usage: how much of the 4-core limit the workers are consuming. Throttled: fraction of CPU scheduling slots the kernel rejected because the worker exceeded its cgroup quota. High usage + high throttle means workers are being rate-limited — scale up worker count to fix.">
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={promPoints} syncId="run">
+                <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={[0, 100]} />
+                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={(v, name) => [v != null ? `${v.toFixed(1)}%` : '—', name]} />
+                <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
+                <ReferenceLine y={100} stroke="rgba(239,68,68,0.3)" strokeDasharray="4 2" />
+                <Line type="monotone" dataKey="workerCpuPct"     name="cpu usage"  stroke={C.workerCpu}     dot={false} strokeWidth={2} connectNulls />
+                <Line type="monotone" dataKey="workerThrottlePct" name="throttled" stroke={C.workerThrottle} dot={false} strokeWidth={1.5} strokeDasharray="4 2" connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartCard>
+
+          <ChartCard title="Worker Memory (MiB)" badge="worker">
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={promPoints} syncId="run">
+                <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} domain={[0, 9000]} />
+                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={(v, name) => [v != null ? `${v.toFixed(0)} MiB` : '—', name]} />
+                <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
+                <ReferenceLine y={8192} stroke="rgba(239,68,68,0.4)" strokeDasharray="4 2" label={{ value: '8 GiB limit', fill: 'rgba(239,68,68,0.7)', fontSize: 10, position: 'insideTopRight' }} />
+                <Line type="monotone" dataKey="workerMemMiB" name="memory" stroke={C.workerMem} dot={false} strokeWidth={2} connectNulls />
               </LineChart>
             </ResponsiveContainer>
           </ChartCard>
