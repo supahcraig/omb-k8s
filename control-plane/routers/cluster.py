@@ -1,10 +1,12 @@
 """
 Cluster router — list pods and fetch logs from the omb namespace.
 """
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query
 from kubernetes import client as k8s_client
 
@@ -31,6 +33,17 @@ def _age(ts) -> str:
     return f"{s // 86400}d"
 
 
+async def _probe_worker(pod_name: str, namespace: str) -> bool:
+    """Return True if the worker HTTP server responds on port 8080."""
+    url = f"http://{pod_name}.omb-worker.{namespace}.svc.cluster.local:8080/"
+    try:
+        async with httpx.AsyncClient(timeout=1.5) as client:
+            resp = await client.get(url)
+            return resp.status_code < 500
+    except Exception:
+        return False
+
+
 @router.get("/pods")
 async def list_pods():
     load_incluster_once()
@@ -40,13 +53,19 @@ async def list_pods():
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+    import re
+    worker_re = re.compile(r"^omb-worker-\d+$")
+
     pods = []
+    probe_targets = []  # (index into pods, pod_name) for workers
+
     for pod in pod_list.items:
         cst = pod.status.container_statuses or []
         total = len(pod.spec.containers)
         ready = sum(1 for c in cst if c.ready)
         restarts = sum(c.restart_count for c in cst)
         containers = [c.name for c in pod.spec.containers]
+        is_worker = bool(worker_re.match(pod.metadata.name))
 
         pods.append({
             "name": pod.metadata.name,
@@ -56,10 +75,37 @@ async def list_pods():
             "age": _age(pod.metadata.creation_timestamp),
             "node": (pod.spec.node_name or "—").split(".")[0],
             "containers": containers,
+            "worker_healthy": None,  # populated below for workers
         })
+
+        if is_worker and (pod.status.phase or "") == "Running":
+            probe_targets.append((len(pods) - 1, pod.metadata.name))
+
+    # Probe all running workers concurrently
+    if probe_targets:
+        results = await asyncio.gather(
+            *[_probe_worker(name, settings.omb_namespace) for _, name in probe_targets]
+        )
+        for (idx, _), healthy in zip(probe_targets, results):
+            pods[idx]["worker_healthy"] = healthy
 
     pods.sort(key=lambda p: p["name"])
     return {"namespace": settings.omb_namespace, "pods": pods}
+
+
+@router.delete("/pods/{pod_name}", status_code=204)
+async def restart_pod(pod_name: str):
+    """Delete a pod so its controller (StatefulSet/Deployment) recreates it."""
+    load_incluster_once()
+    core_api = k8s_client.CoreV1Api()
+    try:
+        await run_sync(core_api.delete_namespaced_pod, pod_name, settings.omb_namespace)
+    except k8s_client.ApiException as exc:
+        if exc.status == 404:
+            raise HTTPException(status_code=404, detail=f"Pod {pod_name!r} not found")
+        raise HTTPException(status_code=500, detail=exc.reason or str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/pods/{pod_name}/logs")
