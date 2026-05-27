@@ -75,7 +75,19 @@ function LatencyStatsTable({ stats, keys, labels, warmupNote }) {
   );
 }
 
-export default function RunCharts({ livePoints = [], metricsOut = null, promSamples = [], isLive = false, messageSize = 1024, warmupSamples = 60, totalSamples = 360, warmupStartedAt = null, benchmarkStartedAt = null }) {
+export default function RunCharts({
+  livePoints = [],
+  metricsOut = null,
+  promSamples = [],
+  isLive = false,
+  messageSize = 1024,
+  warmupSamples = 60,
+  totalSamples = 360,
+  warmupStartedAt = null,
+  benchmarkStartedAt = null,
+  workerMemLimitMiB = null,
+  workerCpuCores = null,
+}) {
   const [, setTick] = useState(0)
   useEffect(() => {
     if (!isLive) return
@@ -291,7 +303,11 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
       {/* Row 4: Worker resource charts */}
       {(hasWorkerMetrics || isLive) && (
         <div className="charts-row charts-row-2">
-          <ChartCard title="Worker CPU (%)" badge="worker" info="CPU Usage: how much of the 4-core limit the workers are consuming. Throttled: fraction of CPU scheduling slots the kernel rejected because the worker exceeded its cgroup quota. High usage + high throttle means workers are being rate-limited — scale up worker count to fix.">
+          <ChartCard
+            title="Worker CPU (%)"
+            badge="worker"
+            info={`CPU Usage: how much of the ${workerCpuCores != null ? workerCpuCores : 4}-core worker allocation the workers are consuming. Throttled: fraction of CPU scheduling slots the kernel rejected because the worker exceeded its cgroup quota. No CPU limit is set so throttle will always be 0 — any non-zero throttle value indicates a misconfiguration. High CPU usage means workers are busy — scale up worker count to increase throughput.`}
+          >
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={promPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
@@ -311,10 +327,30 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
               <LineChart data={promPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
                 <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
-                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} domain={[0, 9000]} />
-                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={(v, name) => [v != null ? `${v.toFixed(0)} MiB` : '—', name]} />
+                <YAxis
+                  stroke={C.axis}
+                  tick={{ fill: C.axis, fontSize: 10 }}
+                  width={55}
+                  domain={[0, workerMemLimitMiB != null ? Math.ceil(workerMemLimitMiB * 1.1) : 9000]}
+                />
+                <Tooltip
+                  contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }}
+                  formatter={(v, name) => [v != null ? `${v.toFixed(0)} MiB` : '—', name]}
+                />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
-                <ReferenceLine y={8192} stroke="rgba(239,68,68,0.4)" strokeDasharray="4 2" label={{ value: '8 GiB limit', fill: 'rgba(239,68,68,0.7)', fontSize: 10, position: 'insideTopRight' }} />
+                <ReferenceLine
+                  y={workerMemLimitMiB != null ? workerMemLimitMiB : 8192}
+                  stroke="rgba(239,68,68,0.4)"
+                  strokeDasharray="4 2"
+                  label={{
+                    value: workerMemLimitMiB != null
+                      ? `${Math.round(workerMemLimitMiB / 1024)} GiB limit`
+                      : '8 GiB limit',
+                    fill: 'rgba(239,68,68,0.7)',
+                    fontSize: 10,
+                    position: 'insideTopRight',
+                  }}
+                />
                 <Line type="monotone" dataKey="workerMemMiB" name="memory" stroke={C.workerMem} dot={false} strokeWidth={2} connectNulls />
               </LineChart>
             </ResponsiveContainer>
