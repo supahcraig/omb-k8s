@@ -78,8 +78,10 @@ If the StatefulSet is unreachable the endpoint returns a 503; callers handle thi
 ### Prometheus collector: parameterized divisor
 
 `CPU_LIMIT_CORES = 4.0` is removed. The `collect_prometheus()` function gains a
-`cpu_request_cores: float` parameter. The caller (`runs.py`) fetches
-`/api/workers/resources` before starting the collection task and passes the value through.
+`cpu_request_cores: float` parameter. The resource fetch and pass-through happen inside
+`launch_run()` in `runs.py`, not in the route handler, because `launch_run` is shared by
+both single runs (`create_run` route) and sweeps (`routers/sweeps.py` calls it directly).
+Placing the fetch in `launch_run` means both paths benefit with one change.
 
 The CPU % formula stays the same:
 ```
@@ -158,13 +160,15 @@ StatefulSet spec              → container resources (cpu request, memory limit
 | `worker/entrypoint.sh` | Replace `-Xms4G -Xmx4G` with `InitialRAMPercentage=75.0` / `MaxRAMPercentage=75.0` |
 | `charts/omb/templates/worker/statefulset.yaml` | Use `{{ .Values.worker.resources.* }}`; CPU request only (no limit); memory request = limit |
 | `charts/omb/values.yaml` | Add `worker.resources.cpu: "4"` and `worker.resources.memory: "8Gi"` as conservative fallback defaults |
-| `charts/omb/values-aws.yaml` | Add `worker.resources.cpu: "15"` and `worker.resources.memory: "60Gi"` |
-| `charts/omb/values-gcp.yaml` | Add `worker.resources.cpu: "15"` and `worker.resources.memory: "58Gi"` |
-| `charts/omb/values-aks.yaml` | Add `worker.resources.cpu: "15"` and `worker.resources.memory: "58Gi"` |
-| `control-plane/routers/workers.py` | Add `GET /api/workers/resources` endpoint |
-| `control-plane/services/prometheus_collector.py` | Remove `CPU_LIMIT_CORES = 4.0`; add `cpu_request_cores` param to `collect_prometheus()` |
-| `control-plane/routers/runs.py` | Fetch worker resources before starting collection task; pass `cpu_request_cores` |
-| `control-plane/frontend/src/pages/RunDetailPage.jsx` | Fetch `/api/workers/resources` on mount; pass props to `RunCharts` |
+| `charts/omb/values-aws.yaml` | Add `worker.resources.cpu: "15"` and `worker.resources.memory: "60Gi"` (file currently only has `storage.storageClassName`) |
+| `charts/omb/values-gcp.yaml` | Add `worker.resources.cpu: "15"` and `worker.resources.memory: "58Gi"` (file currently only has `storage.storageClassName`) |
+| `charts/omb/values-aks.yaml` | Add `worker.resources.cpu: "15"` and `worker.resources.memory: "58Gi"` (file currently only has `storage.storageClassName`) |
+| `control-plane/schemas.py` | Add `WorkerResources` response schema: `{ cpu_request_cores: float, memory_limit_mib: int }` |
+| `control-plane/routers/workers.py` | Add `GET /api/workers/resources` endpoint returning `WorkerResources` |
+| `control-plane/services/prometheus_collector.py` | Remove `CPU_LIMIT_CORES = 4.0`; add `cpu_request_cores: float` param to `collect_prometheus()` |
+| `control-plane/routers/runs.py` | Inside `launch_run()`: fetch worker resources from k8s, pass `cpu_request_cores` to `collect_prometheus`. Covers both single-run and sweep paths since both call `launch_run`. |
+| `control-plane/frontend/src/api.js` | Add `getWorkerResources()` calling `GET /api/workers/resources` |
+| `control-plane/frontend/src/pages/RunDetailPage.jsx` | Fetch `getWorkerResources()` on mount; pass result as props to `RunCharts` |
 | `control-plane/frontend/src/components/RunCharts.jsx` | Accept `workerMemLimitMiB` / `workerCpuCores` props; dynamic domain, reference line, tooltip text |
 | `CLAUDE.md` | Update "4 vCPU / 8GB" references; update JVM flags list to reflect percentage-based flags |
 
