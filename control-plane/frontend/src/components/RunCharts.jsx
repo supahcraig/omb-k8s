@@ -28,11 +28,14 @@ const C = {
   e2eLatencyGrid: 'rgba(252,211,77,0.15)',
 };
 
-function ChartCard({ title, badge, children }) {
+function ChartCard({ title, badge, info, children }) {
   return (
     <div className="chart-card">
       <div className="chart-card-header">
         <span className="chart-card-title">{title}</span>
+        {info && (
+          <span className="chart-info-icon" title={info}>i</span>
+        )}
         {badge && <span className={`source-badge source-badge-${badge}`}>{badge}</span>}
       </div>
       {children}
@@ -109,7 +112,7 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
   const statsWarmup = chartPoints.length > warmupSamples ? warmupSamples : 0;
   const latencyStats = computeLatencyStats(chartPoints, statsWarmup);
 
-  if (chartPoints.length === 0 && promPoints.length === 0) return null;
+  if (!isLive && chartPoints.length === 0 && promPoints.length === 0) return null;
 
   return (
     <div className="run-charts">
@@ -282,10 +285,10 @@ export default function RunCharts({ livePoints = [], metricsOut = null, promSamp
         </div>
       )}
 
-      {/* Row 4: Worker resource charts (only if worker metrics available) */}
-      {hasWorkerMetrics && (
+      {/* Row 4: Worker resource charts */}
+      {(hasWorkerMetrics || isLive) && (
         <div className="charts-row charts-row-2">
-          <ChartCard title="Worker CPU (%)" badge="worker">
+          <ChartCard title="Worker CPU (%)" badge="worker" info="CPU Usage: how much of the 4-core limit the workers are consuming. Throttled: fraction of CPU scheduling slots the kernel rejected because the worker exceeded its cgroup quota. High usage + high throttle means workers are being rate-limited — scale up worker count to fix.">
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={promPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
