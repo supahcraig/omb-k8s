@@ -2,8 +2,9 @@
 # NEVER commit the filled-in copy — it contains sensitive infrastructure details.
 
 # Unique name for this engagement's cluster and all related AWS resources.
-# Use something like "omb-<customer>-<YYYYMMDD>" to avoid name collisions.
-cluster_name = "omb-acme-20240101"
+# Optional: leave commented out to auto-generate a unique name like "omb-relaxed-lemur".
+# Set explicitly if you need a predictable name (e.g. for tagging policies or customer docs).
+# cluster_name = "omb-acme-20240101"
 
 # AWS region where the k8s cluster will be created.
 # This should be the same region (or a peered region) as the target Redpanda cluster.
@@ -39,3 +40,12 @@ tags = {
   customer   = "acme"
   managed_by = "terraform"
 }
+
+# After terraform apply, restrict the control-plane UI to your IP:
+#   helm install omb charts/omb -n omb \
+#     -f charts/omb/values-aws.yaml \
+#     --set "controlPlane.allowedCIDRs[0]=$(terraform output -raw terraform_operator_ip)/32" \
+#     ...
+# To add IPs post-deploy without redeploying: helm upgrade omb charts/omb -n omb --reuse-values \
+#   --set "controlPlane.allowedCIDRs[0]=<existing>/32" \
+#   --set "controlPlane.allowedCIDRs[1]=<new>/32"

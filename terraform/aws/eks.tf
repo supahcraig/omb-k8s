@@ -1,5 +1,5 @@
 resource "aws_security_group" "omb_workers" {
-  name        = "${var.cluster_name}-omb-workers"
+  name        = "${local.cluster_name}-omb-workers"
   description = "Additional SG for OMB worker port 9080 communication"
   vpc_id      = aws_vpc.main.id
 
@@ -19,12 +19,12 @@ resource "aws_security_group" "omb_workers" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.cluster_name}-omb-workers"
+    Name = "${local.cluster_name}-omb-workers"
   })
 }
 
 resource "aws_eks_cluster" "main" {
-  name     = var.cluster_name
+  name     = local.cluster_name
   role_arn = aws_iam_role.eks_cluster.arn
 
   vpc_config {
@@ -53,7 +53,7 @@ resource "aws_eks_addon" "ebs_csi" {
 # Runs: control-plane, Prometheus, Grafana, Cluster Autoscaler, driver Jobs.
 
 resource "aws_launch_template" "control_plane" {
-  name_prefix   = "${var.cluster_name}-control-plane-"
+  name_prefix   = "${local.cluster_name}-control-plane-"
   instance_type = "m5.xlarge"
 
   vpc_security_group_ids = [
@@ -63,7 +63,7 @@ resource "aws_launch_template" "control_plane" {
   tag_specifications {
     resource_type = "instance"
     tags = merge(var.tags, {
-      Name = "${var.cluster_name}-control-plane"
+      Name = "${local.cluster_name}-control-plane"
     })
   }
 
@@ -74,7 +74,7 @@ resource "aws_launch_template" "control_plane" {
 
 resource "aws_eks_node_group" "control_plane" {
   cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "${var.cluster_name}-control-plane"
+  node_group_name = "${local.cluster_name}-control-plane"
   node_role_arn   = aws_iam_role.node_group.arn
   subnet_ids      = aws_subnet.private[*].id
 
@@ -112,7 +112,7 @@ resource "aws_eks_node_group" "control_plane" {
 # Port 9080 SG attached for worker-to-worker communication.
 
 resource "aws_launch_template" "benchmark_workers" {
-  name_prefix   = "${var.cluster_name}-benchmark-workers-"
+  name_prefix   = "${local.cluster_name}-benchmark-workers-"
   instance_type = "m5.4xlarge"
 
   vpc_security_group_ids = [
@@ -123,7 +123,7 @@ resource "aws_launch_template" "benchmark_workers" {
   tag_specifications {
     resource_type = "instance"
     tags = merge(var.tags, {
-      Name = "${var.cluster_name}-benchmark-worker"
+      Name = "${local.cluster_name}-benchmark-worker"
     })
   }
 
@@ -134,7 +134,7 @@ resource "aws_launch_template" "benchmark_workers" {
 
 resource "aws_eks_node_group" "benchmark_workers" {
   cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "${var.cluster_name}-benchmark-workers"
+  node_group_name = "${local.cluster_name}-benchmark-workers"
   node_role_arn   = aws_iam_role.node_group.arn
   subnet_ids      = aws_subnet.private[*].id
 
@@ -166,7 +166,7 @@ resource "aws_eks_node_group" "benchmark_workers" {
   # Required tags for Cluster Autoscaler node group discovery
   tags = merge(var.tags, {
     "k8s.io/cluster-autoscaler/enabled"             = "true"
-    "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
+    "k8s.io/cluster-autoscaler/${local.cluster_name}" = "owned"
   })
 
   depends_on = [
