@@ -7,6 +7,7 @@ metrics on omb-worker-* pods. Silently no-ops if Prometheus is unreachable
 so a missing Prometheus deployment never breaks a benchmark run.
 """
 import asyncio
+import json
 import logging
 import math
 from typing import Optional
@@ -38,6 +39,31 @@ async def _query(client: httpx.AsyncClient, base_url: str, query: str) -> Option
         return None
 
 
+async def _query_per_pod(client: httpx.AsyncClient, base_url: str, query: str) -> dict:
+    """Execute a PromQL query and return a dict of {pod_name: float_value}.
+
+    Returns an empty dict on any error or non-200 response.
+    """
+    try:
+        resp = await client.get(f"{base_url}/api/v1/query", params={"query": query}, timeout=8.0)
+        if resp.status_code != 200:
+            return {}
+        results = resp.json().get("data", {}).get("result", [])
+        out = {}
+        for item in results:
+            pod = item.get("metric", {}).get("pod", "unknown")
+            try:
+                val = float(item["value"][1])
+                if not (math.isnan(val) or math.isinf(val)):
+                    out[pod] = val
+            except (KeyError, ValueError, IndexError):
+                pass
+        return out
+    except Exception as exc:
+        logger.debug("Prometheus per-pod query error: %s", exc)
+        return {}
+
+
 async def _collect_sample(
     client: httpx.AsyncClient,
     prom_url: str,
@@ -56,14 +82,18 @@ async def _collect_sample(
     memory_mib = await _query(client, prom_url,
         f'avg(container_memory_working_set_bytes{{{worker_selector}}}) / 1048576')
 
-    # Throttle: fraction of CFS periods that were throttled (→ %)
-    # Returns NaN early in the run before the rate window fills;
-    # _query() converts NaN → None automatically.
     throttle_pct = await _query(client, prom_url,
         f'100 * max('
         f'  rate(container_cpu_cfs_throttled_periods_total{{{worker_selector}}}[2m])'
         f'  / rate(container_cpu_cfs_periods_total{{{worker_selector}}}[2m])'
         f')')
+
+    memory_per_pod = await _query_per_pod(client, prom_url,
+        f'container_memory_working_set_bytes{{{worker_selector}}} / 1048576')
+
+    cpu_per_pod = await _query_per_pod(client, prom_url,
+        f'100 * rate(container_cpu_usage_seconds_total{{{worker_selector}}}[2m])'
+        f' / {cpu_request_cores}')
 
     async with AsyncSessionLocal() as db:
         sample = PrometheusSample(
@@ -75,6 +105,8 @@ async def _collect_sample(
             worker_cpu_pct=cpu_pct,
             worker_memory_mib=memory_mib,
             worker_throttle_pct=throttle_pct,
+            worker_memory_per_pod=json.dumps(memory_per_pod) if memory_per_pod else None,
+            worker_cpu_per_pod=json.dumps(cpu_per_pod) if cpu_per_pod else None,
         )
         db.add(sample)
         try:
@@ -103,7 +135,6 @@ async def collect_prometheus(
     t = 0
 
     async with httpx.AsyncClient() as client:
-        # Immediate first sample so charts populate as soon as the run starts
         await _collect_sample(client, prom_url, namespace, run_id, t, cpu_request_cores)
 
         while not runner.is_done(run_id):
