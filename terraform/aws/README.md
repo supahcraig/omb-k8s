@@ -37,8 +37,12 @@ Expect ~15-20 minutes for EKS to provision.
 
 **3. Configure kubectl:**
 
+Set `KUBECONFIG` before running get-credentials to keep this cluster's config
+isolated from `~/.kube/config`:
+
 ```bash
-aws eks update-kubeconfig --region <region> --name <cluster_name>
+export KUBECONFIG=$(pwd)/kubeconfig
+$(terraform output -raw kubeconfig_command)
 kubectl get nodes  # should show 4 nodes in Ready state (2 control-plane, 2 benchmark-workers)
 ```
 

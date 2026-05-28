@@ -40,19 +40,14 @@ both sides yourself using the same or a second Terraform configuration.
 ```bash
 cd aws/
 cp terraform.tfvars.example ../../../engagements/<customer>-peering-aws.tfvars
-# Fill in source_vpc_id, source_route_table_ids, target_vpc_id, target_vpc_cidr
+# Fill in source_vpc_id, source_vpc_cidr, target_vpc_id, target_vpc_cidr
 terraform init
 terraform apply -var-file=../../../engagements/<customer>-peering-aws.tfvars
 terraform output peering_connection_id   # share this with Redpanda BYOC
 ```
 
-**Finding source_route_table_ids:** These are the private route table IDs from the
-EKS module's VPC. Get them from:
-```bash
-# In the EKS module directory:
-terraform show | grep route_table
-# Or from AWS console: VPC > Route Tables > filter by VPC ID
-```
+Route tables are discovered automatically at plan time — no need to look them up
+or provide them as inputs.
 
 ## GCP usage
 

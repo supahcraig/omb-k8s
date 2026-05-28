@@ -192,11 +192,18 @@ terraform destroy
 **Important:** Terraform state is local. Do not delete your local state
 directory until after `terraform destroy` completes successfully.
 
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [Deployment: AWS (EKS)](docs/deployment-aws.md) | Step-by-step EKS provisioning and Helm install |
+| [Deployment: GCP (GKE)](docs/deployment-gcp.md) | Step-by-step GKE provisioning and Helm install |
+| [Deployment: Azure (AKS)](docs/deployment-azure.md) | Step-by-step AKS provisioning and Helm install |
+| [Running Benchmarks](docs/running-benchmarks.md) | Configuring connectivity, workloads, single runs, sweeps |
+| [Scaling Workers](docs/scaling-workers.md) | How to scale worker pods mid-engagement |
+| [Architecture](docs/architecture.md) | Component diagram, worker discovery, run lifecycle |
+| [Teardown](docs/teardown.md) | Safe cleanup — Helm uninstall and terraform destroy |
+
 ## Worker Image
 
 See [worker/README.md](worker/README.md) for local build and test instructions.
-
-## Architecture
-
-See [CLAUDE.md](CLAUDE.md) for full architecture documentation and key design
-decisions.

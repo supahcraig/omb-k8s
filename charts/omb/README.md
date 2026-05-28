@@ -37,7 +37,7 @@ Exec into any running pod and verify worker-0 is reachable by its stable DNS nam
 
 ```bash
 kubectl exec -it <any-running-pod> -n <namespace> -- \
-  curl http://omb-worker-0.omb-worker.<namespace>.svc.cluster.local:8080
+  curl http://omb-worker-0.omb-worker.<namespace>.svc.cluster.local:9080
 ```
 
 Expected: HTTP 200 response from the OMB worker HTTP interface.

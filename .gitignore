@@ -80,3 +80,6 @@ kubeconfig
 kubeconfig.*
 my-values.yaml
 *-values.local.yaml
+
+# ─── Engagement-specific tfvars ──────────────────────────────────────────────
+terraform/engagements/

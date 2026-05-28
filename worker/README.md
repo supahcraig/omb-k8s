@@ -1,10 +1,10 @@
 # OMB Worker Image
 
 The OMB worker runs the OpenMessaging Benchmark worker process. It listens on
-port 8080 and accepts benchmark commands from the control plane.
+port 9080 and accepts benchmark commands from the control plane.
 
 Worker pods run as a StatefulSet so each pod gets a stable DNS name
-(`omb-worker-0.omb-worker:8080`, etc.). Do not convert to a Deployment.
+(`omb-worker-0.omb-worker:9080`, etc.). Do not convert to a Deployment.
 
 ## Building locally
 
@@ -21,13 +21,13 @@ driver. Expect the first build to take 5–10 minutes (Maven dependency download
 Start the worker:
 
 ```bash
-docker run --rm -p 8080:8080 -e OMB_MODE=worker omb-worker
+docker run --rm -p 9080:9080 -e OMB_MODE=worker omb-worker
 ```
 
 Verify it is healthy:
 
 ```bash
-curl http://localhost:8080/counters-stats
+curl http://localhost:9080/counters-stats
 ```
 
 Expected response: `200 OK` with JSON showing zero message counts (worker is idle):
@@ -44,7 +44,7 @@ benchmark Jobs):
 docker run --rm -e OMB_MODE=driver omb-worker \
   --drivers /etc/omb/driver.yaml \
   /etc/omb/workload.yaml \
-  --workers http://omb-worker-0.omb-worker:8080
+  --workers http://omb-worker-0.omb-worker:9080
 ```
 
 ## Environment variables
