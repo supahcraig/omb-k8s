@@ -6,6 +6,8 @@ metadata:
     app: omb-control-plane
 spec:
   type: LoadBalancer
+  loadBalancerSourceRanges:
+    {{- toYaml .Values.controlPlane.allowedCIDRs | nindent 4 }}
   selector:
     app: omb-control-plane
   ports:

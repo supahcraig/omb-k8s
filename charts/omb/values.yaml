@@ -17,6 +17,14 @@ controlPlane:
   # If empty, an ephemeral key is generated at startup — passwords will not
   # survive pod restarts. Set this before saving any credentials.
   encryptionKey: ""
+  # List of CIDRs allowed to reach the control-plane UI via the LoadBalancer.
+  # Defaults to open (0.0.0.0/0). Pass your Terraform operator IP at deploy time:
+  #   helm install omb ... --set 'controlPlane.allowedCIDRs[0]=1.2.3.4/32'
+  # To add IPs post-deploy: helm upgrade omb ... --reuse-values \
+  #   --set 'controlPlane.allowedCIDRs[0]=1.2.3.4/32' \
+  #   --set 'controlPlane.allowedCIDRs[1]=5.6.7.8/32'
+  allowedCIDRs:
+    - "0.0.0.0/0"
 
 storage:
   storageClassName: ""
