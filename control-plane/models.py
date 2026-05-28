@@ -102,6 +102,8 @@ class PrometheusSample(Base):
     worker_cpu_pct = Column(Float, nullable=True)      # avg % of 4-core limit across workers
     worker_memory_mib = Column(Float, nullable=True)   # avg memory working set in MiB
     worker_throttle_pct = Column(Float, nullable=True) # max throttled-periods % across workers
+    worker_memory_per_pod = Column(Text, nullable=True)  # JSON: {"omb-worker-0": MiB, ...}
+    worker_cpu_per_pod = Column(Text, nullable=True)     # JSON: {"omb-worker-0": pct, ...}
 
     run = relationship("Run", back_populates="prometheus_samples")
 
