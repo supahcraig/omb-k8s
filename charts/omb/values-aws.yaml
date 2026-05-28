@@ -16,4 +16,4 @@ clusterAutoscaler:
 worker:
   resources:
     cpu: "15"
-    memory: "60Gi"
+    memory: "58Gi"
