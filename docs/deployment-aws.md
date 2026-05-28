@@ -54,7 +54,7 @@ region             = "us-east-1"
 vpc_cidr           = "10.0.0.0/16"
 availability_zones = ["us-east-1a", "us-east-1b"]
 
-# The Redpanda BYOC or self-hosted VPC to peer with
+# VPC ID of the cluster you are benchmarking
 target_vpc_id = "vpc-0123456789abcdef0"
 target_cidr   = "172.16.0.0/16"
 
@@ -65,10 +65,10 @@ target_cidr   = "172.16.0.0/16"
 # target_security_group_id = "sg-0abc123def456gh78"
 ```
 
-> **Note:** `target_security_group_id` is optional but recommended for BYOC
-> engagements. Obtain the SG ID from the Redpanda Cloud console (Network tab)
-> or from the customer's AWS account. Without it you will need to manually add
-> the inbound rule after Terraform completes.
+> **Note:** `target_security_group_id` is optional. When set, Terraform adds
+> an inbound rule to the broker security group for ports 9092–9093. Without it,
+> VPC routes work but broker connections will be refused at the SG layer. Find
+> the SG ID in the AWS console or Redpanda Cloud console under Networking.
 
 ---
 
@@ -197,37 +197,15 @@ http://<hostname>/
 
 ## 8. Configure cluster connectivity
 
-Open the UI, click **Settings** in the left sidebar, then select the
-**Cluster** tab. Fill in the connection details for the target Redpanda or
-Kafka cluster.
-
-### BYOC (Redpanda Cloud)
-
-BYOC clusters always require TLS and SASL. Obtain the bootstrap server address
-from the Redpanda Cloud console (Cluster Overview → Bootstrap server).
+Open the UI, click **Settings** in the left sidebar, then select the **Cluster** tab.
 
 | Field | Value |
 |-------|-------|
-| Seed Brokers | Single bootstrap server, e.g. `seed-abc123.cloud.redpanda.com:9092` |
-| TLS | Enabled |
-| SASL | Enabled |
-| SASL Mechanism | SCRAM-SHA-256 |
-| SASL Username | From Redpanda Cloud console (Security → Users) |
-| SASL Password | From Redpanda Cloud console |
-
-Click **Save**.
-
-### Self-hosted
-
-Self-hosted clusters may or may not require TLS or SASL.
-
-| Field | Value |
-|-------|-------|
-| Seed Brokers | Comma-separated broker addresses, e.g. `10.0.1.10:9092,10.0.1.11:9092` |
-| TLS | Enable if the cluster requires it |
-| SASL | Enable if the cluster requires it |
-| SASL Mechanism | SCRAM-SHA-256, SCRAM-SHA-512, or PLAIN (match your broker config) |
-| SASL Username / Password | As configured on the broker |
+| Seed Brokers | One or more broker addresses. Type each one and press Enter. Redpanda Cloud: single bootstrap server (e.g. `seed-abc123.cloud.redpanda.com:9092`). Self-managed: one address per broker. |
+| TLS | Enable if the cluster requires it. Redpanda Cloud always requires TLS. |
+| SASL | Enable if the cluster requires authentication. Redpanda Cloud always requires SASL. |
+| SASL Mechanism | SCRAM-SHA-256 for Redpanda Cloud. SCRAM-SHA-256, SCRAM-SHA-512, or PLAIN for self-managed (match your broker config). |
+| Username / Password | Your broker credentials. |
 
 Click **Save**.
 

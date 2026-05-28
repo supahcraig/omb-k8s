@@ -69,7 +69,7 @@ vnet_address_space    = ["10.2.0.0/16"]
 subnet_address_prefix = "10.2.0.0/20"
 
 # Resource ID of the Redpanda/Kafka VNet to peer with.
-# For BYOC: obtain from the Redpanda Cloud BYOC UI (Networking tab).
+# For Redpanda Cloud: obtain this from the console (Networking tab).
 # Format: /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<vnet>
 # Leave empty ("") to skip VNet peering.
 target_vnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/redpanda-rg/providers/Microsoft.Network/virtualNetworks/redpanda-vnet"
@@ -81,9 +81,9 @@ tags = {
 }
 ```
 
-**VNet address space:** Choose a CIDR that does not overlap with the Redpanda BYOC or self-hosted VNet. The OMB VNet and the target VNet must have non-overlapping CIDRs for VNet peering to succeed.
+**VNet address space:** Choose a CIDR that does not overlap with the target cluster's VNet. Non-overlapping CIDRs are required for VNet peering to succeed.
 
-**`target_vnet_id`:** Set to the full Azure resource ID of the Redpanda VNet. For BYOC clusters, find this in the Redpanda Cloud console under Networking. Leave as `""` if you are not using VNet peering.
+**`target_vnet_id`:** Full Azure resource ID of the target cluster's VNet. For Redpanda Cloud, find this in the console under Networking. Leave as `""` to skip peering.
 
 > **Keep this file out of git.** `terraform.tfvars` is gitignored by default. Never commit a filled-in tfvars file.
 
@@ -213,37 +213,17 @@ http://<EXTERNAL-IP>
 
 Open the UI, navigate to **Settings**, and select the **Cluster** tab.
 
-### BYOC (Redpanda Cloud)
-
-BYOC clusters require TLS and SASL authentication.
-
 | Field | Value |
 |-------|-------|
-| Seed brokers | Single bootstrap server (e.g. `seed-abc123.us-east-1.aws.redpanda.cloud:9092`) |
-| TLS | Enabled |
-| SASL | Enabled |
-| SASL mechanism | `SCRAM-SHA-256` |
-| SASL username | Your Redpanda Cloud service account username |
-| SASL password | Your Redpanda Cloud service account password |
+| Seed brokers | One or more broker addresses. Type each one and press Enter. Redpanda Cloud: single bootstrap server (e.g. `seed-abc123.us-east-1.aws.redpanda.cloud:9092`). Self-managed: one address per broker. |
+| TLS | Enable if the cluster requires it. Redpanda Cloud always requires TLS. |
+| SASL | Enable if the cluster requires authentication. Redpanda Cloud always requires SASL. |
+| SASL mechanism | SCRAM-SHA-256 for Redpanda Cloud. SCRAM-SHA-256, SCRAM-SHA-512, or PLAIN for self-managed. |
+| Username / Password | Your broker credentials. |
 
 Click **Save**.
 
-### Self-hosted
-
-Self-hosted clusters may or may not require TLS or SASL.
-
-| Field | Value |
-|-------|-------|
-| Seed brokers | Comma-separated broker addresses (e.g. `10.2.1.10:9092,10.2.1.11:9092,10.2.1.12:9092`) |
-| TLS | Enable if the cluster uses TLS |
-| SASL | Enable if the cluster requires authentication |
-| SASL mechanism | `SCRAM-SHA-256`, `SCRAM-SHA-512`, or `PLAIN` as appropriate |
-| SASL username | Your cluster username (if SASL enabled) |
-| SASL password | Your cluster password (if SASL enabled) |
-
-Click **Save**.
-
-> **VNet peering:** Worker pods communicate with brokers over the internal VNet peering connection established by Terraform. Broker addresses should be the private IPs or internal DNS names, not public endpoints. If peering was skipped (`target_vnet_id = ""`), brokers must be reachable over the public internet.
+> **VNet peering:** Worker pods communicate with brokers over the internal VNet peering connection established by Terraform. Use private IPs or internal DNS names, not public endpoints. If peering was skipped (`target_vnet_id = ""`), brokers must be reachable over the public internet.
 
 ---
 

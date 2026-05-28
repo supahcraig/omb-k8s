@@ -76,7 +76,7 @@ see `CLAUDE.md`.
                                 │ VPC Peering
                                 │ routes: 9092-9093
 ┌───────────────────────────────▼─────────────────────────────────┐
-│  Target Cluster (BYOC Redpanda or self-hosted Kafka)             │
+│  Target Cluster (Redpanda or Kafka)                              │
 │  Kafka protocol: ports 9092 (plain/SASL) and 9093 (TLS)         │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -630,7 +630,7 @@ a separate VPC (or VNet). VPC peering bridges them.
 ```
 OMB VPC (SE-owned account)
       ↕  aws_vpc_peering_connection (auto_accept = true)
-Target VPC (same SE-owned account — BYOC uses the SE's account)
+Target VPC (same SE-owned account — required for auto_accept = true)
 ```
 
 - Both VPCs are in the same account, so `auto_accept = true` works without a separate accepter resource.

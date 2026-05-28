@@ -121,17 +121,9 @@ helm upgrade omb charts/omb -n omb \
 
 ### Connecting to a target cluster
 
-**Redpanda Cloud (BYOC):**
-- Single bootstrap server
-- TLS required
-- SASL/SCRAM-SHA-256 required
-
-**Self-hosted:**
-- One or more seed brokers (comma-separated)
-- TLS and SASL optional
-
-Configure connectivity in the UI under Settings → Cluster Connectivity after
-deployment.
+Open **Settings → Cluster Connectivity** after deployment. Enter one or more
+broker addresses, then enable TLS and SASL as required by the target cluster.
+Redpanda Cloud always requires both. Click **Save**.
 
 ## Scaling Workers
 

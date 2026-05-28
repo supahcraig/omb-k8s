@@ -65,7 +65,7 @@ vpc_cidr = "10.1.0.0/16"
 
 # Network self_link of the Redpanda/Kafka cluster VPC to peer with.
 # Format: projects/PROJECT_ID/global/networks/NETWORK_NAME
-# For BYOC: obtain from the Redpanda Cloud BYOC UI (Networking tab).
+# For Redpanda Cloud: obtain the network self_link from the console (Networking tab).
 # Leave empty ("") to skip VPC peering.
 target_network = "projects/redpanda-project-id/global/networks/redpanda-vpc"
 target_cidr    = "172.16.0.0/16"
@@ -112,9 +112,9 @@ Key outputs:
 | `cluster_name` | GKE cluster name (auto-generated if not specified) |
 | `terraform_operator_ip` | Your public IP — pass to helm install as `controlPlane.allowedCIDRs` |
 | `kubeconfig_command` | Ready-to-run `gcloud` credentials command |
-| `vpc_id` | Network self_link (share with BYOC team if peering) |
+| `vpc_id` | Network self_link (share with Redpanda team to complete the peering handshake) |
 
-**BYOC peering note:** GCP VPC peering requires both sides to initiate. After apply, the peering status will be `INACTIVE` until the Redpanda team creates the reverse peering from their network to yours. Share the `vpc_id` output value with your Redpanda contact and ask them to complete the handshake via the BYOC UI.
+**GCP peering note:** GCP VPC peering requires both sides to initiate. After apply, the peering status will be `INACTIVE` until the Redpanda team creates the reverse peering from their network to yours. Share the `vpc_id` output value with your Redpanda contact and ask them to complete the handshake via the Redpanda Cloud console.
 
 ---
 
@@ -184,37 +184,17 @@ Open the UI at `http://<IP-address>` in your browser.
 
 ## 8. Configure cluster connectivity
 
-Open **Settings** in the left sidebar. Fill in the **Cluster Connectivity** tab based on your target cluster type.
-
-### BYOC (Redpanda Cloud)
-
-BYOC clusters require TLS and SASL. Configure as follows:
+Open **Settings** in the left sidebar, then the **Cluster Connectivity** tab.
 
 | Field | Value |
 |-------|-------|
-| Seed brokers | Single bootstrap server (e.g. `seed-abc123.us-central1.cloud.redpanda.com:9092`) |
-| TLS | Enabled |
-| SASL | Enabled |
-| SASL mechanism | SCRAM-SHA-256 |
-| SASL username | Your BYOC service account username |
-| SASL password | Your BYOC service account password |
+| Seed brokers | One or more broker addresses. Type each one and press Enter. Redpanda Cloud: single bootstrap server (e.g. `seed-abc123.us-central1.cloud.redpanda.com:9092`). Self-managed: one address per broker. |
+| TLS | Enable if the cluster requires it. Redpanda Cloud always requires TLS. |
+| SASL | Enable if the cluster requires authentication. Redpanda Cloud always requires SASL. |
+| SASL mechanism | SCRAM-SHA-256 for Redpanda Cloud. SCRAM-SHA-256, SCRAM-SHA-512, or PLAIN for self-managed. |
+| Username / Password | Your broker credentials. |
 
-> **Note:** The BYOC bootstrap server and credentials are available in the Redpanda Cloud console under your cluster's **Connect** tab.
-
-### Self-hosted cluster
-
-Self-hosted clusters support flexible connectivity options:
-
-| Field | Value |
-|-------|-------|
-| Seed brokers | Comma-separated broker addresses (e.g. `broker1:9092,broker2:9092,broker3:9092`) |
-| TLS | Enable if the cluster requires TLS |
-| SASL | Enable if the cluster requires authentication |
-| SASL mechanism | SCRAM-SHA-256, SCRAM-SHA-512, or PLAIN |
-| SASL username | Your broker username (if SASL enabled) |
-| SASL password | Your broker password (if SASL enabled) |
-
-Click **Save** after entering your values.
+Click **Save**.
 
 ---
 
