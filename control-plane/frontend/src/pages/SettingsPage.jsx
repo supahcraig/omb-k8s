@@ -2,12 +2,45 @@ import { useEffect, useState } from 'react'
 import { getSettings, updateSettings, testConnection } from '../api.js'
 import { useSettings } from '../context/SettingsContext.jsx'
 
-// A password field that masks saved values and requires an explicit "Change" click
+function ChipInput({ values, onChange, placeholder }) {
+  const [inputVal, setInputVal] = useState('')
+
+  function commit(raw) {
+    const v = raw.trim()
+    if (!v) return
+    onChange([...values, v])
+    setInputVal('')
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit(inputVal) }
+    else if (e.key === 'Backspace' && inputVal === '') onChange(values.slice(0, -1))
+  }
+
+  return (
+    <div className="chip-input" onClick={e => e.currentTarget.querySelector('input')?.focus()}>
+      {values.map((v, i) => (
+        <span key={i} className="chip-value">
+          {v}
+          <button type="button" className="chip-remove"
+            onClick={() => onChange(values.filter((_, j) => j !== i))}>×</button>
+        </span>
+      ))}
+      <input
+        className="chip-input-field"
+        value={inputVal}
+        onChange={e => setInputVal(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => commit(inputVal)}
+        placeholder={values.length === 0 ? (placeholder || 'hostname:9092, press Enter') : ''}
+      />
+    </div>
+  )
+}
+
 function PasswordField({ label, hint, hasSaved, value, onChange }) {
   const [changing, setChanging] = useState(!hasSaved)
 
-  // If hasSaved transitions from false→true (after first save), keep input shown
-  // but if we load settings and see a saved value, start masked
   useEffect(() => {
     if (hasSaved) setChanging(false)
   }, [hasSaved])
@@ -60,8 +93,10 @@ function Toggle({ checked, onChange, label }) {
 // ── Cluster Connectivity Tab ─────────────────────────────────────────────────
 
 function ClusterTab({ initial, onChange }) {
-  const [mode, setMode] = useState(initial?.mode || 'byoc')
-  const [bootstrap, setBootstrap] = useState(initial?.bootstrap_servers || '')
+  const initBrokers = (initial?.bootstrap_servers || '')
+    .split(',').map(s => s.trim()).filter(Boolean)
+
+  const [brokers, setBrokers] = useState(initBrokers)
   const [tlsEnabled, setTlsEnabled] = useState(initial?.tls_enabled ?? false)
   const [saslEnabled, setSaslEnabled] = useState(initial?.sasl_enabled ?? false)
   const [saslMechanism, setSaslMechanism] = useState(initial?.sasl_mechanism || 'SCRAM-SHA-256')
@@ -69,7 +104,6 @@ function ClusterTab({ initial, onChange }) {
   const [password, setPassword] = useState('')
   const [passwordChanged, setPasswordChanged] = useState(false)
 
-  // hasSaved = settings exist and we haven't just entered a new password
   const hasSavedPassword = !!initial && !passwordChanged
 
   const [saving, setSaving] = useState(false)
@@ -78,20 +112,9 @@ function ClusterTab({ initial, onChange }) {
   const [testResult, setTestResult] = useState(null)
 
   function buildConfig() {
-    if (mode === 'byoc') {
-      return {
-        mode: 'byoc',
-        bootstrap_servers: bootstrap,
-        tls_enabled: true,
-        sasl_enabled: true,
-        sasl_mechanism: 'SCRAM-SHA-256',
-        sasl_username: username,
-        sasl_password: passwordChanged ? password : null,
-      }
-    }
     return {
       mode: 'self-hosted',
-      bootstrap_servers: bootstrap,
+      bootstrap_servers: brokers.join(','),
       tls_enabled: tlsEnabled,
       sasl_enabled: saslEnabled,
       sasl_mechanism: saslEnabled ? saslMechanism : null,
@@ -115,7 +138,6 @@ function ClusterTab({ initial, onChange }) {
   }
 
   async function handleTest() {
-    // Must save first so the backend can use stored credentials
     if (!initial) {
       setTestResult({ success: false, message: 'Save settings before testing connection.' })
       return
@@ -134,86 +156,42 @@ function ClusterTab({ initial, onChange }) {
 
   return (
     <div>
-      <div className="mode-tabs">
-        <button className={`mode-tab${mode === 'byoc' ? ' active' : ''}`} onClick={() => setMode('byoc')}>
-          BYOC (Redpanda Cloud)
-        </button>
-        <button className={`mode-tab${mode === 'self-hosted' ? ' active' : ''}`} onClick={() => setMode('self-hosted')}>
-          Self-Hosted
-        </button>
-      </div>
-
       <div className="form-group">
-        <label className="form-label">
-          {mode === 'byoc' ? 'Bootstrap Server' : 'Seed Brokers'}
-        </label>
-        <input
-          className="form-input"
-          value={bootstrap}
-          onChange={e => setBootstrap(e.target.value)}
-          placeholder={mode === 'byoc'
-            ? 'hostname.region.byoc.prd.cloud.redpanda.com:9092'
-            : 'broker-1:9092,broker-2:9092,broker-3:9092'
-          }
+        <label className="form-label">Seed Brokers</label>
+        <ChipInput
+          values={brokers}
+          onChange={setBrokers}
+          placeholder="hostname:9092 — press Enter or comma to add"
         />
-        {mode === 'self-hosted' && (
-          <span className="form-hint">Enter one or more seed brokers, e.g. broker-1:9092,broker-2:9092</span>
-        )}
+        <span className="form-hint">Add each broker address individually.</span>
       </div>
 
-      {mode === 'byoc' ? (
-        <>
-          <div className="alert alert-info" style={{ marginBottom: 16 }}>
-            BYOC clusters always use TLS and SASL/SCRAM-SHA-256.
+      <Toggle checked={tlsEnabled} onChange={setTlsEnabled} label="TLS" />
+      <div className="mt-12">
+        <Toggle checked={saslEnabled} onChange={setSaslEnabled} label="SASL" />
+      </div>
+
+      {saslEnabled && (
+        <div className="mt-16">
+          <div className="form-group">
+            <label className="form-label">SASL Mechanism</label>
+            <select className="form-select" value={saslMechanism} onChange={e => setSaslMechanism(e.target.value)}>
+              <option value="SCRAM-SHA-256">SCRAM-SHA-256</option>
+              <option value="SCRAM-SHA-512">SCRAM-SHA-512</option>
+              <option value="PLAIN">PLAIN</option>
+            </select>
           </div>
           <div className="form-group">
-            <label className="form-label">SASL Username</label>
+            <label className="form-label">Username</label>
             <input className="form-input" value={username} onChange={e => setUsername(e.target.value)} />
           </div>
           <PasswordField
-            label="SASL Password"
+            label="Password"
             hasSaved={hasSavedPassword}
             value={password}
             onChange={v => { setPassword(v); setPasswordChanged(true) }}
           />
-        </>
-      ) : (
-        <>
-          <Toggle
-            checked={tlsEnabled}
-            onChange={setTlsEnabled}
-            label="TLS"
-          />
-          <div className="mt-12">
-            <Toggle
-              checked={saslEnabled}
-              onChange={setSaslEnabled}
-              label="SASL"
-            />
-          </div>
-          {saslEnabled && (
-            <div className="mt-16">
-              <div className="form-group">
-                <label className="form-label">SASL Mechanism</label>
-                <select className="form-select" value={saslMechanism} onChange={e => setSaslMechanism(e.target.value)}>
-                  <option value="SCRAM-SHA-256">SCRAM-SHA-256</option>
-                  <option value="SCRAM-SHA-512">SCRAM-SHA-512</option>
-                  <option value="PLAIN">PLAIN</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Username</label>
-                <input className="form-input" value={username} onChange={e => setUsername(e.target.value)} />
-              </div>
-              <PasswordField
-                label="Password"
-                hasSaved={hasSavedPassword}
-                value={password}
-                onChange={v => { setPassword(v); setPasswordChanged(true) }}
-              />
-            </div>
-          )}
-        </>
+        </div>
       )}
 
       {saveMsg && (
@@ -243,9 +221,7 @@ function ClusterTab({ initial, onChange }) {
 
 // ── Prometheus Tab ────────────────────────────────────────────────────────────
 
-function PrometheusTab({ initial, clusterMode, onChange }) {
-  const [mode, setMode] = useState(initial?.mode || clusterMode || 'byoc')
-  const [scrapeYaml, setScrapeYaml] = useState(initial?.scrape_yaml || '')
+function PrometheusTab({ initial, onChange }) {
   const [scrapeTargets, setScrapeTargets] = useState(
     Array.isArray(initial?.scrape_targets)
       ? initial.scrape_targets.join(',')
@@ -255,9 +231,6 @@ function PrometheusTab({ initial, clusterMode, onChange }) {
   const [saveMsg, setSaveMsg] = useState(null)
 
   function buildConfig() {
-    if (mode === 'byoc') {
-      return { mode: 'byoc', scrape_yaml: scrapeYaml, scrape_targets: null }
-    }
     return {
       mode: 'self-hosted',
       scrape_yaml: null,
@@ -272,7 +245,7 @@ function PrometheusTab({ initial, clusterMode, onChange }) {
     setSaveMsg(null)
     try {
       await onChange(buildConfig())
-      setSaveMsg({ type: 'success', text: 'Prometheus configuration saved and applied.' })
+      setSaveMsg({ type: 'success', text: 'Prometheus configuration saved.' })
     } catch (e) {
       setSaveMsg({ type: 'error', text: e.message })
     } finally {
@@ -282,39 +255,21 @@ function PrometheusTab({ initial, clusterMode, onChange }) {
 
   return (
     <div>
-      <div className="mode-tabs">
-        <button className={`mode-tab${mode === 'byoc' ? ' active' : ''}`} onClick={() => setMode('byoc')}>
-          BYOC (Redpanda Cloud)
-        </button>
-        <button className={`mode-tab${mode === 'self-hosted' ? ' active' : ''}`} onClick={() => setMode('self-hosted')}>
-          Self-Hosted
-        </button>
+      <div className="alert alert-info" style={{ marginBottom: 16 }}>
+        Redpanda broker metrics are not currently collected. Scrape targets saved here will enable broker-side throughput and record rate charts in a future update.
       </div>
-
-      {mode === 'byoc' ? (
-        <div className="form-group">
-          <label className="form-label">Scrape Job YAML</label>
-          <textarea
-            className="form-textarea tall"
-            value={scrapeYaml}
-            onChange={e => setScrapeYaml(e.target.value)}
-            placeholder={'- job_name: redpandaCloud-...\n  static_configs:\n    - targets: [...]\n  basic_auth:\n    username: prometheus\n    password: your-password\n  scheme: https'}
-            style={{ fontFamily: 'monospace', fontSize: 12 }}
-          />
-          <span className="form-hint">
-            Paste the scrape job YAML from Redpanda Cloud UI → Metrics → Prometheus.
-          </span>
-        </div>
-      ) : (
-        <div className="form-group">
-          <label className="form-label">Scrape Targets</label>
-          <input className="form-input" value={scrapeTargets} onChange={e => setScrapeTargets(e.target.value)}
-            placeholder="broker-1:9644,broker-2:9644,broker-3:9644" />
-          <span className="form-hint">
-            Typically the same hosts as your seed brokers on the Prometheus metrics port (default 9644 for Redpanda).
-          </span>
-        </div>
-      )}
+      <div className="form-group">
+        <label className="form-label">Scrape Targets</label>
+        <input
+          className="form-input"
+          value={scrapeTargets}
+          onChange={e => setScrapeTargets(e.target.value)}
+          placeholder="broker-1:9644,broker-2:9644,broker-3:9644"
+        />
+        <span className="form-hint">
+          Redpanda metrics port (default 9644) for each broker, comma-separated.
+        </span>
+      </div>
 
       {saveMsg && (
         <div className={`alert alert-${saveMsg.type === 'success' ? 'success' : 'error'} mt-16`}>
@@ -324,7 +279,7 @@ function PrometheusTab({ initial, clusterMode, onChange }) {
 
       <div className="mt-20">
         <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? <><span className="spinner" /> Saving…</> : 'Save & Apply'}
+          {saving ? <><span className="spinner" /> Saving…</> : 'Save'}
         </button>
       </div>
     </div>
@@ -385,8 +340,13 @@ export default function SettingsPage() {
             <button
               className={`tab${activeTab === 'prometheus' ? ' active' : ''}`}
               onClick={() => setActiveTab('prometheus')}
+              style={{ opacity: 0.45 }}
+              title="Redpanda broker metrics — not yet active"
             >
-              Prometheus Configuration
+              Prometheus
+              <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)' }}>
+                coming soon
+              </span>
             </button>
           </div>
 
@@ -400,7 +360,6 @@ export default function SettingsPage() {
           {activeTab === 'prometheus' && (
             <PrometheusTab
               initial={settings?.prometheus}
-              clusterMode={settings?.cluster?.mode}
               onChange={savePrometheus}
             />
           )}
