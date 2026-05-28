@@ -53,13 +53,31 @@ export function computeLatencyStats(points, warmupSamples = 0) {
 }
 
 export function promToChartData(samples) {
-  return samples.map(s => ({
-    t:                 s.t,
-    bytesInMBSec:      s.bytes_in_per_sec  != null ? s.bytes_in_per_sec  / 1_048_576 : null,
-    bytesOutMBSec:     s.bytes_out_per_sec != null ? s.bytes_out_per_sec / 1_048_576 : null,
-    recordsPerSec:     s.records_per_sec,
-    workerCpuPct:      s.worker_cpu_pct,
-    workerMemMiB:      s.worker_memory_mib,
-    workerThrottlePct: s.worker_throttle_pct,
-  }));
+  return samples.map(s => {
+    const memPerPod = s.worker_memory_per_pod
+      ? JSON.parse(s.worker_memory_per_pod)
+      : {};
+    const cpuPerPod = s.worker_cpu_per_pod
+      ? JSON.parse(s.worker_cpu_per_pod)
+      : {};
+
+    const point = {
+      t:                 s.t,
+      bytesInMBSec:      s.bytes_in_per_sec  != null ? s.bytes_in_per_sec  / 1_048_576 : null,
+      bytesOutMBSec:     s.bytes_out_per_sec != null ? s.bytes_out_per_sec / 1_048_576 : null,
+      recordsPerSec:     s.records_per_sec,
+      workerCpuPct:      s.worker_cpu_pct,
+      workerMemMiB:      s.worker_memory_mib,
+      workerThrottlePct: s.worker_throttle_pct,
+    };
+
+    for (const [pod, val] of Object.entries(memPerPod)) {
+      point[`workerMem_${pod}`] = val;
+    }
+    for (const [pod, val] of Object.entries(cpuPerPod)) {
+      point[`workerCpu_${pod}`] = val;
+    }
+
+    return point;
+  });
 }

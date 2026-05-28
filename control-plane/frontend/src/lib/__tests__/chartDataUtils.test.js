@@ -75,13 +75,40 @@ describe('normalizeTimeseries', () => {
 });
 
 describe('promToChartData', () => {
+  // t values are elapsed seconds (0, 15, ...) as sent by the backend — not Unix timestamps.
   const samples = [
-    { t: 1716700000, bytes_in_per_sec: 100663296, bytes_out_per_sec: 99614720, records_per_sec: 98304 },
-    { t: 1716700060, bytes_in_per_sec: 101711872, bytes_out_per_sec: 100663296, records_per_sec: 99000 },
+    {
+      t: 0,
+      bytes_in_per_sec: 100663296,
+      bytes_out_per_sec: 99614720,
+      records_per_sec: 98304,
+      worker_cpu_pct: 6.5,
+      worker_memory_mib: 3800.0,
+      worker_throttle_pct: null,
+      worker_memory_per_pod: '{"omb-worker-0":3600.0,"omb-worker-1":200.0}',
+      worker_cpu_per_pod: '{"omb-worker-0":12.0,"omb-worker-1":1.0}',
+    },
+    {
+      t: 15,
+      bytes_in_per_sec: 101711872,
+      bytes_out_per_sec: 100663296,
+      records_per_sec: 99000,
+      worker_cpu_pct: 7.0,
+      worker_memory_mib: 3900.0,
+      worker_throttle_pct: null,
+      worker_memory_per_pod: null,
+      worker_cpu_per_pod: null,
+    },
   ];
 
   test('returns one point per sample', () => {
     expect(promToChartData(samples)).toHaveLength(2);
+  });
+
+  test('t passes through unchanged (elapsed seconds)', () => {
+    const result = promToChartData(samples);
+    expect(result[0].t).toBe(0);
+    expect(result[1].t).toBe(15);
   });
 
   test('bytesInMBSec = bytes_in_per_sec / 1048576', () => {
@@ -99,10 +126,21 @@ describe('promToChartData', () => {
     expect(result[0].recordsPerSec).toBe(98304);
   });
 
-  test('t is 0-based index, not Unix timestamp', () => {
+  test('flattens worker_memory_per_pod JSON into workerMem_<pod> keys', () => {
     const result = promToChartData(samples);
-    expect(result[0].t).toBe(0);
-    expect(result[1].t).toBe(1);
+    expect(result[0]['workerMem_omb-worker-0']).toBeCloseTo(3600.0);
+    expect(result[0]['workerMem_omb-worker-1']).toBeCloseTo(200.0);
+  });
+
+  test('flattens worker_cpu_per_pod JSON into workerCpu_<pod> keys', () => {
+    const result = promToChartData(samples);
+    expect(result[0]['workerCpu_omb-worker-0']).toBeCloseTo(12.0);
+    expect(result[0]['workerCpu_omb-worker-1']).toBeCloseTo(1.0);
+  });
+
+  test('per-pod keys are absent when worker_memory_per_pod is null', () => {
+    const result = promToChartData(samples);
+    expect(result[1]['workerMem_omb-worker-0']).toBeUndefined();
   });
 
   test('returns empty array for empty input', () => {
