@@ -265,9 +265,11 @@ do not duplicate the three-step sequence elsewhere.
        --workers http://omb-worker-0.omb-worker:8080,... --output /tmp/omb-results
 6. UI streams Job logs via websocket
 7. Concurrently, `services/prometheus_collector.py` polls the in-cluster
-   kube-prometheus-stack Prometheus every 15 s for cAdvisor worker metrics
-   (CPU %, memory MiB, CFS throttle %) and writes them to `prometheus_samples`.
-   The Prometheus service is at:
+   kube-prometheus-stack Prometheus every 15 s for cAdvisor worker metrics and
+   writes them to `prometheus_samples`. Each sample row stores both aggregate
+   averages (`worker_cpu_pct`, `worker_memory_mib`, `worker_throttle_pct`) and
+   per-pod JSON objects (`worker_memory_per_pod`, `worker_cpu_per_pod`) keyed by
+   pod name. The Prometheus service is at:
    `http://omb-kube-prometheus-stack-prometheus.{namespace}.svc.cluster.local:9090`
    The collector silently no-ops if Prometheus is unreachable.
 8. On completion, results parsed and stored in SQLite, run record finalized
@@ -317,6 +319,20 @@ the password ends up in a k8s ConfigMap anyway — encryption provided no real
 security benefit and caused runs to break silently after pod restarts due to
 ephemeral key rotation. The settings API returns `sasl_password` in GET responses
 so `DriverForm` can embed it directly in the generated YAML.
+
+**Settings page has no BYOC/self-hosted distinction.** The cluster connectivity tab
+is a single unified form — seed broker chips, TLS toggle, SASL toggle + mechanism.
+BYOC and self-hosted both work identically once TLS and SASL are configured; the
+distinction was removed as unnecessary complexity. The Prometheus tab is present but
+dimmed — Redpanda broker metrics scraping is not yet wired up (the collector uses the
+in-cluster kube-prometheus-stack URL hardcoded in `routers/runs.py`, not the settings).
+
+**`sampleRateMillis` defaults to 1000 ms in WorkloadForm.** OMB's own default is
+10 000 ms (one stat line every 10 s). The UI default overrides this to 1000 ms
+(one stat line per second) for better live chart resolution. The final aggregated
+stats (p50/p99/etc.) come from a cumulative histogram and are unaffected by this
+value. Do not revert to 10 000 — SEs can increase it manually for very long runs
+where log volume is a concern.
 
 ## Who uses this
 
@@ -368,6 +384,9 @@ Required JVM flags in the entrypoint script (do not add -Xms/-Xmx):
 
 -XX:+UseContainerSupport causes the JVM to read cgroup memory limits. Combined with
 MaxRAMPercentage=75.0 this produces heap = 75% of container memory automatically.
+MinHeapFreeRatio=10 / MaxHeapFreeRatio=20 causes G1GC to shrink the committed heap
+back toward the live set after a large run completes, so worker memory charts reflect
+actual usage rather than the high-water mark from a prior run.
 The correct response to needing more throughput is adding more worker pods via the UI
 scaling control, not changing JVM settings or instance types.
 
@@ -385,7 +404,7 @@ handles all navigation. Routes and pages:
 | `/sweeps/new` | NewSweepPage | Redirects to `/runs/new` with `state={{ enableSweep: true }}` |
 | `/sweeps/:id` | SweepDetailPage | Sweep overview — run comparison table with links to individual runs |
 | `/workloads` | WorkloadLibraryPage | Saved workload configs; "Use" navigates to `/runs/new` |
-| `/settings` | SettingsPage | Cluster connectivity (BYOC/self-hosted) + Prometheus config |
+| `/settings` | SettingsPage | Cluster connectivity (seed brokers, TLS, SASL) + Prometheus scrape targets |
 | `/cluster` | ClusterPage | k8s cluster status, worker health, pod restart |
 
 Sidebar nav groups:
@@ -415,11 +434,13 @@ auto-expands when localStorage contains saved axes with values. `/sweeps/new` is
 kept as a redirect to `/runs/new?state={enableSweep:true}` for backward
 compatibility (bookmarks). Do not add a separate sweep form page.
 
-**Parameter Sweep axes are split into Workload and Driver panels.** Each panel
-has its own field dropdown (from a fixed list + "Custom…" escape hatch) and chip
-inputs. There is no per-row type dropdown. Axes are stored separately in
+**Parameter Sweep axes are split into Driver (left) and Workload (right) panels.**
+Each panel has its own field dropdown (from a fixed list + "Custom…" escape hatch)
+and chip inputs. There is no per-row type dropdown. Axes are stored separately in
 localStorage as `workloadAxes` and `driverAxes`. The old format (single `axes`
-array with a `type` field) is migrated on first read.
+array with a `type` field) is migrated on first read. The sweep section defaults to
+disabled on page load regardless of saved axes — it only auto-enables when navigating
+from `/sweeps/new`. Individual axes can be deleted down to zero per panel.
 
 **Launching a run or sweep navigates immediately to the execution page.**
 `NewRunPage` navigates to `/runs/:id` after `createRun` returns, or fetches
@@ -459,6 +480,16 @@ from the server, so it is accurate after navigation. SQLite stores naive UTC
 datetimes without 'Z'; always append 'Z' before `new Date(ts)` in JavaScript to
 avoid local-timezone misinterpretation.
 
+**RunCharts renders per-worker CPU and memory series.** The Worker CPU and Worker
+Memory charts show one `<Line>` per pod (e.g. `worker-0`, `worker-1`) using the
+`worker_cpu_per_pod` / `worker_memory_per_pod` JSON columns from `prometheus_samples`.
+If those columns are absent (old runs), the charts fall back to the averaged
+`workerCpuPct` / `workerMemMiB` columns. Memory y-axis is in GiB (data stays in
+MiB; `tickFormatter` divides by 1024). Both axes auto-scale to data rather than
+using a fixed domain. All chart x-axes show local time derived from `run.started_at`
+(Prometheus data) or `warmupStartedAt` (OMB log data); SQLite datetimes always need
+`+Z` appended before `new Date()` to parse as UTC correctly.
+
 **Status badges in `RunDetailPage` reflect live run sub-phases.** While
 `run.status === 'running'`, a finer-grained `displayStatus` is derived from live
 log parse state: `initializing` (purple, before warmup traffic log line), `warmup`
@@ -476,10 +507,10 @@ the prefill fetch is skipped and the library content is used instead.
 
 **NewRunPage layout: sweep section above the 2×2 panel grid.** The page renders
 top-to-bottom: (1) header card with name, launch button, and projected load;
-(2) Parameter Sweep card with toggle, cooldown input, and workload/driver axis
-panels; (3) 2×2 CSS grid sitting directly on the page background — top row:
-Driver form panel (blue accent) + Workload form panel (green accent); bottom row:
-Driver YAML panel + Workload YAML panel (darker `#0d1018` to read as code).
+(2) Parameter Sweep card with toggle, cooldown input, and Driver (left) + Workload
+(right) axis panels; (3) 2×2 CSS grid sitting directly on the page background —
+top row: Driver form panel (blue accent) + Workload form panel (green accent);
+bottom row: Driver YAML panel + Workload YAML panel (darker `#0d1018` to read as code).
 
 ## SQLite database
 
