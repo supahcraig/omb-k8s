@@ -1,5 +1,6 @@
 worker:
   replicas: 2
+  port: 9080
   image:
     repository: ghcr.io/supahcraig/omb-worker
     tag: latest

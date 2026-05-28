@@ -42,6 +42,6 @@ COPY entrypoint.sh /omb/entrypoint.sh
 
 RUN chmod +x /omb/entrypoint.sh /omb/bin/benchmark-worker /omb/bin/benchmark
 
-EXPOSE 8080
+EXPOSE 9080
 
 ENTRYPOINT ["/omb/entrypoint.sh"]

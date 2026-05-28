@@ -121,17 +121,20 @@ resource "google_compute_network_peering" "to_target" {
 }
 
 resource "google_compute_firewall" "omb_workers_8080" {
-  name    = "${var.cluster_name}-omb-8080"
+  name    = "${var.cluster_name}-omb-worker"
   network = google_compute_network.main.name
 
   allow {
     protocol = "tcp"
-    ports    = ["8080"]
+    ports    = ["9080"]
   }
 
-  # Allow intra-subnet (worker-to-worker) and from peered target if configured
+  # vpc_cidr: node-to-node traffic
+  # pod_cidr: control-plane pod traffic (control plane does not use hostNetwork)
+  # target_cidr: peered target cluster if configured
   source_ranges = compact([
     var.vpc_cidr,
+    var.pod_cidr,
     var.target_cidr,
   ])
 }

@@ -26,13 +26,13 @@ resource "azurerm_network_security_group" "omb_workers" {
   tags                = var.tags
 
   security_rule {
-    name                       = "allow-omb-8080-inbound"
+    name                       = "allow-omb-9080-inbound"
     priority                   = 100
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = "8080"
+    destination_port_range     = "9080"
     source_address_prefix      = var.subnet_address_prefix
     destination_address_prefix = "*"
   }

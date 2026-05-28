@@ -34,12 +34,13 @@ def _age(ts) -> str:
 
 
 async def _probe_worker(pod_name: str, namespace: str) -> bool:
-    """Return True if the worker HTTP server responds on port 8080."""
-    url = f"http://{pod_name}.omb-worker.{namespace}.svc.cluster.local:8080/"
+    """Return True if the worker HTTP server responds."""
+    url = f"http://{pod_name}.omb-worker.{namespace}.svc.cluster.local:{settings.omb_worker_port}/"
+    def _sync_get() -> int:
+        with httpx.Client(timeout=1.5) as client:
+            return client.get(url).status_code
     try:
-        async with httpx.AsyncClient(timeout=1.5) as client:
-            resp = await client.get(url)
-            return resp.status_code < 500
+        return await asyncio.to_thread(_sync_get) < 500
     except Exception:
         return False
 

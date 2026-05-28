@@ -10,6 +10,6 @@ spec:
     app: omb-worker
   ports:
     - name: worker
-      port: 8080
-      targetPort: 8080
+      port: {{ .Values.worker.port }}
+      targetPort: {{ .Values.worker.port }}
       protocol: TCP

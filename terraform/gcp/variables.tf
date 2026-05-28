@@ -24,6 +24,12 @@ variable "vpc_cidr" {
   default     = "10.1.0.0/16"
 }
 
+variable "pod_cidr" {
+  description = "GKE pod CIDR — must be included in the port-8080 firewall rule so control-plane pods can reach hostNetwork worker pods. GKE routes-based networking defaults to 10.244.0.0/16."
+  type        = string
+  default     = "10.244.0.0/16"
+}
+
 variable "target_network" {
   description = "Self-link of the target VPC to peer with (projects/PROJECT/global/networks/NETWORK); leave empty to skip peering"
   type        = string

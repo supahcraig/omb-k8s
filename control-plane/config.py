@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     omb_namespace: str = "default"
     port: int = 8000
     worker_image: str = "ghcr.io/supahcraig/omb-worker:latest"
+    omb_worker_port: int = 9080
 
 
 settings = Settings()

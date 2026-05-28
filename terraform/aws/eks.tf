@@ -1,12 +1,12 @@
 resource "aws_security_group" "omb_workers" {
   name        = "${var.cluster_name}-omb-workers"
-  description = "Additional SG for OMB worker port 8080 communication"
+  description = "Additional SG for OMB worker port 9080 communication"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "OMB worker-to-worker on port 8080"
-    from_port   = 8080
-    to_port     = 8080
+    description = "OMB worker-to-worker on port 9080"
+    from_port   = 9080
+    to_port     = 9080
     protocol    = "tcp"
     self        = true
   }
@@ -109,7 +109,7 @@ resource "aws_eks_node_group" "control_plane" {
 # ── Benchmark-worker node pool ────────────────────────────────────────────────
 # m5.4xlarge (16 vCPU / 64 GB), autoscales 0–20.
 # Tainted dedicated=benchmark:NoSchedule so only omb-worker pods land here.
-# Port 8080 SG attached for worker-to-worker communication.
+# Port 9080 SG attached for worker-to-worker communication.
 
 resource "aws_launch_template" "benchmark_workers" {
   name_prefix   = "${var.cluster_name}-benchmark-workers-"

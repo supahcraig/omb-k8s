@@ -244,11 +244,13 @@ async def test_connection(db: AsyncSession = Depends(get_db)) -> dict:
         producer_kwargs["sasl_plain_username"] = sasl_username
         producer_kwargs["sasl_plain_password"] = sasl_password
 
+    import asyncio  # noqa: PLC0415
+
     producer = AIOKafkaProducer(**producer_kwargs)
     started = False
     stopped = False
     try:
-        await producer.start()
+        await asyncio.wait_for(producer.start(), timeout=10.0)
         started = True
         await producer.stop()
         stopped = True
@@ -256,13 +258,22 @@ async def test_connection(db: AsyncSession = Depends(get_db)) -> dict:
             "success": True,
             "message": f"Successfully connected to broker at {bootstrap}.",
         }
+    except asyncio.TimeoutError:
+        logger.warning("test-connection timed out for %s", bootstrap)
+        return {
+            "success": False,
+            "message": (
+                f"Connection to {bootstrap} timed out after 10 s. "
+                "Check the broker address and that it is reachable from this cluster."
+            ),
+        }
     except KafkaConnectionError:
         logger.warning("test-connection KafkaConnectionError for %s", bootstrap)
         return {
             "success": False,
             "message": (
                 f"Could not reach broker at {bootstrap}. "
-                "Check that VPC peering is active and the bootstrap address is correct."
+                "Check the bootstrap address and network connectivity."
             ),
         }
     except Exception:

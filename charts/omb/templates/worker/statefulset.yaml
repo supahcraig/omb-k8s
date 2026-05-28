@@ -38,8 +38,10 @@ spec:
           env:
             - name: OMB_MODE
               value: worker
+            - name: OMB_WORKER_PORT
+              value: {{ .Values.worker.port | quote }}
           ports:
-            - containerPort: 8080
+            - containerPort: {{ .Values.worker.port }}
               name: worker
           resources:
             requests:

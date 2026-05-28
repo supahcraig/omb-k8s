@@ -31,7 +31,7 @@ trap _term SIGTERM SIGINT
 case "${OMB_MODE:-worker}" in
   worker)
     java -server $JVM_OPTS -cp "lib/*" \
-      io.openmessaging.benchmark.worker.BenchmarkWorker --port 8080 &
+      io.openmessaging.benchmark.worker.BenchmarkWorker --port "${OMB_WORKER_PORT:-9080}" &
     child=$!
     wait "$child"
     ;;

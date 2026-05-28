@@ -91,7 +91,7 @@ class OmbRunner:
 
         # 3. Construct --workers argument
         workers_arg = ",".join(
-            f"http://omb-worker-{i}.omb-worker.{namespace}.svc.cluster.local:8080"
+            f"http://omb-worker-{i}.omb-worker.{namespace}.svc.cluster.local:{settings.omb_worker_port}"
             for i in range(replica_count)
         )
 
@@ -190,13 +190,15 @@ class OmbRunner:
         the caller can surface a clear message to the SE.
         """
         async def _probe_one(idx: int) -> Optional[str]:
-            url = f"http://omb-worker-{idx}.omb-worker.{namespace}.svc.cluster.local:8080/stop-all"
+            url = f"http://omb-worker-{idx}.omb-worker.{namespace}.svc.cluster.local:{settings.omb_worker_port}/stop-all"
+            def _sync_post() -> int:
+                with httpx.Client(timeout=3.0) as client:
+                    return client.post(url).status_code
             try:
-                async with httpx.AsyncClient(timeout=3.0) as client:
-                    resp = await client.post(url)
-                if resp.status_code != 200:
+                status = await asyncio.to_thread(_sync_post)
+                if status != 200:
                     return (
-                        f"omb-worker-{idx} is not ready (HTTP {resp.status_code}) — "
+                        f"omb-worker-{idx} is not ready (HTTP {status}) — "
                         "it may be stuck from a previous cancelled run. "
                         "Go to the Cluster tab and restart it before running."
                     )

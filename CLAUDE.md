@@ -32,7 +32,7 @@ provisions the target cluster.
 │    OMB benchmark binary (for driver Jobs)   │
 │                                             │
 │  omb-worker pods (StatefulSet, N replicas)  │
-│    Pure OMB worker, port 8080               │
+│    Pure OMB worker, port 9080               │
 │    Scales non-destructively                 │
 │                                             │
 │  prometheus + grafana pods                  │
@@ -74,7 +74,7 @@ provisions the target cluster.
 ## Key design decisions — do not reverse these without discussion
 
 **Workers are a StatefulSet, not a Deployment.** This gives pods stable,
-predictable DNS names (omb-worker-0.omb-worker:8080, omb-worker-1.omb-worker:8080,
+predictable DNS names (omb-worker-0.omb-worker:9080, omb-worker-1.omb-worker:9080,
 etc.) via a headless Service. This is how the control plane constructs the
 --workers argument dynamically without a service registry or Ansible inventory.
 
@@ -168,8 +168,8 @@ not deploy the Cluster Autoscaler correctly without it.
 **EKS node group uses a launch template to attach the OMB workers security group.**
 EKS managed node groups don't support attaching additional security groups directly.
 The workaround is a launch template that specifies both the cluster-managed security
-group (`vpc_config[0].cluster_security_group_id`) and the OMB workers SG (port 8080).
-Do not remove the launch template or the node group will lose the port 8080 rules.
+group (`vpc_config[0].cluster_security_group_id`) and the OMB workers SG (port 9080).
+Do not remove the launch template or the node group will lose the port 9080 rules.
 
 **EKS requires the EBS CSI driver addon for PVC provisioning.** The default EKS
 setup only has the in-tree `kubernetes.io/aws-ebs` provisioner, which creates a
@@ -262,7 +262,7 @@ do not duplicate the three-step sequence elsewhere.
      exactly `messageSize` random bytes via `dd if=/dev/urandom`
    - The driver container mounting both the ConfigMap and the payload emptyDir:
      bin/benchmark --drivers /etc/omb/driver.yaml /etc/omb/workload.yaml \
-       --workers http://omb-worker-0.omb-worker:8080,... --output /tmp/omb-results
+       --workers http://omb-worker-0.omb-worker:9080,... --output /tmp/omb-results
 6. UI streams Job logs via websocket
 7. Concurrently, `services/prometheus_collector.py` polls the in-cluster
    kube-prometheus-stack Prometheus every 15 s for cAdvisor worker metrics and
@@ -345,9 +345,12 @@ operations after initial deployment.
 
 1. Clone repo to local machine
 2. cd terraform/<cloud> && cp terraform.tfvars.example terraform.tfvars and fill in values (terraform.tfvars is gitignored)
-3. terraform init && terraform apply (provisions k8s cluster + VPC + peering)
-4. aws/gcloud/az eks/gke/aks get-credentials (configure local kubectl)
-5. helm install omb charts/omb -f charts/omb/values-<cloud>.yaml -f my-values.yaml
+3. export KUBECONFIG=$(pwd)/terraform/<cloud>/kubeconfig (isolates this cluster's config from ~/.kube/config; set before get-credentials)
+4. terraform init && terraform apply (provisions k8s cluster + VPC + peering)
+5. aws/gcloud/az eks/gke/aks get-credentials (configure local kubectl; writes to $KUBECONFIG path)
+6. helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update (one-time per machine; required before dependency build)
+7. helm dependency build charts/omb (downloads kube-prometheus-stack and other chart deps into charts/omb/charts/; safe to re-run)
+7. helm install omb charts/omb -f charts/omb/values-<cloud>.yaml -f my-values.yaml
 6. Open the UI at the LoadBalancer address
 7. Configure cluster connectivity and Prometheus in Settings
 8. Run benchmarks

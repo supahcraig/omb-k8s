@@ -29,20 +29,34 @@ Cloud credentials configured for your target cloud.
 cd terraform/aws          # or gcp / azure
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars for the engagement (it is gitignored)
+
+# 2. Isolate kubectl config from ~/.kube/config (set this before get-credentials)
+export KUBECONFIG=$(pwd)/kubeconfig
+
 terraform init && terraform apply
 
-# 2. Configure kubectl
+# 3. Configure kubectl (writes to $KUBECONFIG)
 $(terraform output -raw kubeconfig_command)
 
-# 3. Install the Helm chart
+# 4. Add Helm repos (one-time per machine)
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+# 5. Fetch chart dependencies
+helm dependency build charts/omb
+
+# 6. Install the Helm chart
 helm install omb charts/omb -n omb --create-namespace \
   -f charts/omb/values-aws.yaml \
   --set clusterAutoscaler.clusterName=$(terraform output -raw cluster_name) \
   --set clusterAutoscaler.region=$(terraform output -raw region) \
   --set clusterAutoscaler.roleArn=$(terraform output -raw cluster_autoscaler_iam_role_arn)
 
-# 4. Open the UI
+# 7. Open the UI
+# AWS (returns hostname):
 kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+# GCP/Azure (returns IP):
+kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 ```
 
 Open the LoadBalancer address in your browser. Configure cluster connectivity
@@ -56,9 +70,13 @@ and Prometheus in Settings, then run benchmarks.
 cd terraform/aws
 cp terraform.tfvars.example terraform.tfvars
 # Edit: cluster_name, region, vpc_cidr, availability_zones, target_vpc_id, target_cidr
+export KUBECONFIG=$(pwd)/kubeconfig
 terraform init && terraform apply
 
 $(terraform output -raw kubeconfig_command)
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
+helm dependency build charts/omb
 
 helm install omb charts/omb -n omb --create-namespace \
   -f charts/omb/values-aws.yaml \
@@ -73,9 +91,13 @@ helm install omb charts/omb -n omb --create-namespace \
 cd terraform/gcp
 cp terraform.tfvars.example terraform.tfvars
 # Edit: project_id, region, zone, cluster_name, target_network, target_cidr
+export KUBECONFIG=$(pwd)/kubeconfig
 terraform init && terraform apply
 
 $(terraform output -raw kubeconfig_command)
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
+helm dependency build charts/omb
 
 helm install omb charts/omb -n omb --create-namespace \
   -f charts/omb/values-gcp.yaml
@@ -87,9 +109,13 @@ helm install omb charts/omb -n omb --create-namespace \
 cd terraform/azure
 cp terraform.tfvars.example terraform.tfvars
 # Edit: resource_group_name, location, cluster_name, target_vnet_id
+export KUBECONFIG=$(pwd)/kubeconfig
 terraform init && terraform apply
 
 $(terraform output -raw kubeconfig_command)
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
+helm dependency build charts/omb
 
 helm install omb charts/omb -n omb --create-namespace \
   -f charts/omb/values-aks.yaml

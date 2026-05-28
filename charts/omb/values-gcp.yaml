@@ -4,4 +4,4 @@ storage:
 worker:
   resources:
     cpu: "15"
-    memory: "58Gi"
+    memory: "55Gi"

@@ -6,6 +6,8 @@ metadata:
     app: omb-control-plane
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: omb-control-plane
@@ -34,6 +36,8 @@ spec:
               value: /data/omb_ui.db
             - name: PORT
               value: "8000"
+            - name: OMB_WORKER_PORT
+              value: {{ .Values.worker.port | quote }}
             - name: PROMETHEUS_URL
               value: "http://{{ .Release.Name }}-kube-prometheus-stack-prometheus.{{ .Release.Namespace }}.svc.cluster.local:9090"
             {{- if .Values.controlPlane.encryptionKey }}
