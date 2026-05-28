@@ -455,6 +455,7 @@ export default function RunDetailPage() {
         benchmarkStartedAt={benchmarkStartedAt}
         workerMemLimitMiB={workerResources?.memory_limit_mib ?? null}
         workerCpuCores={workerResources?.cpu_request_cores ?? null}
+        runStartedAt={run?.started_at ?? null}
       />
 
       {/* Log output */}

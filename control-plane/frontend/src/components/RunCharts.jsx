@@ -28,6 +28,27 @@ const C = {
   e2eLatencyGrid: 'rgba(252,211,77,0.15)',
 };
 
+function _parseBase(isoString) {
+  if (!isoString) return null;
+  const s = isoString.endsWith('Z') ? isoString : isoString + 'Z';
+  const ms = new Date(s).getTime();
+  return isNaN(ms) ? null : ms;
+}
+
+function fmtTimeTick(baseMs, t) {
+  if (!baseMs) return t;
+  return new Date(baseMs + t * 1000).toLocaleTimeString([], {
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+}
+
+function fmtTimeLabel(baseMs, t) {
+  if (!baseMs) return `t=${t}s`;
+  return new Date(baseMs + t * 1000).toLocaleTimeString([], {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  });
+}
+
 function ChartCard({ title, badge, info, children }) {
   return (
     <div className="chart-card">
@@ -43,7 +64,7 @@ function ChartCard({ title, badge, info, children }) {
   );
 }
 
-function LatencyStatsTable({ stats, keys, labels, warmupNote }) {
+function LatencyStatsTable({ stats, keys, labels, colors, warmupNote }) {
   if (!stats) return null;
   const fmt = v => v == null ? '—' : v.toFixed(1);
   return (
@@ -60,9 +81,10 @@ function LatencyStatsTable({ stats, keys, labels, warmupNote }) {
         <tbody>
           {keys.map((k, i) => {
             const s = stats[k];
+            const color = colors?.[i];
             return (
               <tr key={k}>
-                <td>{labels[i]}</td>
+                <td style={color ? { color } : undefined}>{labels[i]}</td>
                 <td>{s ? fmt(s.min) : '—'}</td>
                 <td>{s ? fmt(s.mean) : '—'}</td>
                 <td>{s ? fmt(s.max) : '—'}</td>
@@ -87,6 +109,7 @@ export default function RunCharts({
   benchmarkStartedAt = null,
   workerMemLimitMiB = null,
   workerCpuCores = null,
+  runStartedAt = null,
 }) {
   const [, setTick] = useState(0)
   useEffect(() => {
@@ -123,6 +146,10 @@ export default function RunCharts({
   // Fall back to all data during warmup so the table isn't blank.
   const statsWarmup = chartPoints.length > warmupSamples ? warmupSamples : 0;
   const latencyStats = computeLatencyStats(chartPoints, statsWarmup);
+
+  const runStartedAtMs = _parseBase(runStartedAt);
+  const ombTimeBase = warmupStartedAt ?? runStartedAtMs;
+  const promTimeBase = runStartedAtMs;
 
   if (!isLive && chartPoints.length === 0 && promPoints.length === 0) return null;
 
@@ -179,9 +206,9 @@ export default function RunCharts({
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(ombTimeBase, v)} />
               <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
-              <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
+              <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               <Line type="monotone" dataKey="pubMsgSec"  name="publish"  stroke={C.publish} dot={false} strokeWidth={2} />
               <Line type="monotone" dataKey="consMsgSec" name="consume"  stroke={C.consume} dot={false} strokeWidth={1.5} strokeDasharray="5 3" />
@@ -193,9 +220,9 @@ export default function RunCharts({
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(ombTimeBase, v)} />
               <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
-              <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
+              <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               <Line type="monotone" dataKey="pubMBSec"  name="publish"  stroke={C.publish} dot={false} strokeWidth={2} />
               <Line type="monotone" dataKey="consMBSec" name="consume"  stroke={C.consume} dot={false} strokeWidth={1.5} strokeDasharray="5 3" />
@@ -207,9 +234,9 @@ export default function RunCharts({
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(ombTimeBase, v)} />
               <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={65} domain={[0, 'auto']} tickFormatter={v => v.toLocaleString()} />
-              <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={v => [v.toLocaleString(), 'backlog']} />
+              <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={v => [v.toLocaleString(), 'backlog']} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Line type="monotone" dataKey="backlog" name="backlog" stroke={C.backlog} dot={false} strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
@@ -223,9 +250,9 @@ export default function RunCharts({
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={chartPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.pubLatencyGrid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(ombTimeBase, v)} />
                 <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
-                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
                 {warmupSamples > 0 && chartPoints.length > 0 && (
                   <ReferenceArea x1={0} x2={Math.min(warmupSamples, chartPoints[chartPoints.length - 1].t)} fill="rgba(255,255,255,0.04)" />
@@ -239,6 +266,7 @@ export default function RunCharts({
               stats={latencyStats}
               keys={['pubP50', 'pubP99', 'pubP999']}
               labels={['P50', 'P99', 'P99.9']}
+              colors={[C.pubP50, C.pubP99, C.pubP999]}
               warmupNote={isLive && currentSamples <= warmupSamples}
             />
           </ChartCard>
@@ -247,9 +275,9 @@ export default function RunCharts({
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={chartPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.e2eLatencyGrid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(ombTimeBase, v)} />
                 <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
-                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
                 {warmupSamples > 0 && chartPoints.length > 0 && (
                   <ReferenceArea x1={0} x2={Math.min(warmupSamples, chartPoints[chartPoints.length - 1].t)} fill="rgba(255,255,255,0.04)" />
@@ -263,6 +291,7 @@ export default function RunCharts({
               stats={latencyStats}
               keys={['e2eP50', 'e2eP99', 'e2eP999']}
               labels={['P50', 'P99', 'P99.9']}
+              colors={[C.e2eP50, C.e2eP99, C.e2eP999]}
               warmupNote={isLive && currentSamples <= warmupSamples}
             />
           </ChartCard>
@@ -276,9 +305,9 @@ export default function RunCharts({
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={promPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(promTimeBase, v)} />
                 <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
-                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(promTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
                 <Line type="monotone" dataKey="bytesInMBSec"  name="bytes in"  stroke={C.bytesIn}  dot={false} strokeWidth={2} />
                 <Line type="monotone" dataKey="bytesOutMBSec" name="bytes out" stroke={C.bytesOut} dot={false} strokeWidth={1.5} strokeDasharray="5 3" />
@@ -290,9 +319,9 @@ export default function RunCharts({
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={promPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(promTimeBase, v)} />
                 <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
-                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(promTimeBase, v)} />
                 <Line type="monotone" dataKey="recordsPerSec" name="records/sec" stroke={C.records} dot={false} strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
@@ -311,9 +340,9 @@ export default function RunCharts({
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={promPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
-                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={[0, 100]} />
-                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={(v, name) => [v != null ? `${v.toFixed(1)}%` : '—', name]} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(promTimeBase, v)} />
+                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={[0, 'auto']} />
+                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={(v, name) => [v != null ? `${v.toFixed(1)}%` : '—', name]} labelFormatter={v => fmtTimeLabel(promTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
                 <ReferenceLine y={100} stroke="rgba(239,68,68,0.3)" strokeDasharray="4 2" />
                 <Line type="monotone" dataKey="workerCpuPct"     name="cpu usage"  stroke={C.workerCpu}     dot={false} strokeWidth={2} connectNulls />
@@ -322,20 +351,22 @@ export default function RunCharts({
             </ResponsiveContainer>
           </ChartCard>
 
-          <ChartCard title="Worker Memory (MiB)" badge="worker">
+          <ChartCard title="Worker Memory (GiB)" badge="worker">
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={promPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(promTimeBase, v)} />
                 <YAxis
                   stroke={C.axis}
                   tick={{ fill: C.axis, fontSize: 10 }}
-                  width={55}
-                  domain={[0, workerMemLimitMiB != null ? Math.ceil(workerMemLimitMiB * 1.1) : 9000]}
+                  width={50}
+                  domain={[0, 'auto']}
+                  tickFormatter={v => (v / 1024).toFixed(1)}
                 />
                 <Tooltip
                   contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }}
-                  formatter={(v, name) => [v != null ? `${v.toFixed(0)} MiB` : '—', name]}
+                  labelFormatter={v => fmtTimeLabel(promTimeBase, v)}
+                  formatter={(v, name) => [v != null ? `${(v / 1024).toFixed(2)} GiB` : '—', name]}
                 />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
                 <ReferenceLine
