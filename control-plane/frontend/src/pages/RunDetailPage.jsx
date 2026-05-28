@@ -404,12 +404,12 @@ export default function RunDetailPage() {
             <StatusBadge status={displayStatus} />
             {run.started_at && (
               <span className="text-muted text-small">
-                Started {new Date(run.started_at).toLocaleString()}
+                Started {new Date(run.started_at.endsWith('Z') ? run.started_at : run.started_at + 'Z').toLocaleString()}
               </span>
             )}
             {run.completed_at && (
               <span className="text-muted text-small">
-                Completed {new Date(run.completed_at).toLocaleString()}
+                Completed {new Date(run.completed_at.endsWith('Z') ? run.completed_at : run.completed_at + 'Z').toLocaleString()}
               </span>
             )}
           </div>

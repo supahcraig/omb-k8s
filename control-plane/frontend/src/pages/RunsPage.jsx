@@ -61,9 +61,9 @@ export default function RunsPage() {
                 <tr key={run.id}>
                   <td>#{run.id}</td>
                   <td>{run.name || <span className="text-muted">—</span>}</td>
-                  <td><StatusBadge status={run.status} /></td>
-                  <td className="text-small text-muted">
-                    {run.started_at ? new Date(run.started_at).toLocaleString() : '—'}
+                  <td style={{ whiteSpace: 'nowrap' }}><StatusBadge status={run.status} /></td>
+                  <td className="text-small text-muted" style={{ whiteSpace: 'nowrap' }}>
+                    {run.started_at ? new Date(run.started_at.endsWith('Z') ? run.started_at : run.started_at + 'Z').toLocaleString() : '—'}
                   </td>
                   <td className="num">{fmt(run.publish_rate_avg)}</td>
                   <td className="num">{fmt(run.publish_latency_p99)}</td>

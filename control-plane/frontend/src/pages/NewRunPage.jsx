@@ -120,7 +120,7 @@ function AxisPanel({ axes, fields, color, title, onUpdate, onRemove, onAdd }) {
             )}
             <ChipInput values={axis.values} onChange={vals => onUpdate(i, { values: vals })} />
             <button type="button" className="btn btn-danger btn-sm"
-              onClick={() => onRemove(i)} disabled={axes.length === 1}>×</button>
+              onClick={() => onRemove(i)}>×</button>
           </div>
         ))}
       </div>
@@ -158,7 +158,7 @@ export default function NewRunPage() {
     saved?.workloadAxes?.some(a => a.values.length > 0) ||
     saved?.driverAxes?.some(a => a.values.length > 0)
   )
-  const [sweepEnabled, setSweepEnabled] = useState(!!location.state?.enableSweep || hasAxesValues)
+  const [sweepEnabled, setSweepEnabled] = useState(!!location.state?.enableSweep)
   const [cooldown, setCooldown]         = useState(saved?.cooldown ?? 60)
   const [workloadAxes, setWorkloadAxes] = useState(
     saved?.workloadAxes?.length ? saved.workloadAxes
@@ -372,16 +372,16 @@ export default function NewRunPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <AxisPanel
-                axes={workloadAxes} fields={WORKLOAD_AXIS_FIELDS} color="#10b981" title="Workload"
-                onUpdate={(i, u) => setWorkloadAxes(p => p.map((a, idx) => idx === i ? { ...a, ...u } : a))}
-                onRemove={i => setWorkloadAxes(p => p.length > 1 ? p.filter((_, idx) => idx !== i) : p)}
-                onAdd={() => setWorkloadAxes(p => [...p, { field: WORKLOAD_AXIS_FIELDS[0], values: [], custom: false }])}
-              />
-              <AxisPanel
                 axes={driverAxes} fields={DRIVER_AXIS_FIELDS} color="#3b82f6" title="Driver"
                 onUpdate={(i, u) => setDriverAxes(p => p.map((a, idx) => idx === i ? { ...a, ...u } : a))}
-                onRemove={i => setDriverAxes(p => p.length > 1 ? p.filter((_, idx) => idx !== i) : p)}
+                onRemove={i => setDriverAxes(p => p.filter((_, idx) => idx !== i))}
                 onAdd={() => setDriverAxes(p => [...p, { field: DRIVER_AXIS_FIELDS[0], values: [], custom: false }])}
+              />
+              <AxisPanel
+                axes={workloadAxes} fields={WORKLOAD_AXIS_FIELDS} color="#10b981" title="Workload"
+                onUpdate={(i, u) => setWorkloadAxes(p => p.map((a, idx) => idx === i ? { ...a, ...u } : a))}
+                onRemove={i => setWorkloadAxes(p => p.filter((_, idx) => idx !== i))}
+                onAdd={() => setWorkloadAxes(p => [...p, { field: WORKLOAD_AXIS_FIELDS[0], values: [], custom: false }])}
               />
             </div>
           </div>
