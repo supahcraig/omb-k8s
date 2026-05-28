@@ -122,7 +122,7 @@
     <rect x="70" y="410" width="156" height="68" rx="8" stroke-width="0.5"/>
     <text class="th" x="148" y="432" text-anchor="middle">omb-worker-0</text>
     <text class="ts" x="148" y="448" text-anchor="middle">hostNetwork: true</text>
-    <text class="ts" x="148" y="464" text-anchor="middle">port 8080</text>
+    <text class="ts" x="148" y="464" text-anchor="middle">port 9080</text>
   </g>
 
   <!-- Worker Node 2 -->
@@ -135,7 +135,7 @@
     <rect x="270" y="410" width="156" height="68" rx="8" stroke-width="0.5"/>
     <text class="th" x="348" y="432" text-anchor="middle">omb-worker-1</text>
     <text class="ts" x="348" y="448" text-anchor="middle">hostNetwork: true</text>
-    <text class="ts" x="348" y="464" text-anchor="middle">port 8080</text>
+    <text class="ts" x="348" y="464" text-anchor="middle">port 9080</text>
   </g>
 
   <!-- Worker Node 3 -->
@@ -148,7 +148,7 @@
     <rect x="470" y="410" width="156" height="68" rx="8" stroke-width="0.5"/>
     <text class="th" x="548" y="432" text-anchor="middle">omb-worker-2</text>
     <text class="ts" x="548" y="448" text-anchor="middle">hostNetwork: true</text>
-    <text class="ts" x="548" y="464" text-anchor="middle">port 8080</text>
+    <text class="ts" x="548" y="464" text-anchor="middle">port 9080</text>
   </g>
 
   <!-- Autoscale note -->
