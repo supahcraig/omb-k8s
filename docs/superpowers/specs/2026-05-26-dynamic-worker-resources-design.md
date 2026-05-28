@@ -117,7 +117,7 @@ stays at zero permanently — the metric exists but the rate is 0, so `throttle_
 
 | Cloud | Instance | vCPU | RAM | `worker.resources.cpu` | `worker.resources.memory` | JVM heap (~75%) |
 |-------|----------|------|-----|------------------------|---------------------------|-----------------|
-| AWS   | m5.4xlarge | 16 | 64 GiB | `"15"` | `"60Gi"` | ~45 GiB |
+| AWS   | m5.4xlarge | 16 | 64 GiB | `"15"` | `"58Gi"` | ~43 GiB |
 | GCP   | n2-standard-16 | 16 | 64 GiB | `"15"` | `"58Gi"` | ~43 GiB |
 | Azure | Standard_D16s_v3 | 16 | 64 GiB | `"15"` | `"58Gi"` | ~43 GiB |
 
@@ -160,7 +160,7 @@ StatefulSet spec              → container resources (cpu request, memory limit
 | `worker/entrypoint.sh` | Replace `-Xms4G -Xmx4G` with `InitialRAMPercentage=75.0` / `MaxRAMPercentage=75.0` |
 | `charts/omb/templates/worker/statefulset.yaml` | Use `{{ .Values.worker.resources.* }}`; CPU request only (no limit); memory request = limit |
 | `charts/omb/values.yaml` | Add `worker.resources.cpu: "4"` and `worker.resources.memory: "8Gi"` as conservative fallback defaults |
-| `charts/omb/values-aws.yaml` | Add `worker.resources.cpu: "15"` and `worker.resources.memory: "60Gi"` (file currently only has `storage.storageClassName`) |
+| `charts/omb/values-aws.yaml` | Add `worker.resources.cpu: "15"` and `worker.resources.memory: "58Gi"` (file currently only has `storage.storageClassName`) |
 | `charts/omb/values-gcp.yaml` | Add `worker.resources.cpu: "15"` and `worker.resources.memory: "58Gi"` (file currently only has `storage.storageClassName`) |
 | `charts/omb/values-aks.yaml` | Add `worker.resources.cpu: "15"` and `worker.resources.memory: "58Gi"` (file currently only has `storage.storageClassName`) |
 | `control-plane/schemas.py` | Add `WorkerResources` response schema: `{ cpu_request_cores: float, memory_limit_mib: int }` |
