@@ -137,6 +137,13 @@ export default function RunCharts({
   const hasBrokerMetrics = promPoints.some(p => p.bytesInMBSec != null || p.bytesOutMBSec != null);
   const hasWorkerMetrics = promPoints.some(p => p.workerCpuPct != null || p.workerMemMiB != null);
   const maxThrottle      = promPoints.reduce((max, p) => Math.max(max, p.workerThrottlePct ?? 0), 0);
+  const maxCpuPct        = promPoints.reduce((max, p) => {
+    const podKeys = Object.keys(p).filter(k => k.startsWith('workerCpu_'));
+    const sample = podKeys.length > 0
+      ? Math.max(...podKeys.map(k => p[k] ?? 0))
+      : (p.workerCpuPct ?? 0);
+    return Math.max(max, sample);
+  }, 0);
 
   // Progress bar driven by log-line timestamps: bar starts when warmup traffic
   // begins, green benchmark portion starts when benchmark traffic begins.
@@ -200,6 +207,22 @@ export default function RunCharts({
           )}
         </div>
       </div>
+
+      {/* CPU saturation alert */}
+      {maxCpuPct > 85 && (
+        <div style={{
+          background: 'rgba(245,158,11,0.12)',
+          border: '1px solid rgba(245,158,11,0.35)',
+          borderRadius: 6,
+          padding: '10px 14px',
+          marginBottom: 12,
+          color: '#fbbf24',
+          fontSize: 13,
+          lineHeight: 1.5,
+        }}>
+          ⚠ Workers are CPU-saturated (peak {maxCpuPct.toFixed(0)}%) — throughput may reflect worker capacity, not broker capacity. Scale up worker count to get accurate results.
+        </div>
+      )}
 
       {/* Throttle alert */}
       {maxThrottle > 10 && (
@@ -352,7 +375,7 @@ export default function RunCharts({
           <ChartCard
             title="Worker CPU (%)"
             badge="worker"
-            info={`CPU Usage: how much of the ${workerCpuCores != null ? workerCpuCores : 4}-core worker allocation the workers are consuming. Throttled: fraction of CPU scheduling slots the kernel rejected because the worker exceeded its cgroup quota. No CPU limit is set so throttle will always be 0 — any non-zero throttle value indicates a misconfiguration. High CPU usage means workers are busy — scale up worker count to increase throughput.`}
+            info={`CPU Usage: how much of the ${workerCpuCores != null ? workerCpuCores : 4}-core worker allocation the workers are consuming. Throttled: fraction of CPU scheduling slots the kernel rejected because the worker exceeded its cgroup quota. No CPU limit is set so throttle will always be 0 — any non-zero throttle value indicates a misconfiguration. Above 85% (amber line) workers are CPU-saturated and throughput reflects worker capacity, not broker capacity — scale up worker count. Above 100% (red line) workers are exceeding their CPU request and competing with node overhead.`}
           >
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={promPoints} syncId="run">
@@ -361,6 +384,7 @@ export default function RunCharts({
                 <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={[0, 'auto']} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={(v, name) => [v != null ? `${v.toFixed(1)}%` : '—', name]} labelFormatter={v => fmtTimeLabel(promTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
+                <ReferenceLine y={85} stroke="rgba(245,158,11,0.6)" strokeDasharray="4 2" label={{ value: '85%', position: 'insideTopRight', fill: 'rgba(245,158,11,0.8)', fontSize: 10 }} />
                 <ReferenceLine y={100} stroke="rgba(239,68,68,0.3)" strokeDasharray="4 2" />
                 {workerPods.length > 0
                   ? workerPods.map((pod, i) => (
