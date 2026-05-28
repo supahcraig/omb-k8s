@@ -92,7 +92,7 @@ terraform output vpc_peering_connection_id
 You must run `terraform destroy` to stop incurring costs.
 
 ```bash
-helm uninstall omb -n default
+helm uninstall omb -n omb
 terraform destroy
 ```
 

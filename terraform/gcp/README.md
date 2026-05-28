@@ -80,7 +80,7 @@ They must create a peering from their network to yours via the BYOC UI.
 ## Teardown
 
 ```bash
-helm uninstall omb -n default
+helm uninstall omb -n omb
 terraform destroy
 ```
 
