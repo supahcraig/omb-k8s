@@ -11,6 +11,7 @@ const DEFAULTS = {
   consumerBacklogSizeGB: 0,
   testDurationMinutes: 5,
   warmupDurationMinutes: 1,
+  sampleRateMillis: 1000,
   useRandomizedPayloads: false,
   randomizedPayloadPoolSize: '',
 }
@@ -136,6 +137,7 @@ export default function WorkloadForm({ initialYaml, onChange }) {
         {numInput('warmupDurationMinutes', 'Warmup', 'min')}
         {numInput('testDurationMinutes', 'Test Duration', 'min')}
       </div>
+      {numInput('sampleRateMillis', 'Sample Rate', 'ms')}
 
       <div className="section-label" style={{ marginTop: 8 }}>Payload</div>
       <div className="form-group" style={{ marginBottom: 12 }}>

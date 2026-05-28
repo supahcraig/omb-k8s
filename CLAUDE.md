@@ -363,6 +363,8 @@ Required JVM flags in the entrypoint script (do not add -Xms/-Xmx):
   -XX:+ParallelRefProcEnabled
   -XX:+PerfDisableSharedMem
   -XX:+DisableExplicitGC
+  -XX:MinHeapFreeRatio=10
+  -XX:MaxHeapFreeRatio=20
 
 -XX:+UseContainerSupport causes the JVM to read cgroup memory limits. Combined with
 MaxRAMPercentage=75.0 this produces heap = 75% of container memory automatically.

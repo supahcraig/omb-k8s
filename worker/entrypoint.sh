@@ -13,7 +13,9 @@ JVM_OPTS="\
 -XX:MaxGCPauseMillis=10 \
 -XX:+ParallelRefProcEnabled \
 -XX:+PerfDisableSharedMem \
--XX:+DisableExplicitGC"
+-XX:+DisableExplicitGC \
+-XX:MinHeapFreeRatio=10 \
+-XX:MaxHeapFreeRatio=20"
 
 # Forward SIGTERM to the child process and wait for clean exit.
 # Required for graceful Kubernetes pod termination.
