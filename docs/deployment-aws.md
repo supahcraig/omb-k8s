@@ -38,21 +38,18 @@ cd omb-k8s
 
 ## 3. Create your engagement tfvars file
 
-Terraform tfvars files are gitignored under `terraform/engagements/`. Create one
-per customer so you can re-run Terraform safely without overwriting another
-engagement's values.
-
 ```bash
-mkdir -p terraform/engagements
-cp terraform/aws/terraform.tfvars.example terraform/engagements/<customer>.tfvars
+cd terraform/aws
+cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edit the file and fill in every value:
+Edit `terraform/aws/terraform.tfvars` and fill in your values:
 
 ```hcl
-# terraform/engagements/acme.tfvars  (example)
+# cluster_name is optional — leave commented out to auto-generate (e.g. omb-relaxed-lemur).
+# Set explicitly if you need a predictable name for tagging policies or customer docs.
+# cluster_name = "omb-acme-20240101"
 
-cluster_name       = "omb-acme-20240101"
 region             = "us-east-1"
 vpc_cidr           = "10.0.0.0/16"
 availability_zones = ["us-east-1a", "us-east-1b"]
@@ -78,9 +75,9 @@ target_cidr   = "172.16.0.0/16"
 ## 4. Run Terraform
 
 ```bash
-cd terraform/aws
+# Still inside terraform/aws/
 terraform init
-terraform apply -var-file="../../terraform/engagements/<customer>.tfvars"
+terraform apply
 ```
 
 Review the plan, type `yes` to confirm. Provisioning takes **15–20 minutes** —
@@ -89,10 +86,12 @@ EKS control plane creation accounts for most of that time.
 When `apply` completes, Terraform prints outputs including:
 
 ```
-cluster_name                   = "omb-acme-20240101"
+cluster_name                   = "omb-relaxed-lemur"   # auto-generated if not specified
 region                         = "us-east-1"
-cluster_autoscaler_iam_role_arn = "arn:aws:iam::123456789012:role/omb-acme-cluster-autoscaler"
-kubeconfig_command             = "aws eks update-kubeconfig --region us-east-1 --name omb-acme-20240101"
+terraform_operator_ip          = "203.0.113.42"
+cluster_autoscaler_iam_role_arn = "arn:aws:iam::123456789012:role/omb-relaxed-lemur-cluster-autoscaler"
+kubeconfig_command             = "aws eks update-kubeconfig --region us-east-1 --name omb-relaxed-lemur"
+find_elb_sg_command            = "aws elb describe-load-balancers ..."
 ```
 
 > **Important:** Keep your Terraform state files (`terraform/aws/terraform.tfstate`)
@@ -151,7 +150,8 @@ helm install omb charts/omb -n omb --create-namespace \
   -f charts/omb/values-aws.yaml \
   --set clusterAutoscaler.clusterName=$(terraform -chdir=terraform/aws output -raw cluster_name) \
   --set clusterAutoscaler.region=$(terraform -chdir=terraform/aws output -raw region) \
-  --set clusterAutoscaler.roleArn=$(terraform -chdir=terraform/aws output -raw cluster_autoscaler_iam_role_arn)
+  --set clusterAutoscaler.roleArn=$(terraform -chdir=terraform/aws output -raw cluster_autoscaler_iam_role_arn) \
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/aws output -raw terraform_operator_ip)/32"
 ```
 
 > **Note:** `helm dependency build` downloads `kube-prometheus-stack` and other
@@ -316,7 +316,7 @@ When the engagement is complete:
 ```bash
 helm uninstall omb -n omb
 cd terraform/aws
-terraform destroy -var-file="../../terraform/engagements/<customer>.tfvars"
+terraform destroy
 ```
 
 `terraform destroy` takes approximately 10–15 minutes. Confirm all resources are

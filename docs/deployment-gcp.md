@@ -39,14 +39,12 @@ All paths in this guide are relative to the repo root.
 
 ## 3. Create your engagement tfvars file
 
-Each engagement gets its own tfvars file kept outside version control. The `terraform/engagements/` directory is gitignored for this purpose.
-
 ```bash
-mkdir -p terraform/engagements
-cp terraform/gcp/terraform.tfvars.example terraform/engagements/<customer>.tfvars
+cd terraform/gcp
+cp terraform.tfvars.example terraform.tfvars
 ```
 
-Open `terraform/engagements/<customer>.tfvars` and fill in your values:
+Open `terraform/gcp/terraform.tfvars` and fill in your values:
 
 ```hcl
 # GCP project where all resources will be created.
@@ -59,8 +57,8 @@ region = "us-central1"
 # Single-zone keeps node count exact — regional clusters multiply by 3.
 zone = "us-central1-a"
 
-# Short descriptive name; used as prefix for all resource names.
-cluster_name = "omb-acme-20240101"
+# cluster_name is optional — leave commented out to auto-generate (e.g. omb-relaxed-lemur).
+# cluster_name = "omb-acme-20240101"
 
 # CIDR for the new VPC subnet. Must not overlap with the target cluster.
 vpc_cidr = "10.1.0.0/16"
@@ -79,18 +77,16 @@ labels = {
 }
 ```
 
-> **Important:** Never commit the filled-in tfvars file. It contains customer-specific network details and is gitignored by default.
+> **Important:** Never commit the filled-in tfvars file — it is gitignored by default.
 
 ---
 
 ## 4. Run Terraform
 
 ```bash
-cd terraform/gcp
-
+# Still inside terraform/gcp/
 terraform init
-terraform plan -var-file=../../terraform/engagements/<customer>.tfvars
-terraform apply -var-file=../../terraform/engagements/<customer>.tfvars
+terraform apply
 ```
 
 Type `yes` when prompted. GKE provisioning typically takes **3–5 minutes**.
@@ -113,7 +109,8 @@ Key outputs:
 
 | Output | Description |
 |--------|-------------|
-| `cluster_name` | GKE cluster name |
+| `cluster_name` | GKE cluster name (auto-generated if not specified) |
+| `terraform_operator_ip` | Your public IP — pass to helm install as `controlPlane.allowedCIDRs` |
 | `kubeconfig_command` | Ready-to-run `gcloud` credentials command |
 | `vpc_id` | Network self_link (share with BYOC team if peering) |
 
@@ -151,7 +148,8 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo update
 helm dependency build charts/omb
 helm install omb charts/omb -n omb --create-namespace \
-  -f charts/omb/values-gcp.yaml
+  -f charts/omb/values-gcp.yaml \
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/gcp output -raw terraform_operator_ip)/32"
 ```
 
 This deploys:
@@ -274,7 +272,7 @@ When the engagement is complete, tear down in this order to avoid orphaned cloud
 ```bash
 helm uninstall omb -n omb
 cd terraform/gcp
-terraform destroy -var-file=../../terraform/engagements/<customer>.tfvars
+terraform destroy
 ```
 
 > **Warning:** `helm uninstall` does not stop GKE nodes — you must run `terraform destroy` to stop billing. Keep your local Terraform state directory (`terraform/gcp/terraform.tfstate`) until after destroy completes. Deleting the state file before destroy makes it impossible to clean up resources with Terraform.
