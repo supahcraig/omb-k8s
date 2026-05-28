@@ -49,6 +49,17 @@ function fmtTimeLabel(baseMs, t) {
   });
 }
 
+const WORKER_COLORS = [
+  '#818cf8', // indigo  — worker-0
+  '#34d399', // emerald — worker-1
+  '#f97316', // orange  — worker-2
+  '#fbbf24', // amber   — worker-3
+  '#a78bfa', // violet  — worker-4
+  '#38bdf8', // sky     — worker-5
+  '#fb923c', // light orange — worker-6
+  '#4ade80', // green   — worker-7
+];
+
 function ChartCard({ title, badge, info, children }) {
   return (
     <div className="chart-card">
@@ -150,6 +161,12 @@ export default function RunCharts({
   const runStartedAtMs = _parseBase(runStartedAt);
   const ombTimeBase = warmupStartedAt ?? runStartedAtMs;
   const promTimeBase = runStartedAtMs;
+
+  const workerPods = [...new Set(
+    promPoints.flatMap(p =>
+      Object.keys(p).filter(k => k.startsWith('workerMem_')).map(k => k.slice('workerMem_'.length))
+    )
+  )].sort();
 
   if (!isLive && chartPoints.length === 0 && promPoints.length === 0) return null;
 
@@ -345,7 +362,21 @@ export default function RunCharts({
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={(v, name) => [v != null ? `${v.toFixed(1)}%` : '—', name]} labelFormatter={v => fmtTimeLabel(promTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
                 <ReferenceLine y={100} stroke="rgba(239,68,68,0.3)" strokeDasharray="4 2" />
-                <Line type="monotone" dataKey="workerCpuPct"     name="cpu usage"  stroke={C.workerCpu}     dot={false} strokeWidth={2} connectNulls />
+                {workerPods.length > 0
+                  ? workerPods.map((pod, i) => (
+                      <Line
+                        key={`cpu-${pod}`}
+                        type="monotone"
+                        dataKey={`workerCpu_${pod}`}
+                        name={pod.replace('omb-worker-', 'worker-')}
+                        stroke={WORKER_COLORS[i % WORKER_COLORS.length]}
+                        dot={false}
+                        strokeWidth={2}
+                        connectNulls
+                      />
+                    ))
+                  : <Line type="monotone" dataKey="workerCpuPct" name="cpu usage" stroke={C.workerCpu} dot={false} strokeWidth={2} connectNulls />
+                }
                 <Line type="monotone" dataKey="workerThrottlePct" name="throttled" stroke={C.workerThrottle} dot={false} strokeWidth={1.5} strokeDasharray="4 2" connectNulls />
               </LineChart>
             </ResponsiveContainer>
@@ -382,7 +413,21 @@ export default function RunCharts({
                     position: 'insideTopRight',
                   }}
                 />
-                <Line type="monotone" dataKey="workerMemMiB" name="memory" stroke={C.workerMem} dot={false} strokeWidth={2} connectNulls />
+                {workerPods.length > 0
+                  ? workerPods.map((pod, i) => (
+                      <Line
+                        key={`mem-${pod}`}
+                        type="monotone"
+                        dataKey={`workerMem_${pod}`}
+                        name={pod.replace('omb-worker-', 'worker-')}
+                        stroke={WORKER_COLORS[i % WORKER_COLORS.length]}
+                        dot={false}
+                        strokeWidth={2}
+                        connectNulls
+                      />
+                    ))
+                  : <Line type="monotone" dataKey="workerMemMiB" name="memory" stroke={C.workerMem} dot={false} strokeWidth={2} connectNulls />
+                }
               </LineChart>
             </ResponsiveContainer>
           </ChartCard>
