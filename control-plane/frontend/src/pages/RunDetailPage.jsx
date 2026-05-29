@@ -475,39 +475,23 @@ export default function RunDetailPage() {
         </div>
       )}
 
-      {/* Summary metrics */}
-      {(m || run.status === 'running') && (
+      {/* Summary metrics — only shown after run completes */}
+      {m && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr 1fr 1fr 1fr' : '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
             <TileColumn label="Avg Publish Rate" badge="omb">
-              <MetricCard
-                value={m ? fmt(m.publish_rate_avg) : fmt(livePublishRate)}
-                unit="msg/s"
-                expected={expectedMsgSec > 0 ? expectedMsgSec : undefined}
-              />
-              <MetricCard
-                value={m ? fmt(m.publish_rate_avg * messageSize / 1_048_576, 2) : fmt(livePublishMBSec, 2)}
-                unit="MB/s"
-                expected={expectedMBSec > 0 ? expectedMBSec : undefined}
-              />
+              <MetricCard value={fmt(m.publish_rate_avg)} unit="msg/s" expected={expectedMsgSec > 0 ? expectedMsgSec : undefined} />
+              <MetricCard value={fmt(m.publish_rate_avg * messageSize / 1_048_576, 2)} unit="MB/s" expected={expectedMBSec > 0 ? expectedMBSec : undefined} />
             </TileColumn>
             <TileColumn label="Avg Consume Rate" badge="omb">
-              <MetricCard
-                value={m ? fmt(m.consume_rate_avg) : fmt(liveConsumeRate)}
-                unit="msg/s"
-                expected={expectedMsgSec > 0 ? expectedMsgSec : undefined}
-              />
-              <MetricCard
-                value={m ? fmt(m.consume_rate_avg * messageSize / 1_048_576, 2) : fmt(liveConsumeMBSec, 2)}
-                unit="MB/s"
-                expected={expectedMBSec > 0 ? expectedMBSec : undefined}
-              />
+              <MetricCard value={fmt(m.consume_rate_avg)} unit="msg/s" expected={expectedMsgSec > 0 ? expectedMsgSec : undefined} />
+              <MetricCard value={fmt(m.consume_rate_avg * messageSize / 1_048_576, 2)} unit="MB/s" expected={expectedMBSec > 0 ? expectedMBSec : undefined} />
             </TileColumn>
-            {m && <LatencyColumn label="Pub Latency" metrics={m} prefix="publish" badge="omb" />}
-            {m && <LatencyColumn label="E2E Latency" metrics={m} prefix="end_to_end" badge="omb" />}
+            <LatencyColumn label="Pub Latency" metrics={m} prefix="publish" badge="omb" />
+            <LatencyColumn label="E2E Latency" metrics={m} prefix="end_to_end" badge="omb" />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
             <TileColumn label="Broker Publish Rate" badge="redpanda">
               <StubTile unit="msg/s" />
               <StubTile unit="MB/s" />
@@ -516,6 +500,7 @@ export default function RunDetailPage() {
               <StubTile unit="msg/s" />
               <StubTile unit="MB/s" />
             </TileColumn>
+            <div /><div />
           </div>
         </>
       )}

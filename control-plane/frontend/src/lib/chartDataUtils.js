@@ -21,7 +21,7 @@ export function normalizeTimeseries(metricsOut, messageSize) {
     consMsgSec: cons[i],
     pubMBSec:   pub[i]  * mbFactor,
     consMBSec:  cons[i] * mbFactor,
-    backlog:    backlog[i],
+    backlog:    Math.max(0, backlog[i]),
     pubP50:     null,
     pubP99:     null,
     pubP999:    null,
