@@ -116,6 +116,27 @@ async def _collect_sample(
             logger.warning("Failed to save Prometheus sample for run %d t=%d: %s", run_id, t, exc)
 
 
+async def probe_broker_prometheus(targets: list) -> None:
+    """GET /metrics from each broker target and log a sample of metric names.
+
+    Runs once at job start — no storage, diagnostic only.
+    Targets are host:port strings (e.g. 'broker-1:9644').
+    """
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        for target in targets:
+            url = f"http://{target}/metrics"
+            try:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    lines = [l for l in resp.text.splitlines() if l and not l.startswith('#')]
+                    names = sorted({l.split('{')[0].split(' ')[0] for l in lines[:200]})[:20]
+                    logger.info("Broker Prometheus %s: %d bytes, sample metrics: %s", target, len(resp.text), names)
+                else:
+                    logger.warning("Broker Prometheus %s returned HTTP %d", target, resp.status_code)
+            except Exception as exc:
+                logger.warning("Broker Prometheus %s unreachable: %s", target, exc)
+
+
 async def collect_prometheus(
     run_id: int,
     namespace: str,

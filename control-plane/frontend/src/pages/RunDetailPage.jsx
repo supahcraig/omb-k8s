@@ -46,29 +46,61 @@ function MetricCard({ label, value, unit, expected }) {
   )
 }
 
-function LatencyColumn({ label, metrics, prefix }) {
+function TileColumn({ label, badge, children }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, minHeight: 20 }}>
+        <span style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
+          {label}
+        </span>
+        {badge && <span className={`source-badge source-badge-${badge}`}>{badge}</span>}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function StubTile({ unit }) {
+  return (
+    <div style={{
+      background: 'rgba(245,158,11,0.06)',
+      border: '1px solid rgba(245,158,11,0.2)',
+      borderRadius: 8,
+      padding: '10px 14px',
+    }}>
+      <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-muted)' }}>—</div>
+      <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>{unit}</div>
+      <div style={{ fontSize: 10, color: 'rgba(245,158,11,0.5)', marginTop: 4 }}>not connected</div>
+    </div>
+  )
+}
+
+function LatencyColumn({ label, metrics, prefix, badge }) {
   const rows = [
-    { key: 'avg',  label: 'Avg'  },
-    { key: 'p50',  label: 'P50'  },
-    { key: 'p99',  label: 'P99'  },
-    { key: 'p999', label: 'P999' },
+    { key: 'avg',  rowLabel: 'Avg'  },
+    { key: 'p50',  rowLabel: 'P50'  },
+    { key: 'p99',  rowLabel: 'P99'  },
+    { key: 'p999', rowLabel: 'P999' },
   ]
   return (
-    <div className="metric-card">
-      <div className="metric-label">{label}</div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 6 }}>
-        <tbody>
-          {rows.map(({ key, label: rowLabel }) => (
-            <tr key={key}>
-              <td style={{ fontSize: 11, color: 'var(--color-text-muted)', paddingBottom: 3 }}>{rowLabel}</td>
-              <td style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', paddingBottom: 3 }}>
-                {fmt(metrics[`${prefix}_latency_${key}`])} <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>ms</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <TileColumn label={label} badge={badge}>
+      <div className="metric-card">
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <tbody>
+            {rows.map(({ key, rowLabel }) => (
+              <tr key={key}>
+                <td style={{ fontSize: 11, color: 'var(--color-text-muted)', paddingBottom: 3 }}>{rowLabel}</td>
+                <td style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', paddingBottom: 3 }}>
+                  {fmt(metrics[`${prefix}_latency_${key}`])} <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>ms</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </TileColumn>
   )
 }
 
@@ -446,64 +478,46 @@ export default function RunDetailPage() {
       {/* Summary metrics */}
       {(m || run.status === 'running') && (
         <>
-          {/* Row 1: rate tiles — 4 narrow columns */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
-            <MetricCard
-              label="Pub Rate"
-              value={m ? fmt(m.publish_rate_avg) : fmt(livePublishRate)}
-              unit="msg/s"
-              expected={expectedMsgSec > 0 ? expectedMsgSec : undefined}
-            />
-            <MetricCard
-              label="Pub Rate"
-              value={m ? fmt(m.publish_rate_avg * messageSize / 1_048_576, 2) : fmt(livePublishMBSec, 2)}
-              unit="MB/s"
-              expected={expectedMBSec > 0 ? expectedMBSec : undefined}
-            />
-            <MetricCard
-              label="Cons Rate"
-              value={m ? fmt(m.consume_rate_avg) : fmt(liveConsumeRate)}
-              unit="msg/s"
-              expected={expectedMsgSec > 0 ? expectedMsgSec : undefined}
-            />
-            <MetricCard
-              label="Cons Rate"
-              value={m ? fmt(m.consume_rate_avg * messageSize / 1_048_576, 2) : fmt(liveConsumeMBSec, 2)}
-              unit="MB/s"
-              expected={expectedMBSec > 0 ? expectedMBSec : undefined}
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr 1fr 1fr 1fr' : '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <TileColumn label="Avg Publish Rate" badge="omb">
+              <MetricCard
+                value={m ? fmt(m.publish_rate_avg) : fmt(livePublishRate)}
+                unit="msg/s"
+                expected={expectedMsgSec > 0 ? expectedMsgSec : undefined}
+              />
+              <MetricCard
+                value={m ? fmt(m.publish_rate_avg * messageSize / 1_048_576, 2) : fmt(livePublishMBSec, 2)}
+                unit="MB/s"
+                expected={expectedMBSec > 0 ? expectedMBSec : undefined}
+              />
+            </TileColumn>
+            <TileColumn label="Avg Consume Rate" badge="omb">
+              <MetricCard
+                value={m ? fmt(m.consume_rate_avg) : fmt(liveConsumeRate)}
+                unit="msg/s"
+                expected={expectedMsgSec > 0 ? expectedMsgSec : undefined}
+              />
+              <MetricCard
+                value={m ? fmt(m.consume_rate_avg * messageSize / 1_048_576, 2) : fmt(liveConsumeMBSec, 2)}
+                unit="MB/s"
+                expected={expectedMBSec > 0 ? expectedMBSec : undefined}
+              />
+            </TileColumn>
+            {m && <LatencyColumn label="Pub Latency" metrics={m} prefix="publish" badge="omb" />}
+            {m && <LatencyColumn label="E2E Latency" metrics={m} prefix="end_to_end" badge="omb" />}
           </div>
-          {/* Row 2: latency columns — only when run is complete */}
-          {m && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-              <LatencyColumn label="Pub Latency" metrics={m} prefix="publish" />
-              <LatencyColumn label="E2E Latency" metrics={m} prefix="end_to_end" />
-            </div>
-          )}
-        </>
-      )}
 
-      {/* Stub Redpanda broker metric tiles */}
-      {(m || run.status === 'running') && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-          {[
-            { label: 'Broker Publish Rate', unit: 'msg/s' },
-            { label: 'Broker Bytes In',     unit: 'MB/s'  },
-          ].map(({ label, unit }) => (
-            <div key={label} style={{
-              background: 'rgba(245,158,11,0.06)',
-              border: '1px solid rgba(245,158,11,0.25)',
-              borderRadius: 8,
-              padding: '12px 16px',
-            }}>
-              <div style={{ fontSize: 11, color: '#fbbf24', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-muted)' }}>—</div>
-              <div style={{ fontSize: 10, color: 'rgba(245,158,11,0.5)', marginTop: 6 }}>
-                Redpanda metrics — not yet connected
-              </div>
-            </div>
-          ))}
-        </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <TileColumn label="Broker Publish Rate" badge="redpanda">
+              <StubTile unit="msg/s" />
+              <StubTile unit="MB/s" />
+            </TileColumn>
+            <TileColumn label="Broker Consume Rate" badge="redpanda">
+              <StubTile unit="msg/s" />
+              <StubTile unit="MB/s" />
+            </TileColumn>
+          </div>
+        </>
       )}
 
       {/* Charts — live during run, post-run from stored metrics + Prometheus */}

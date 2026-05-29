@@ -227,10 +227,14 @@ function PrometheusTab({ initial, onChange }) {
       ? initial.scrape_targets.join(',')
       : (initial?.scrape_targets || '')
   )
+  const [scrapeYaml, setScrapeYaml] = useState(initial?.scrape_yaml || '')
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState(null)
 
   function buildConfig() {
+    if (scrapeYaml.trim()) {
+      return { mode: 'byoc', scrape_yaml: scrapeYaml.trim(), scrape_targets: null }
+    }
     return {
       mode: 'self-hosted',
       scrape_yaml: null,
@@ -256,19 +260,29 @@ function PrometheusTab({ initial, onChange }) {
   return (
     <div>
       <div className="alert alert-info" style={{ marginBottom: 16 }}>
-        Redpanda broker metrics are not currently collected. Scrape targets saved here will enable broker-side throughput and record rate charts in a future update.
+        Broker scrape targets are probed at run start and logged for diagnostics. Chart integration for broker-side metrics is in progress.
       </div>
       <div className="form-group">
-        <label className="form-label">Scrape Targets</label>
+        <label className="form-label">Scrape Targets <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>(self-hosted)</span></label>
         <input
           className="form-input"
           value={scrapeTargets}
-          onChange={e => setScrapeTargets(e.target.value)}
+          onChange={e => { setScrapeTargets(e.target.value); if (e.target.value) setScrapeYaml('') }}
           placeholder="broker-1:9644,broker-2:9644,broker-3:9644"
         />
-        <span className="form-hint">
-          Redpanda metrics port (default 9644) for each broker, comma-separated.
-        </span>
+        <span className="form-hint">Redpanda metrics port (default 9644), comma-separated.</span>
+      </div>
+      <div className="form-group">
+        <label className="form-label">Scrape Config YAML <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>(BYOC — overrides targets above)</span></label>
+        <textarea
+          className="form-input"
+          rows={8}
+          style={{ fontFamily: 'monospace', fontSize: 12 }}
+          value={scrapeYaml}
+          onChange={e => { setScrapeYaml(e.target.value); if (e.target.value) setScrapeTargets('') }}
+          placeholder={'job_name: redpanda\nstatic_configs:\n  - targets: [\'broker:9644\']\nbasic_auth:\n  username: prometheus\n  password: secret'}
+        />
+        <span className="form-hint">Full Prometheus scrape job YAML with auth. Targets are extracted and probed at run start.</span>
       </div>
 
       {saveMsg && (
@@ -340,13 +354,8 @@ export default function SettingsPage() {
             <button
               className={`tab${activeTab === 'prometheus' ? ' active' : ''}`}
               onClick={() => setActiveTab('prometheus')}
-              style={{ opacity: 0.45 }}
-              title="Redpanda broker metrics — not yet active"
             >
               Prometheus
-              <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)' }}>
-                coming soon
-              </span>
             </button>
           </div>
 

@@ -18,7 +18,7 @@ from models import Metrics, Run
 from schemas import RunListItem, RunOut, RunStatus
 from services.k8s_resources import read_worker_resources
 from services.omb_runner import runner
-from services.prometheus_collector import collect_prometheus
+from services.prometheus_collector import collect_prometheus, probe_broker_prometheus
 from services.result_parser import parse_result_from_logs
 
 logger = logging.getLogger(__name__)
@@ -138,6 +138,35 @@ async def delete_run(run_id: int, db: AsyncSession = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Broker Prometheus probe helpers
+# ---------------------------------------------------------------------------
+
+import json as _json
+from models import Setting as _Setting
+
+
+async def _load_broker_targets() -> list:
+    """Return scrape targets from stored Prometheus settings, or [] if none."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(_Setting).where(_Setting.key == 'prometheus'))
+        row = result.scalars().first()
+        if not row:
+            return []
+        stored = _json.loads(row.value or '{}')
+        # self-hosted: comma-separated scrape_targets_str
+        scrape_str = stored.get('scrape_targets_str') or ''
+        if scrape_str:
+            return [t.strip() for t in scrape_str.split(',') if t.strip()]
+        # byoc: extract targets from scrape_yaml static_configs
+        scrape_yaml = stored.get('scrape_yaml') or ''
+        if scrape_yaml:
+            import re
+            targets = re.findall(r"['\"]([^'\"]+:\d+)['\"]", scrape_yaml)
+            return targets
+        return []
+
+
+# ---------------------------------------------------------------------------
 # Shared run lifecycle — used by single runs and sweeps
 # ---------------------------------------------------------------------------
 
@@ -170,6 +199,11 @@ async def launch_run(
     asyncio.create_task(
         collect_prometheus(run_id, settings.omb_namespace, prom_url, cpu_request_cores)
     )
+
+    # Probe broker Prometheus endpoints (diagnostic logging only)
+    broker_targets = await _load_broker_targets()
+    if broker_targets:
+        asyncio.create_task(probe_broker_prometheus(broker_targets))
     if await_finish:
         await _finish_run(run_id)
     else:

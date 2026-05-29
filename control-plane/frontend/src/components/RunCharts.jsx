@@ -28,6 +28,26 @@ const C = {
   e2eLatencyGrid: 'rgba(252,211,77,0.15)',
 };
 
+// Round up to the next integer at the same order of magnitude (e.g. 6.2M → 7M)
+function niceMax(value) {
+  if (!value || value <= 0) return null
+  const mag = Math.pow(10, Math.floor(Math.log10(value)))
+  return (Math.floor(value / mag) + 1) * mag
+}
+
+function fmtMsgTick(v) {
+  if (v >= 1e9) return `${+(v / 1e9).toFixed(1)}G`
+  if (v >= 1e6) return `${+(v / 1e6).toFixed(1)}M`
+  if (v >= 1e3) return `${+(v / 1e3).toFixed(0)}k`
+  return String(v)
+}
+
+function fmtMBTick(v) {
+  if (v >= 1000) return `${+(v / 1000).toFixed(1)}GB`
+  if (v >= 1)    return `${+v.toFixed(1)}MB`
+  return `${+(v * 1024).toFixed(0)}KB`
+}
+
 function _parseBase(isoString) {
   if (!isoString) return null;
   const s = isoString.endsWith('Z') ? isoString : isoString + 'Z';
@@ -175,6 +195,21 @@ export default function RunCharts({
     )
   )].sort();
 
+  // Adaptive x-axis: short runs show HH:MM:SS, longer runs show HH:MM
+  const isShortRun    = totalSamples <= 300
+  const xTickInterval = totalSamples <= 300 ? 30 : totalSamples <= 1800 ? 300 : 600
+  const xTicks        = Array.from({ length: Math.floor(totalSamples / xTickInterval) + 1 }, (_, i) => i * xTickInterval)
+  const timeOpts      = isShortRun
+    ? { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }
+    : { hour12: false, hour: '2-digit', minute: '2-digit' }
+  function xFmt(base) {
+    return v => base
+      ? new Date(base + v * 1000).toLocaleTimeString([], timeOpts)
+      : isShortRun ? `${v}s` : `${Math.floor(v / 60)}m`
+  }
+  const ombXFmt  = xFmt(ombTimeBase)
+  const promXFmt = xFmt(promTimeBase)
+
   if (!isLive && chartPoints.length === 0 && promPoints.length === 0) return null;
 
   return (
@@ -246,8 +281,8 @@ export default function RunCharts({
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(ombTimeBase, v)} />
-              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={[0, expectedMsgSec > 0 ? dataMax => Math.max(dataMax, expectedMsgSec) * 1.05 : 'auto']} />
+              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
+              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMsgTick} domain={[0, expectedMsgSec > 0 ? dataMax => niceMax(Math.max(dataMax, expectedMsgSec)) : 'auto']} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               {expectedMsgSec > 0 && (
@@ -263,8 +298,8 @@ export default function RunCharts({
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(ombTimeBase, v)} />
-              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={[0, expectedMBSec > 0 ? dataMax => Math.max(dataMax, expectedMBSec) * 1.05 : 'auto']} />
+              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
+              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMBTick} domain={[0, expectedMBSec > 0 ? dataMax => niceMax(Math.max(dataMax, expectedMBSec)) : 'auto']} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               {expectedMBSec > 0 && (
@@ -280,7 +315,7 @@ export default function RunCharts({
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(ombTimeBase, v)} />
+              <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
               <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={65} domain={[0, 'auto']} tickFormatter={v => v.toLocaleString()} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={v => [v.toLocaleString(), 'backlog']} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Line type="monotone" dataKey="backlog" name="backlog" stroke={C.backlog} dot={false} strokeWidth={2} />
@@ -296,7 +331,7 @@ export default function RunCharts({
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={chartPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.pubLatencyGrid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(ombTimeBase, v)} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
                 <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
@@ -321,7 +356,7 @@ export default function RunCharts({
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={chartPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.e2eLatencyGrid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(ombTimeBase, v)} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
                 <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
@@ -351,7 +386,7 @@ export default function RunCharts({
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={promPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(promTimeBase, v)} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={promXFmt} />
                 <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(promTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
@@ -365,7 +400,7 @@ export default function RunCharts({
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={promPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(promTimeBase, v)} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={promXFmt} />
                 <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(promTimeBase, v)} />
                 <Line type="monotone" dataKey="recordsPerSec" name="records/sec" stroke={C.records} dot={false} strokeWidth={2} />
@@ -386,7 +421,7 @@ export default function RunCharts({
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={promPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(promTimeBase, v)} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={promXFmt} />
                 <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={[0, 'auto']} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={(v, name) => [v != null ? `${v.toFixed(1)}%` : '—', name]} labelFormatter={v => fmtTimeLabel(promTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
@@ -416,7 +451,7 @@ export default function RunCharts({
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={promPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(promTimeBase, v)} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={promXFmt} />
                 <YAxis
                   stroke={C.axis}
                   tick={{ fill: C.axis, fontSize: 10 }}
