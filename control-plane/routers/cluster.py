@@ -73,7 +73,7 @@ async def list_pods():
         if cst:
             raw_id = cst[0].image_id or ""
             image_ref = cst[0].image or None
-            logger.debug("pod %s image=%r image_id=%r", pod.metadata.name, image_ref, raw_id)
+            logger.info("pod %s image=%r image_id=%r", pod.metadata.name, image_ref, raw_id)
             if "sha256:" in raw_id:
                 image_hash = raw_id.split("sha256:")[-1][:12]
 
