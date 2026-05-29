@@ -141,10 +141,12 @@ export default function RunCharts({
   workerMemLimitMiB = null,
   workerCpuCores = null,
   runStartedAt = null,
-  expectedMsgSec    = 0,
-  expectedMBSec     = 0,
-  expectedConsMsgSec = 0,
-  expectedConsMBSec  = 0,
+  expectedMsgSec      = 0,
+  expectedMBSec       = 0,
+  expectedConsMsgSec  = 0,
+  expectedConsMBSec   = 0,
+  pubLatencyHint      = null,
+  e2eLatencyHint      = null,
 }) {
   const [, setTick] = useState(0)
   useEffect(() => {
@@ -188,18 +190,23 @@ export default function RunCharts({
   const statsWarmup = warmupSamples;
   const latencyStats = computeLatencyStats(chartPoints, statsWarmup);
 
-  // Latency y-axis: clip at post-warmup scale so warmup spikes don't swamp the benchmark curve
+  // Latency y-axis: clip at post-warmup scale so warmup spikes don't swamp the benchmark curve.
+  // Use Math.max across all percentiles (not ?? chaining) to avoid missing data in any field.
+  // Fall back to passed-in hint (from run.metrics) for completed runs viewed in a new session
+  // where normalizeTimeseries has null latency fields.
+  const maxLat = (pts, k50, k99, k999) =>
+    pts.reduce((m, p) => Math.max(m, p[k999] ?? 0, p[k99] ?? 0, p[k50] ?? 0), 0)
+
   const postWarmupPts  = chartPoints.slice(warmupSamples)
-  const pubPostMax     = postWarmupPts.reduce((max, p) => Math.max(max, p.pubP999 ?? p.pubP99 ?? 0), 0)
-  const e2ePostMax     = postWarmupPts.reduce((max, p) => Math.max(max, p.e2eP999 ?? p.e2eP99 ?? 0), 0)
-  const pubClipMax     = pubPostMax  > 0 ? pubPostMax  * 1.15 : null
-  const e2eClipMax     = e2ePostMax  > 0 ? e2ePostMax  * 1.15 : null
-  const warmupPts      = chartPoints.slice(0, warmupSamples)
-  const pubWarmupMax   = warmupPts.reduce((max, p) => Math.max(max, p.pubP999 ?? p.pubP99 ?? 0), 0)
-  const e2eWarmupMax   = warmupPts.reduce((max, p) => Math.max(max, p.e2eP999 ?? p.e2eP99 ?? 0), 0)
-  // Only clip when warmup spike is at least 2× the benchmark ceiling — prevents spurious activation
-  const pubClipped     = pubClipMax  != null && pubWarmupMax  > pubClipMax * 2
-  const e2eClipped     = e2eClipMax  != null && e2eWarmupMax  > e2eClipMax * 2
+  const pubBenchMax    = maxLat(postWarmupPts, 'pubP50', 'pubP99', 'pubP999') || (pubLatencyHint ?? 0)
+  const e2eBenchMax    = maxLat(postWarmupPts, 'e2eP50', 'e2eP99', 'e2eP999') || (e2eLatencyHint ?? 0)
+  const pubOverallMax  = maxLat(chartPoints, 'pubP50', 'pubP99', 'pubP999')
+  const e2eOverallMax  = maxLat(chartPoints, 'e2eP50', 'e2eP99', 'e2eP999')
+  const pubClipMax     = pubBenchMax > 0 ? pubBenchMax * 1.25 : null
+  const e2eClipMax     = e2eBenchMax > 0 ? e2eBenchMax * 1.25 : null
+  // Clip when overall max (warmup included) is >2× the benchmark-scale ceiling
+  const pubClipped     = pubClipMax != null && pubOverallMax > pubClipMax * 2
+  const e2eClipped     = e2eClipMax != null && e2eOverallMax > e2eClipMax * 2
 
   const runStartedAtMs = _parseBase(runStartedAt);
   const ombTimeBase = warmupStartedAt ?? runStartedAtMs;
