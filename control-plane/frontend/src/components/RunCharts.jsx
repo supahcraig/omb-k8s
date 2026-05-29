@@ -139,10 +139,8 @@ export default function RunCharts({
   const maxThrottle      = promPoints.reduce((max, p) => Math.max(max, p.workerThrottlePct ?? 0), 0);
   const maxCpuPct        = promPoints.reduce((max, p) => {
     const podKeys = Object.keys(p).filter(k => k.startsWith('workerCpu_'));
-    const sample = podKeys.length > 0
-      ? Math.max(...podKeys.map(k => p[k] ?? 0))
-      : (p.workerCpuPct ?? 0);
-    return Math.max(max, sample);
+    const podMax = podKeys.length > 0 ? Math.max(...podKeys.map(k => p[k] ?? 0)) : 0;
+    return Math.max(max, podMax, p.workerCpuPct ?? 0);
   }, 0);
 
   // Progress bar driven by log-line timestamps: bar starts when warmup traffic
@@ -384,8 +382,8 @@ export default function RunCharts({
                 <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={[0, 'auto']} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} formatter={(v, name) => [v != null ? `${v.toFixed(1)}%` : '—', name]} labelFormatter={v => fmtTimeLabel(promTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
-                <ReferenceLine y={85} stroke="rgba(245,158,11,0.6)" strokeDasharray="4 2" label={{ value: '85%', position: 'insideTopRight', fill: 'rgba(245,158,11,0.8)', fontSize: 10 }} />
-                <ReferenceLine y={100} stroke="rgba(239,68,68,0.3)" strokeDasharray="4 2" />
+                <ReferenceLine y={85} stroke="rgba(239,68,68,0.5)" strokeDasharray="4 2" label={{ value: '85%', position: 'insideTopRight', fill: 'rgba(239,68,68,0.7)', fontSize: 10 }} />
+                <ReferenceLine y={100} stroke="rgba(239,68,68,0.7)" />
                 {workerPods.length > 0
                   ? workerPods.map((pod, i) => (
                       <Line
