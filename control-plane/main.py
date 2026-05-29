@@ -94,7 +94,7 @@ if os.path.isdir(STATIC_DIR):
         """Serve index.html for any path not matched by an API route."""
         index = os.path.join(STATIC_DIR, "index.html")
         if os.path.isfile(index):
-            return FileResponse(index)
+            return FileResponse(index, headers={"Cache-Control": "no-store"})
         return JSONResponse({"detail": "Frontend not built."}, status_code=404)
 
 else:
