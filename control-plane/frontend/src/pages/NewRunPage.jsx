@@ -184,11 +184,14 @@ export default function NewRunPage() {
 
   const projectedLoad = useMemo(() => {
     const { values } = parseWorkloadYaml(workloadYaml)
-    const totalMsgSec = Number(values.producerRate) || 0
-    const msgSize     = Number(values.messageSize)  || 1024
-    const totalMBSec  = (totalMsgSec * msgSize) / 1_048_576
-    const perProducerCount = (Number(values.producersPerTopic) || 1) * (Number(values.topics) || 1)
-    const totalPartitions  = (Number(values.topics) || 1) * (Number(values.partitionsPerTopic) || 1)
+    const totalMsgSec          = Number(values.producerRate)       || 0
+    const msgSize              = Number(values.messageSize)        || 1024
+    const totalMBSec           = (totalMsgSec * msgSize) / 1_048_576
+    const subscriptionsPerTopic = Number(values.subscriptionsPerTopic) || 1
+    const consumeMsgSec        = totalMsgSec * subscriptionsPerTopic
+    const consumeMBSec         = consumeMsgSec * msgSize / 1_048_576
+    const perProducerCount     = (Number(values.producersPerTopic) || 1) * (Number(values.topics) || 1)
+    const totalPartitions      = (Number(values.topics) || 1) * (Number(values.partitionsPerTopic) || 1)
 
     const batchSizeMatch = driverYaml.match(/batch\.size=(\d+)/)
     const lingerMsMatch  = driverYaml.match(/linger\.ms=(\d+)/)
@@ -205,6 +208,7 @@ export default function NewRunPage() {
 
     return {
       totalMsgSec, totalMBSec,
+      consumeMsgSec, consumeMBSec,
       perProducerMsgSec: perProducerCount > 0 ? totalMsgSec / perProducerCount : 0,
       perProducerMBSec:  perProducerCount > 0 ? totalMBSec  / perProducerCount : 0,
       perPartitionMsgSec, perPartitionMBSec,
@@ -305,9 +309,12 @@ export default function NewRunPage() {
           <div className="projected-load" style={{ marginBottom: 0 }}>
             <div className="projected-load-title">Projected Load</div>
             <div className="projected-load-grid" style={{ gridTemplateColumns: '110px 1fr 1fr' }}>
-              <span>Total</span>
+              <span>Publish</span>
               <span>{projectedLoad.totalMsgSec.toLocaleString()} msg/s</span>
               <span>{projectedLoad.totalMBSec.toFixed(1)} MB/s</span>
+              <span>Consume</span>
+              <span>{projectedLoad.consumeMsgSec.toLocaleString()} msg/s</span>
+              <span>{projectedLoad.consumeMBSec.toFixed(1)} MB/s</span>
               <span>Per producer</span>
               <span>{projectedLoad.perProducerMsgSec.toLocaleString(undefined, { maximumFractionDigits: 0 })} msg/s</span>
               <span>{projectedLoad.perProducerMBSec.toFixed(1)} MB/s</span>
@@ -331,9 +338,9 @@ export default function NewRunPage() {
                 </span>
                 {projectedLoad.mbPerBatchActual != null && (
                   <span style={{ opacity: 0.8, marginLeft: 6 }}>
-                    · {projectedLoad.mbPerBatchActual < 0.01
-                        ? `${(projectedLoad.mbPerBatchActual * 1024).toFixed(2)} KB/batch`
-                        : `${projectedLoad.mbPerBatchActual.toFixed(3)} MB/batch`}
+                    · {projectedLoad.mbPerBatchActual < 1
+                        ? `${(projectedLoad.mbPerBatchActual * 1024).toFixed(0)} kB/batch`
+                        : `${projectedLoad.mbPerBatchActual.toFixed(2)} MB/batch`}
                   </span>
                 )}
               </span>

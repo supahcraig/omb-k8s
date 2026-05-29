@@ -393,8 +393,11 @@ export default function RunDetailPage() {
   const warmupSamples = (workloadParams?.values?.warmupDurationMinutes ?? 1) * 60
   const totalSamples  = ((workloadParams?.values?.warmupDurationMinutes ?? 1) + (workloadParams?.values?.testDurationMinutes ?? 5)) * 60
 
-  const expectedMsgSec = Number(workloadParams?.values?.producerRate) || 0
-  const expectedMBSec  = expectedMsgSec * (Number(workloadParams?.values?.messageSize) || 1024) / 1_048_576
+  const expectedMsgSec          = Number(workloadParams?.values?.producerRate) || 0
+  const expectedMBSec           = expectedMsgSec * (Number(workloadParams?.values?.messageSize) || 1024) / 1_048_576
+  const subscriptionsPerTopic   = Number(workloadParams?.values?.subscriptionsPerTopic) || 1
+  const expectedConsMsgSec      = expectedMsgSec * subscriptionsPerTopic
+  const expectedConsMBSec       = expectedMBSec  * subscriptionsPerTopic
 
   // Live publish/consume rates: average post-warmup livePoints
   const postWarmupPoints  = livePoints.filter(p => (p.t ?? 0) >= warmupSamples)
@@ -521,6 +524,8 @@ export default function RunDetailPage() {
         runStartedAt={run?.started_at ?? null}
         expectedMsgSec={expectedMsgSec}
         expectedMBSec={expectedMBSec}
+        expectedConsMsgSec={expectedConsMsgSec}
+        expectedConsMBSec={expectedConsMBSec}
       />
 
       {/* Log output */}

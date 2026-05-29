@@ -141,8 +141,10 @@ export default function RunCharts({
   workerMemLimitMiB = null,
   workerCpuCores = null,
   runStartedAt = null,
-  expectedMsgSec = 0,
-  expectedMBSec = 0,
+  expectedMsgSec    = 0,
+  expectedMBSec     = 0,
+  expectedConsMsgSec = 0,
+  expectedConsMBSec  = 0,
 }) {
   const [, setTick] = useState(0)
   useEffect(() => {
@@ -195,8 +197,9 @@ export default function RunCharts({
   const warmupPts      = chartPoints.slice(0, warmupSamples)
   const pubWarmupMax   = warmupPts.reduce((max, p) => Math.max(max, p.pubP999 ?? p.pubP99 ?? 0), 0)
   const e2eWarmupMax   = warmupPts.reduce((max, p) => Math.max(max, p.e2eP999 ?? p.e2eP99 ?? 0), 0)
-  const pubClipped     = pubClipMax  != null && pubWarmupMax  > pubClipMax
-  const e2eClipped     = e2eClipMax  != null && e2eWarmupMax  > e2eClipMax
+  // Only clip when warmup spike is at least 2× the benchmark ceiling — prevents spurious activation
+  const pubClipped     = pubClipMax  != null && pubWarmupMax  > pubClipMax * 2
+  const e2eClipped     = e2eClipMax  != null && e2eWarmupMax  > e2eClipMax * 2
 
   const runStartedAtMs = _parseBase(runStartedAt);
   const ombTimeBase = warmupStartedAt ?? runStartedAtMs;
@@ -299,7 +302,10 @@ export default function RunCharts({
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               {expectedMsgSec > 0 && (
-                <ReferenceLine y={expectedMsgSec} stroke="rgba(245,158,11,0.7)" strokeDasharray="4 2" label={{ value: 'target', position: 'insideTopRight', fill: 'rgba(245,158,11,0.8)', fontSize: 10 }} />
+                <ReferenceLine y={expectedMsgSec} stroke="rgba(245,158,11,0.7)" strokeDasharray="4 2" label={{ value: 'pub target', position: 'insideTopRight', fill: 'rgba(245,158,11,0.8)', fontSize: 10 }} />
+              )}
+              {expectedConsMsgSec > 0 && expectedConsMsgSec !== expectedMsgSec && (
+                <ReferenceLine y={expectedConsMsgSec} stroke="rgba(74,222,128,0.6)" strokeDasharray="4 2" label={{ value: 'cons target', position: 'insideBottomRight', fill: 'rgba(74,222,128,0.7)', fontSize: 10 }} />
               )}
               <Line type="monotone" dataKey="pubMsgSec"  name="publish"  stroke={C.publish} dot={false} strokeWidth={2} />
               <Line type="monotone" dataKey="consMsgSec" name="consume"  stroke={C.consume} dot={false} strokeWidth={1.5} strokeDasharray="5 3" />
@@ -316,7 +322,10 @@ export default function RunCharts({
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               {expectedMBSec > 0 && (
-                <ReferenceLine y={expectedMBSec} stroke="rgba(245,158,11,0.7)" strokeDasharray="4 2" label={{ value: 'target', position: 'insideTopRight', fill: 'rgba(245,158,11,0.8)', fontSize: 10 }} />
+                <ReferenceLine y={expectedMBSec} stroke="rgba(245,158,11,0.7)" strokeDasharray="4 2" label={{ value: 'pub target', position: 'insideTopRight', fill: 'rgba(245,158,11,0.8)', fontSize: 10 }} />
+              )}
+              {expectedConsMBSec > 0 && expectedConsMBSec !== expectedMBSec && (
+                <ReferenceLine y={expectedConsMBSec} stroke="rgba(74,222,128,0.6)" strokeDasharray="4 2" label={{ value: 'cons target', position: 'insideBottomRight', fill: 'rgba(74,222,128,0.7)', fontSize: 10 }} />
               )}
               <Line type="monotone" dataKey="pubMBSec"  name="publish"  stroke={C.publish} dot={false} strokeWidth={2} />
               <Line type="monotone" dataKey="consMBSec" name="consume"  stroke={C.consume} dot={false} strokeWidth={1.5} strokeDasharray="5 3" />
@@ -345,7 +354,7 @@ export default function RunCharts({
               <LineChart data={chartPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.pubLatencyGrid} />
                 <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
-                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={pubClipMax != null ? [0, pubClipMax] : [0, 'auto']} />
+                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={pubClipped ? [0, pubClipMax] : [0, 'auto']} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
                 {warmupSamples > 0 && chartPoints.length > 0 && (
@@ -370,7 +379,7 @@ export default function RunCharts({
               <LineChart data={chartPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.e2eLatencyGrid} />
                 <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
-                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={e2eClipMax != null ? [0, e2eClipMax] : [0, 'auto']} />
+                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={e2eClipped ? [0, e2eClipMax] : [0, 'auto']} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
                 {warmupSamples > 0 && chartPoints.length > 0 && (
