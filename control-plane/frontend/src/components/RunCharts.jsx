@@ -247,7 +247,7 @@ export default function RunCharts({
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
               <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(ombTimeBase, v)} />
-              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
+              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={[0, expectedMsgSec > 0 ? dataMax => Math.max(dataMax, expectedMsgSec) * 1.05 : 'auto']} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               {expectedMsgSec > 0 && (
@@ -264,7 +264,7 @@ export default function RunCharts({
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
               <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={v => fmtTimeTick(ombTimeBase, v)} />
-              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
+              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={[0, expectedMBSec > 0 ? dataMax => Math.max(dataMax, expectedMBSec) * 1.05 : 'auto']} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               {expectedMBSec > 0 && (

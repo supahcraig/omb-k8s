@@ -365,13 +365,14 @@ export default function RunDetailPage() {
   const expectedMBSec  = expectedMsgSec * (Number(workloadParams?.values?.messageSize) || 1024) / 1_048_576
 
   // Live publish/consume rates: average post-warmup livePoints
-  const postWarmupPoints = livePoints.filter(p => (p.t ?? 0) >= warmupSamples)
-  const livePublishRate  = postWarmupPoints.length > 0
-    ? postWarmupPoints.reduce((s, p) => s + (p.pubMsgSec ?? 0), 0) / postWarmupPoints.length
+  const postWarmupPoints  = livePoints.filter(p => (p.t ?? 0) >= warmupSamples)
+  const liveAvg           = key => postWarmupPoints.length > 0
+    ? postWarmupPoints.reduce((s, p) => s + (p[key] ?? 0), 0) / postWarmupPoints.length
     : null
-  const liveConsumeRate  = postWarmupPoints.length > 0
-    ? postWarmupPoints.reduce((s, p) => s + (p.consMsgSec ?? 0), 0) / postWarmupPoints.length
-    : null
+  const livePublishRate   = liveAvg('pubMsgSec')
+  const livePublishMBSec  = liveAvg('pubMBSec')
+  const liveConsumeRate   = liveAvg('consMsgSec')
+  const liveConsumeMBSec  = liveAvg('consMBSec')
 
   // Build a short label from sweep_params JSON, stripping Properties field prefixes
   function sweepParamLabel(sr) {
@@ -444,22 +445,42 @@ export default function RunDetailPage() {
 
       {/* Summary metrics */}
       {(m || run.status === 'running') && (
-        <div style={{ display: 'grid', gridTemplateColumns: `1fr 1fr${m ? ' 1fr 1fr' : ''}`, gap: 12, marginBottom: 16 }}>
-          <MetricCard
-            label="Publish Rate"
-            value={m ? fmt(m.publish_rate_avg) : fmt(livePublishRate)}
-            unit="msg/s"
-            expected={expectedMsgSec > 0 ? expectedMsgSec : undefined}
-          />
-          <MetricCard
-            label="Consume Rate"
-            value={m ? fmt(m.consume_rate_avg) : fmt(liveConsumeRate)}
-            unit="msg/s"
-            expected={expectedMsgSec > 0 ? expectedMsgSec : undefined}
-          />
-          {m && <LatencyColumn label="Pub Latency" metrics={m} prefix="publish" />}
-          {m && <LatencyColumn label="E2E Latency" metrics={m} prefix="end_to_end" />}
-        </div>
+        <>
+          {/* Row 1: rate tiles — 4 narrow columns */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <MetricCard
+              label="Pub Rate"
+              value={m ? fmt(m.publish_rate_avg) : fmt(livePublishRate)}
+              unit="msg/s"
+              expected={expectedMsgSec > 0 ? expectedMsgSec : undefined}
+            />
+            <MetricCard
+              label="Pub Rate"
+              value={m ? fmt(m.publish_rate_avg * messageSize / 1_048_576, 2) : fmt(livePublishMBSec, 2)}
+              unit="MB/s"
+              expected={expectedMBSec > 0 ? expectedMBSec : undefined}
+            />
+            <MetricCard
+              label="Cons Rate"
+              value={m ? fmt(m.consume_rate_avg) : fmt(liveConsumeRate)}
+              unit="msg/s"
+              expected={expectedMsgSec > 0 ? expectedMsgSec : undefined}
+            />
+            <MetricCard
+              label="Cons Rate"
+              value={m ? fmt(m.consume_rate_avg * messageSize / 1_048_576, 2) : fmt(liveConsumeMBSec, 2)}
+              unit="MB/s"
+              expected={expectedMBSec > 0 ? expectedMBSec : undefined}
+            />
+          </div>
+          {/* Row 2: latency columns — only when run is complete */}
+          {m && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <LatencyColumn label="Pub Latency" metrics={m} prefix="publish" />
+              <LatencyColumn label="E2E Latency" metrics={m} prefix="end_to_end" />
+            </div>
+          )}
+        </>
       )}
 
       {/* Stub Redpanda broker metric tiles */}
