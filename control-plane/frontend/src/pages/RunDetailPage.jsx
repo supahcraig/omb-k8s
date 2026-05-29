@@ -526,8 +526,6 @@ export default function RunDetailPage() {
         expectedMBSec={expectedMBSec}
         expectedConsMsgSec={expectedConsMsgSec}
         expectedConsMBSec={expectedConsMBSec}
-        pubLatencyHint={m?.publish_latency_p999 ?? m?.publish_latency_p99 ?? null}
-        e2eLatencyHint={m?.end_to_end_latency_p999 ?? m?.end_to_end_latency_p99 ?? null}
       />
 
       {/* Log output */}

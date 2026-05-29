@@ -145,8 +145,6 @@ export default function RunCharts({
   expectedMBSec       = 0,
   expectedConsMsgSec  = 0,
   expectedConsMBSec   = 0,
-  pubLatencyHint      = null,
-  e2eLatencyHint      = null,
 }) {
   const [, setTick] = useState(0)
   useEffect(() => {
@@ -190,23 +188,14 @@ export default function RunCharts({
   const statsWarmup = warmupSamples;
   const latencyStats = computeLatencyStats(chartPoints, statsWarmup);
 
-  // Latency y-axis: clip at post-warmup scale so warmup spikes don't swamp the benchmark curve.
-  // Use Math.max across all percentiles (not ?? chaining) to avoid missing data in any field.
-  // Fall back to passed-in hint (from run.metrics) for completed runs viewed in a new session
-  // where normalizeTimeseries has null latency fields.
-  const maxLat = (pts, k50, k99, k999) =>
-    pts.reduce((m, p) => Math.max(m, p[k999] ?? 0, p[k99] ?? 0, p[k50] ?? 0), 0)
-
-  const postWarmupPts  = chartPoints.slice(warmupSamples)
-  const pubBenchMax    = maxLat(postWarmupPts, 'pubP50', 'pubP99', 'pubP999') || (pubLatencyHint ?? 0)
-  const e2eBenchMax    = maxLat(postWarmupPts, 'e2eP50', 'e2eP99', 'e2eP999') || (e2eLatencyHint ?? 0)
-  const pubOverallMax  = maxLat(chartPoints, 'pubP50', 'pubP99', 'pubP999')
-  const e2eOverallMax  = maxLat(chartPoints, 'e2eP50', 'e2eP99', 'e2eP999')
-  const pubClipMax     = pubBenchMax > 0 ? pubBenchMax * 1.25 : null
-  const e2eClipMax     = e2eBenchMax > 0 ? e2eBenchMax * 1.25 : null
-  // Clip when overall max (warmup included) is >2× the benchmark-scale ceiling
-  const pubClipped     = pubClipMax != null && pubOverallMax > pubClipMax * 2
-  const e2eClipped     = e2eClipMax != null && e2eOverallMax > e2eClipMax * 2
+  // Null out latency fields for warmup-period points so the latency charts auto-scale
+  // to benchmark data only. Arrays stay the same length so syncId still works.
+  // The warmup ReferenceArea provides visual context for the blank region.
+  const latencyPoints = chartPoints.map((p, i) =>
+    i < warmupSamples
+      ? { ...p, pubP50: null, pubP99: null, pubP999: null, e2eP50: null, e2eP99: null, e2eP999: null }
+      : p
+  )
 
   const runStartedAtMs = _parseBase(runStartedAt);
   const ombTimeBase = warmupStartedAt ?? runStartedAtMs;
@@ -356,12 +345,12 @@ export default function RunCharts({
       {/* Row 2: 2-column latency (only if we have latency data) */}
       {hasLatency && (
         <div className="charts-row charts-row-2">
-          <ChartCard title={`Publish Latency (ms)${pubClipped ? ' — warmup clipped' : ''}`} badge="omb">
+          <ChartCard title="Publish Latency (ms)" badge="omb">
             <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={chartPoints} syncId="run">
+              <LineChart data={latencyPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.pubLatencyGrid} />
                 <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
-                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={pubClipped ? [0, pubClipMax] : [0, 'auto']} />
+                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
                 {warmupSamples > 0 && chartPoints.length > 0 && (
@@ -381,12 +370,12 @@ export default function RunCharts({
             />
           </ChartCard>
 
-          <ChartCard title={`E2E Latency (ms)${e2eClipped ? ' — warmup clipped' : ''}`} badge="omb">
+          <ChartCard title="E2E Latency (ms)" badge="omb">
             <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={chartPoints} syncId="run">
+              <LineChart data={latencyPoints} syncId="run">
                 <CartesianGrid strokeDasharray="3 3" stroke={C.e2eLatencyGrid} />
                 <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
-                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} domain={e2eClipped ? [0, e2eClipMax] : [0, 'auto']} />
+                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
                 <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
                 {warmupSamples > 0 && chartPoints.length > 0 && (
