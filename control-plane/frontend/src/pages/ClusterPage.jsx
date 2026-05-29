@@ -190,9 +190,9 @@ export default function ClusterPage() {
                         <WorkerHealthDot healthy={pod.worker_healthy} />
                         {pod.name}
                       </div>
-                      {pod.image_hash && (
+                      {(pod.image_hash || pod.image_ref) && (
                         <div style={{ color: 'var(--color-text-muted)', fontSize: 10, marginTop: 1 }}>
-                          sha256:{pod.image_hash}
+                          {pod.image_hash ? `sha256:${pod.image_hash}` : pod.image_ref}
                         </div>
                       )}
                     </td>

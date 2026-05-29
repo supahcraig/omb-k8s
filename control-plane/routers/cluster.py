@@ -69,8 +69,11 @@ async def list_pods():
         is_worker = bool(worker_re.match(pod.metadata.name))
 
         image_hash = None
+        image_ref = None
         if cst:
             raw_id = cst[0].image_id or ""
+            image_ref = cst[0].image or None
+            logger.debug("pod %s image=%r image_id=%r", pod.metadata.name, image_ref, raw_id)
             if "sha256:" in raw_id:
                 image_hash = raw_id.split("sha256:")[-1][:12]
 
@@ -83,6 +86,7 @@ async def list_pods():
             "node": (pod.spec.node_name or "—").split(".")[0],
             "containers": containers,
             "image_hash": image_hash,
+            "image_ref": image_ref,
             "worker_healthy": None,  # populated below for workers
         })
 
