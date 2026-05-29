@@ -323,9 +323,13 @@ so `DriverForm` can embed it directly in the generated YAML.
 **Settings page has no BYOC/self-hosted distinction.** The cluster connectivity tab
 is a single unified form — seed broker chips, TLS toggle, SASL toggle + mechanism.
 BYOC and self-hosted both work identically once TLS and SASL are configured; the
-distinction was removed as unnecessary complexity. The Prometheus tab is present but
-dimmed — Redpanda broker metrics scraping is not yet wired up (the collector uses the
-in-cluster kube-prometheus-stack URL hardcoded in `routers/runs.py`, not the settings).
+distinction was removed as unnecessary complexity. The Prometheus tab accepts either
+comma-separated `scrape_targets` (self-hosted, e.g. `broker:9644`) or a full
+Prometheus scrape job YAML (`scrape_yaml`, for BYOC with basic_auth). At run start,
+`_load_broker_targets()` in `routers/runs.py` reads whichever is configured and fires
+`probe_broker_prometheus()` as a background task — this GETs `/metrics` from each
+target and logs a sample of metric names for diagnostics. No broker metrics are stored
+or displayed yet; chart integration is a future phase.
 
 **`sampleRateMillis` defaults to 1000 ms in WorkloadForm.** OMB's own default is
 10 000 ms (one stat line every 10 s). The UI default overrides this to 1000 ms
@@ -492,6 +496,49 @@ MiB; `tickFormatter` divides by 1024). Both axes auto-scale to data rather than
 using a fixed domain. All chart x-axes show local time derived from `run.started_at`
 (Prometheus data) or `warmupStartedAt` (OMB log data); SQLite datetimes always need
 `+Z` appended before `new Date()` to parse as UTC correctly.
+
+**RunCharts latency charts suppress warmup data.** `latencyPoints` is a mapped copy
+of `chartPoints` where all latency fields (pubP50/pubP99/pubP999/e2eP50/e2eP99/e2eP999)
+are set to `null` for array indices `< warmupSamples`. This prevents warmup spikes
+from swamping the y-axis scale. The arrays stay the same length so `syncId` hover
+sync works. The warmup ReferenceArea still marks the blank region visually.
+`computeLatencyStats` always uses `warmupSamples` as the slice offset so the stats
+table below each chart never includes warmup data.
+
+**RunCharts expected-rate reference lines.** `RunDetailPage` computes `expectedMsgSec`
+and `expectedMBSec` from `workload_config.producerRate` and `messageSize`, and
+`expectedConsMsgSec`/`expectedConsMBSec` by multiplying by `subscriptionsPerTopic`.
+These are passed as props to `RunCharts` which renders amber dashed `ReferenceLine`
+components on the Throughput (msg/s) and Throughput (MB/s) charts. A green dashed
+consume reference line is added only when consume rate differs from publish rate
+(i.e. `subscriptionsPerTopic > 1`). The y-axis max is computed by `niceMax()` —
+rounds up to the next integer at the same order of magnitude (6M → 7M).
+
+**RunCharts CPU saturation alert.** An amber alert banner fires when any worker's CPU
+exceeds 85% of its CPU request (uses per-pod `workerCpu_*` keys, falls back to the
+aggregate `workerCpuPct`). A dashed amber reference line at 85% and a solid red line
+at 100% mark the chart. The 85% threshold is intentional — without a CPU limit,
+cgroup throttling never fires; resource exhaustion instead degrades throughput silently.
+
+**Backlog chart is clamped to ≥ 0.** `normalizeTimeseries` applies `Math.max(0, v)`
+to stored backlog values. `RunCharts` applies the same clamp inline when building
+`chartPoints` from `livePoints`, since livePoints arrive raw from the WebSocket parser
+and bypass `normalizeTimeseries`.
+
+**RunDetailPage result tiles are hidden until the run completes.** The 4-column tile
+grid (`TileColumn` components) only renders when `run.metrics` (`m`) is non-null.
+Each `TileColumn` groups a header label + source badge + stacked `MetricCard` children.
+Layout: Avg Publish Rate col (msg/s + MB/s) | Avg Consume Rate col (msg/s + MB/s) |
+Pub Latency col (Avg/P50/P99/P999) | E2E Latency col (Avg/P50/P99/P999) — all with
+`omb` badge. Below that: a 4-col grid with Broker Publish Rate and Broker Consume Rate
+stub columns (amber, `redpanda` badge, `not connected`), with two empty placeholder
+divs so broker cols align under OMB cols. `MetricCard` accepts an `expected` prop;
+if actual < 95% of expected the value renders red, ≥ 95% renders green.
+
+**Cluster page shows image digest per pod.** The `/api/cluster/pods` endpoint extracts
+`container_statuses[0].image_id` and parses the sha256 digest (first 12 chars) as
+`image_hash`. Falls back to `image_ref` (the full image tag string) if the digest
+format is absent. Displayed as a small subtitle under each pod name in the table.
 
 **Status badges in `RunDetailPage` reflect live run sub-phases.** While
 `run.status === 'running'`, a finer-grained `displayStatus` is derived from live

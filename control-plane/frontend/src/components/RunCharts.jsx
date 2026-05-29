@@ -155,7 +155,12 @@ export default function RunCharts({
 
   // Keep live data once collected; only reconstruct from stored metrics when
   // viewing a historical run (livePoints empty, e.g. after page reload).
-  const chartPoints = livePoints.length > 0 ? livePoints : (metricsOut ? normalizeTimeseries(metricsOut, messageSize) : []);
+  // Clamp backlog to >=0 here as well — normalizeTimeseries clamps for stored data
+  // but livePoints arrive raw from the WebSocket parser.
+  const rawPoints  = livePoints.length > 0 ? livePoints : (metricsOut ? normalizeTimeseries(metricsOut, messageSize) : []);
+  const chartPoints = rawPoints.map(p =>
+    p.backlog != null && p.backlog < 0 ? { ...p, backlog: 0 } : p
+  );
   const promPoints  = promToChartData(promSamples);
   const hasLatency      = chartPoints.some(p => p.pubP99 != null || p.pubP50 != null);
   const hasBrokerMetrics = promPoints.some(p => p.bytesInMBSec != null || p.bytesOutMBSec != null);
