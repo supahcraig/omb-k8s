@@ -26,49 +26,52 @@ function fmt(n, digits = 1) {
   return n.toLocaleString(undefined, { maximumFractionDigits: digits })
 }
 
-function MetricCard({ label, value, unit }) {
+function MetricCard({ label, value, unit, expected }) {
+  const numeric = typeof value === 'string' ? parseFloat(value.replace(/,/g, '')) : value
+  const hasExpected = expected != null && expected > 0
+  const belowTarget = hasExpected && numeric != null && !isNaN(numeric) && numeric < expected * 0.95
+  const atTarget    = hasExpected && numeric != null && !isNaN(numeric) && numeric >= expected * 0.95
+  const valueColor  = belowTarget ? '#ef4444' : atTarget ? '#4ade80' : undefined
   return (
     <div className="metric-card">
       <div className="metric-label">{label}</div>
-      <div className="metric-value">{value}</div>
+      <div className="metric-value" style={valueColor ? { color: valueColor } : undefined}>{value}</div>
       {unit && <div className="metric-unit">{unit}</div>}
+      {hasExpected && (
+        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4 }}>
+          target: {expected.toLocaleString(undefined, { maximumFractionDigits: 0 })} {unit}
+        </div>
+      )}
     </div>
   )
 }
 
-function LatencyTable({ metrics }) {
-  const percentiles = ['p50', 'p75', 'p95', 'p99', 'p999', 'p9999', 'max']
+function LatencyColumn({ label, metrics, prefix }) {
+  const rows = [
+    { key: 'avg',  label: 'Avg'  },
+    { key: 'p50',  label: 'P50'  },
+    { key: 'p99',  label: 'P99'  },
+    { key: 'p999', label: 'P999' },
+  ]
   return (
-    <div className="card mt-20">
-      <div className="card-header"><h3>Latency Percentiles (ms)</h3></div>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Metric</th>
-            {percentiles.map(p => <th key={p} className="num">{p.toUpperCase()}</th>)}
-            <th className="num">Avg</th>
-          </tr>
-        </thead>
+    <div className="metric-card">
+      <div className="metric-label">{label}</div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 6 }}>
         <tbody>
-          <tr>
-            <td>Publish Latency</td>
-            {percentiles.map(p => (
-              <td key={p} className="num">{fmt(metrics[`publish_latency_${p}`])}</td>
-            ))}
-            <td className="num">{fmt(metrics.publish_latency_avg)}</td>
-          </tr>
-          <tr>
-            <td>End-to-End Latency</td>
-            {percentiles.map(p => (
-              <td key={p} className="num">{fmt(metrics[`end_to_end_latency_${p}`])}</td>
-            ))}
-            <td className="num">{fmt(metrics.end_to_end_latency_avg)}</td>
-          </tr>
+          {rows.map(({ key, label: rowLabel }) => (
+            <tr key={key}>
+              <td style={{ fontSize: 11, color: 'var(--color-text-muted)', paddingBottom: 3 }}>{rowLabel}</td>
+              <td style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', paddingBottom: 3 }}>
+                {fmt(metrics[`${prefix}_latency_${key}`])} <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>ms</span>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
   )
 }
+
 
 
 export default function RunDetailPage() {
@@ -358,6 +361,18 @@ export default function RunDetailPage() {
   const warmupSamples = (workloadParams?.values?.warmupDurationMinutes ?? 1) * 60
   const totalSamples  = ((workloadParams?.values?.warmupDurationMinutes ?? 1) + (workloadParams?.values?.testDurationMinutes ?? 5)) * 60
 
+  const expectedMsgSec = Number(workloadParams?.values?.producerRate) || 0
+  const expectedMBSec  = expectedMsgSec * (Number(workloadParams?.values?.messageSize) || 1024) / 1_048_576
+
+  // Live publish/consume rates: average post-warmup livePoints
+  const postWarmupPoints = livePoints.filter(p => (p.t ?? 0) >= warmupSamples)
+  const livePublishRate  = postWarmupPoints.length > 0
+    ? postWarmupPoints.reduce((s, p) => s + (p.pubMsgSec ?? 0), 0) / postWarmupPoints.length
+    : null
+  const liveConsumeRate  = postWarmupPoints.length > 0
+    ? postWarmupPoints.reduce((s, p) => s + (p.consMsgSec ?? 0), 0) / postWarmupPoints.length
+    : null
+
   // Build a short label from sweep_params JSON, stripping Properties field prefixes
   function sweepParamLabel(sr) {
     try {
@@ -428,18 +443,46 @@ export default function RunDetailPage() {
       )}
 
       {/* Summary metrics */}
-      {m && (
-        <>
-          <div className="metrics-grid">
-            <MetricCard label="Publish Rate" value={fmt(m.publish_rate_avg)} unit="msg/s" />
-            <MetricCard label="Consume Rate" value={fmt(m.consume_rate_avg)} unit="msg/s" />
-            <MetricCard label="Pub Latency Avg" value={fmt(m.publish_latency_avg)} unit="ms" />
-            <MetricCard label="Pub Latency P99" value={fmt(m.publish_latency_p99)} unit="ms" />
-            <MetricCard label="E2E Latency Avg" value={fmt(m.end_to_end_latency_avg)} unit="ms" />
-            <MetricCard label="E2E Latency P99" value={fmt(m.end_to_end_latency_p99)} unit="ms" />
-          </div>
-          <LatencyTable metrics={m} />
-        </>
+      {(m || run.status === 'running') && (
+        <div style={{ display: 'grid', gridTemplateColumns: `1fr 1fr${m ? ' 1fr 1fr' : ''}`, gap: 12, marginBottom: 16 }}>
+          <MetricCard
+            label="Publish Rate"
+            value={m ? fmt(m.publish_rate_avg) : fmt(livePublishRate)}
+            unit="msg/s"
+            expected={expectedMsgSec > 0 ? expectedMsgSec : undefined}
+          />
+          <MetricCard
+            label="Consume Rate"
+            value={m ? fmt(m.consume_rate_avg) : fmt(liveConsumeRate)}
+            unit="msg/s"
+            expected={expectedMsgSec > 0 ? expectedMsgSec : undefined}
+          />
+          {m && <LatencyColumn label="Pub Latency" metrics={m} prefix="publish" />}
+          {m && <LatencyColumn label="E2E Latency" metrics={m} prefix="end_to_end" />}
+        </div>
+      )}
+
+      {/* Stub Redpanda broker metric tiles */}
+      {(m || run.status === 'running') && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+          {[
+            { label: 'Broker Publish Rate', unit: 'msg/s' },
+            { label: 'Broker Bytes In',     unit: 'MB/s'  },
+          ].map(({ label, unit }) => (
+            <div key={label} style={{
+              background: 'rgba(245,158,11,0.06)',
+              border: '1px solid rgba(245,158,11,0.25)',
+              borderRadius: 8,
+              padding: '12px 16px',
+            }}>
+              <div style={{ fontSize: 11, color: '#fbbf24', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-muted)' }}>—</div>
+              <div style={{ fontSize: 10, color: 'rgba(245,158,11,0.5)', marginTop: 6 }}>
+                Redpanda metrics — not yet connected
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Charts — live during run, post-run from stored metrics + Prometheus */}
@@ -456,6 +499,8 @@ export default function RunDetailPage() {
         workerMemLimitMiB={workerResources?.memory_limit_mib ?? null}
         workerCpuCores={workerResources?.cpu_request_cores ?? null}
         runStartedAt={run?.started_at ?? null}
+        expectedMsgSec={expectedMsgSec}
+        expectedMBSec={expectedMBSec}
       />
 
       {/* Log output */}

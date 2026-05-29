@@ -121,6 +121,8 @@ export default function RunCharts({
   workerMemLimitMiB = null,
   workerCpuCores = null,
   runStartedAt = null,
+  expectedMsgSec = 0,
+  expectedMBSec = 0,
 }) {
   const [, setTick] = useState(0)
   useEffect(() => {
@@ -177,8 +179,8 @@ export default function RunCharts({
 
   return (
     <div className="run-charts">
-      {/* Progress bar */}
-      <div className="run-progress">
+      {/* Progress bar — only while run is live */}
+      {isLive && <div className="run-progress">
         <div className="run-progress-bar">
           {/* Warmup fill: dark blue, 0 → min(progress, warmup) */}
           <div className="run-progress-fill" style={{
@@ -200,11 +202,11 @@ export default function RunCharts({
         <div className="run-progress-labels">
           <span>warmup {warmupSamples}s</span>
           <span>{Math.floor(currentSamples)}s / {totalSamples}s</span>
-          {isLive && warmupStartedAt && currentSamples < totalSamples && (
+          {warmupStartedAt && currentSamples < totalSamples && (
             <span className="text-muted">{Math.ceil(totalSamples - currentSamples)}s remaining</span>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* CPU saturation alert */}
       {maxCpuPct > 85 && (
@@ -248,6 +250,9 @@ export default function RunCharts({
               <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
+              {expectedMsgSec > 0 && (
+                <ReferenceLine y={expectedMsgSec} stroke="rgba(245,158,11,0.7)" strokeDasharray="4 2" label={{ value: 'target', position: 'insideTopRight', fill: 'rgba(245,158,11,0.8)', fontSize: 10 }} />
+              )}
               <Line type="monotone" dataKey="pubMsgSec"  name="publish"  stroke={C.publish} dot={false} strokeWidth={2} />
               <Line type="monotone" dataKey="consMsgSec" name="consume"  stroke={C.consume} dot={false} strokeWidth={1.5} strokeDasharray="5 3" />
             </LineChart>
@@ -262,6 +267,9 @@ export default function RunCharts({
               <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
+              {expectedMBSec > 0 && (
+                <ReferenceLine y={expectedMBSec} stroke="rgba(245,158,11,0.7)" strokeDasharray="4 2" label={{ value: 'target', position: 'insideTopRight', fill: 'rgba(245,158,11,0.8)', fontSize: 10 }} />
+              )}
               <Line type="monotone" dataKey="pubMBSec"  name="publish"  stroke={C.publish} dot={false} strokeWidth={2} />
               <Line type="monotone" dataKey="consMBSec" name="consume"  stroke={C.consume} dot={false} strokeWidth={1.5} strokeDasharray="5 3" />
             </LineChart>
