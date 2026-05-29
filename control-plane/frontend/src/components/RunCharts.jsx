@@ -371,7 +371,7 @@ export default function RunCharts({
       {(hasWorkerMetrics || isLive) && (
         <div className="charts-row charts-row-2">
           <ChartCard
-            title={`Worker CPU (%) — peak: ${maxCpuPct.toFixed(1)}`}
+            title="Worker CPU (%)"
             badge="worker"
             info={`CPU Usage: how much of the ${workerCpuCores != null ? workerCpuCores : 4}-core worker allocation the workers are consuming. Throttled: fraction of CPU scheduling slots the kernel rejected because the worker exceeded its cgroup quota. No CPU limit is set so throttle will always be 0 — any non-zero throttle value indicates a misconfiguration. Above 85% (amber line) workers are CPU-saturated and throughput reflects worker capacity, not broker capacity — scale up worker count. Above 100% (red line) workers are exceeding their CPU request and competing with node overhead.`}
           >

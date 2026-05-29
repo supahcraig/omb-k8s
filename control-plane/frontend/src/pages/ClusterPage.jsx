@@ -185,9 +185,16 @@ export default function ClusterPage() {
                       background: selectedPod?.name === pod.name ? 'rgba(96,165,250,0.08)' : undefined,
                     }}
                   >
-                    <td style={{ fontFamily: 'monospace', fontSize: 13, display: 'flex', alignItems: 'center' }}>
-                      <WorkerHealthDot healthy={pod.worker_healthy} />
-                      {pod.name}
+                    <td style={{ fontFamily: 'monospace', fontSize: 13 }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <WorkerHealthDot healthy={pod.worker_healthy} />
+                        {pod.name}
+                      </div>
+                      {pod.image_hash && (
+                        <div style={{ color: 'var(--color-text-muted)', fontSize: 10, marginTop: 1 }}>
+                          sha256:{pod.image_hash}
+                        </div>
+                      )}
                     </td>
                     <td><span className={`badge badge-${PHASE_BADGE[pod.phase] || 'pending'}`}>{pod.phase}</span></td>
                     <td>{pod.ready}</td>

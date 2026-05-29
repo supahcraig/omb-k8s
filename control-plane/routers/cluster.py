@@ -68,6 +68,12 @@ async def list_pods():
         containers = [c.name for c in pod.spec.containers]
         is_worker = bool(worker_re.match(pod.metadata.name))
 
+        image_hash = None
+        if cst:
+            raw_id = cst[0].image_id or ""
+            if "sha256:" in raw_id:
+                image_hash = raw_id.split("sha256:")[-1][:12]
+
         pods.append({
             "name": pod.metadata.name,
             "phase": pod.status.phase or "Unknown",
@@ -76,6 +82,7 @@ async def list_pods():
             "age": _age(pod.metadata.creation_timestamp),
             "node": (pod.spec.node_name or "—").split(".")[0],
             "containers": containers,
+            "image_hash": image_hash,
             "worker_healthy": None,  # populated below for workers
         })
 
