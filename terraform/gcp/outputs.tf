@@ -4,7 +4,7 @@ output "cluster_endpoint" {
 }
 
 output "cluster_name" {
-  description = "GKE cluster name"
+  description = "GKE cluster name (auto-generated if not specified in tfvars)"
   value       = google_container_cluster.main.name
 }
 
@@ -20,5 +20,10 @@ output "vpc_cidr" {
 
 output "kubeconfig_command" {
   description = "Run this command to configure kubectl after apply"
-  value       = "gcloud container clusters get-credentials ${var.cluster_name} --zone ${var.zone} --project ${var.project_id}"
+  value       = "gcloud container clusters get-credentials ${local.cluster_name} --zone ${var.zone} --project ${var.project_id}"
+}
+
+output "terraform_operator_ip" {
+  description = "Public IP detected at plan time — use as controlPlane.allowedCIDRs[0] in helm install"
+  value       = chomp(data.http.my_ip.response_body)
 }

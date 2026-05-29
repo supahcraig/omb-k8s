@@ -9,7 +9,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = merge(var.tags, {
-    Name = "${var.cluster_name}-vpc"
+    Name = "${local.cluster_name}-vpc"
   })
 }
 
@@ -17,7 +17,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(var.tags, {
-    Name = "${var.cluster_name}-igw"
+    Name = "${local.cluster_name}-igw"
   })
 }
 
@@ -30,9 +30,9 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = merge(var.tags, {
-    Name                                        = "${var.cluster_name}-public-${var.availability_zones[count.index]}"
+    Name                                        = "${local.cluster_name}-public-${var.availability_zones[count.index]}"
     "kubernetes.io/role/elb"                    = "1"
-    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
   })
 }
 
@@ -43,9 +43,9 @@ resource "aws_subnet" "private" {
   availability_zone = var.availability_zones[count.index]
 
   tags = merge(var.tags, {
-    Name                                        = "${var.cluster_name}-private-${var.availability_zones[count.index]}"
+    Name                                        = "${local.cluster_name}-private-${var.availability_zones[count.index]}"
     "kubernetes.io/role/internal-elb"           = "1"
-    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
   })
 }
 
@@ -54,7 +54,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = merge(var.tags, {
-    Name = "${var.cluster_name}-nat-eip-${count.index}"
+    Name = "${local.cluster_name}-nat-eip-${count.index}"
   })
 }
 
@@ -64,7 +64,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = merge(var.tags, {
-    Name = "${var.cluster_name}-nat-${var.availability_zones[count.index]}"
+    Name = "${local.cluster_name}-nat-${var.availability_zones[count.index]}"
   })
 
   depends_on = [aws_internet_gateway.main]
@@ -79,7 +79,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.cluster_name}-public-rt"
+    Name = "${local.cluster_name}-public-rt"
   })
 }
 
@@ -99,7 +99,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.cluster_name}-private-rt-${var.availability_zones[count.index]}"
+    Name = "${local.cluster_name}-private-rt-${var.availability_zones[count.index]}"
   })
 }
 
@@ -117,7 +117,7 @@ resource "aws_vpc_peering_connection" "target" {
   auto_accept = true
 
   tags = merge(var.tags, {
-    Name = "${var.cluster_name}-to-target"
+    Name = "${local.cluster_name}-to-target"
   })
 }
 

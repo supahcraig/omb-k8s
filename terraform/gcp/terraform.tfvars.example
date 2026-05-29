@@ -11,7 +11,8 @@ region = "us-central1"
 zone = "us-central1-a"
 
 # Short descriptive name. Used as prefix for all resource names.
-cluster_name = "omb-acme-20240101"
+# Optional: leave commented out to auto-generate a unique name like "omb-relaxed-lemur".
+# cluster_name = "omb-acme-20240101"
 
 # CIDR for the new VPC subnet. Must not overlap with the target cluster.
 vpc_cidr = "10.1.0.0/16"
@@ -28,3 +29,12 @@ labels = {
   customer   = "acme"
   managed-by = "terraform"
 }
+
+# After terraform apply, restrict the control-plane UI to your IP:
+#   helm install omb charts/omb -n omb \
+#     -f charts/omb/values-gcp.yaml \
+#     --set "controlPlane.allowedCIDRs[0]=$(terraform output -raw terraform_operator_ip)/32" \
+#     ...
+# To add IPs post-deploy without redeploying: helm upgrade omb charts/omb -n omb --reuse-values \
+#   --set "controlPlane.allowedCIDRs[0]=<existing>/32" \
+#   --set "controlPlane.allowedCIDRs[1]=<new>/32"

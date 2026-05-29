@@ -219,6 +219,26 @@ correct way to use a separately managed node pool with Standard GKE clusters.
 **Cluster provisioning is out of scope.** If you find yourself writing code that
 creates Redpanda broker nodes or interacts with the Redpanda Cloud API, stop.
 
+**Cluster names are auto-generated via `random_pet` if not specified.** Each cloud's
+Terraform module declares `resource "random_pet" "cluster_suffix" { length = 2 }`.
+`var.cluster_name` defaults to `""`. A `locals` block resolves the effective name:
+`var.cluster_name != "" ? var.cluster_name : "omb-${random_pet.cluster_suffix.id}"`.
+All resource names reference `local.cluster_name`, not `var.cluster_name`. The suffix
+is stable across re-applies because Terraform persists it in state. To use a custom
+name, set `cluster_name` in terraform.tfvars. Do not reintroduce a required
+`cluster_name` variable — name collisions across SEs sharing an AWS account were
+the motivation for this change.
+
+**The control-plane LoadBalancer is restricted to `controlPlane.allowedCIDRs`.** The
+Helm chart sets `spec.loadBalancerSourceRanges` on the control-plane Service from this
+value. Default is `["0.0.0.0/0"]` (open). Each Terraform module outputs
+`terraform_operator_ip` (the public IP detected via icanhazip.com at plan time) so the
+SE can restrict access at deploy time:
+`helm install omb ... --set "controlPlane.allowedCIDRs[0]=$(terraform output -raw terraform_operator_ip)/32"`.
+To add IPs post-deploy without redeploying the cluster: `helm upgrade omb charts/omb -n omb
+--reuse-values --set "controlPlane.allowedCIDRs[0]=<ip1>/32"`. `loadBalancerSourceRanges`
+is honored by AWS (ELB SG rules), GCP (VPC firewall rules), and AKS (NSG rules).
+
 **Long-running background tasks must use `asyncio.create_task()`, not FastAPI `BackgroundTasks`.**
 FastAPI's `BackgroundTasks` awaits each task sequentially. `_finish_run` polls for
 the entire benchmark duration (up to 4 hours), so if it is registered as a
@@ -354,7 +374,7 @@ operations after initial deployment.
 5. aws/gcloud/az eks/gke/aks get-credentials (configure local kubectl; writes to $KUBECONFIG path)
 6. helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update (one-time per machine; required before dependency build)
 7. helm dependency build charts/omb (downloads kube-prometheus-stack and other chart deps into charts/omb/charts/; safe to re-run)
-7. helm install omb charts/omb -f charts/omb/values-<cloud>.yaml -f my-values.yaml
+8. helm install omb charts/omb -n omb -f charts/omb/values-<cloud>.yaml --set "controlPlane.allowedCIDRs[0]=$(terraform output -raw terraform_operator_ip)/32" (restricts UI to your IP; omit the --set to leave it open)
 6. Open the UI at the LoadBalancer address
 7. Configure cluster connectivity and Prometheus in Settings
 8. Run benchmarks

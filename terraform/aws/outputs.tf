@@ -4,7 +4,7 @@ output "cluster_endpoint" {
 }
 
 output "cluster_name" {
-  description = "EKS cluster name"
+  description = "EKS cluster name (auto-generated if not specified in tfvars)"
   value       = aws_eks_cluster.main.name
 }
 
@@ -45,5 +45,15 @@ output "region" {
 
 output "kubeconfig_command" {
   description = "Run this command to configure kubectl after apply"
-  value       = "aws eks update-kubeconfig --region ${var.region} --name ${var.cluster_name}"
+  value       = "aws eks update-kubeconfig --region ${var.region} --name ${local.cluster_name}"
+}
+
+output "terraform_operator_ip" {
+  description = "Public IP detected at plan time — use as controlPlane.allowedCIDRs[0] in helm install"
+  value       = chomp(data.http.my_ip.response_body)
+}
+
+output "find_elb_sg_command" {
+  description = "The ELB security group is created by Kubernetes when the LoadBalancer Service is provisioned — Terraform cannot reference it directly. After helm install, run this to find it:"
+  value       = "aws elb describe-load-balancers --region ${var.region} --query 'LoadBalancerDescriptions[*].{Name:LoadBalancerName,SGName:SourceSecurityGroup.GroupName}' --output table"
 }

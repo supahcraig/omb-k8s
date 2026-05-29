@@ -22,46 +22,6 @@ existing clusters and never provisions them.
 
 Cloud credentials configured for your target cloud.
 
-## Quick Start
-
-```bash
-# 1. Provision the Kubernetes cluster
-cd terraform/aws          # or gcp / azure
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars for the engagement (it is gitignored)
-
-# 2. Isolate kubectl config from ~/.kube/config (set this before get-credentials)
-export KUBECONFIG=$(pwd)/kubeconfig
-
-terraform init && terraform apply
-
-# 3. Configure kubectl (writes to $KUBECONFIG)
-$(terraform output -raw kubeconfig_command)
-
-# 4. Add Helm repos (one-time per machine)
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-
-# 5. Fetch chart dependencies
-helm dependency build charts/omb
-
-# 6. Install the Helm chart
-helm install omb charts/omb -n omb --create-namespace \
-  -f charts/omb/values-aws.yaml \
-  --set clusterAutoscaler.clusterName=$(terraform output -raw cluster_name) \
-  --set clusterAutoscaler.region=$(terraform output -raw region) \
-  --set clusterAutoscaler.roleArn=$(terraform output -raw cluster_autoscaler_iam_role_arn)
-
-# 7. Open the UI
-# AWS (returns hostname):
-kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-# GCP/Azure (returns IP):
-kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
-```
-
-Open the LoadBalancer address in your browser. Configure cluster connectivity
-and Prometheus in Settings, then run benchmarks.
-
 ## Deployment
 
 ### AWS (EKS)
@@ -69,20 +29,24 @@ and Prometheus in Settings, then run benchmarks.
 ```bash
 cd terraform/aws
 cp terraform.tfvars.example terraform.tfvars
-# Edit: cluster_name, region, vpc_cidr, availability_zones, target_vpc_id, target_cidr
+# Edit: region, vpc_cidr, availability_zones, target_vpc_id, target_cidr
+# cluster_name is optional — omit to auto-generate (e.g. omb-relaxed-lemur)
 export KUBECONFIG=$(pwd)/kubeconfig
 terraform init && terraform apply
-
 $(terraform output -raw kubeconfig_command)
+cd ../..
 
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
 helm dependency build charts/omb
-
 helm install omb charts/omb -n omb --create-namespace \
   -f charts/omb/values-aws.yaml \
-  --set clusterAutoscaler.clusterName=$(terraform output -raw cluster_name) \
-  --set clusterAutoscaler.region=$(terraform output -raw region) \
-  --set clusterAutoscaler.roleArn=$(terraform output -raw cluster_autoscaler_iam_role_arn)
+  --set clusterAutoscaler.clusterName=$(terraform -chdir=terraform/aws output -raw cluster_name) \
+  --set clusterAutoscaler.region=$(terraform -chdir=terraform/aws output -raw region) \
+  --set clusterAutoscaler.roleArn=$(terraform -chdir=terraform/aws output -raw cluster_autoscaler_iam_role_arn) \
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/aws output -raw terraform_operator_ip)/32"
+
+# AWS returns a hostname (not an IP); DNS propagation takes ~1 min
+kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 ```
 
 ### GCP (GKE)
@@ -90,17 +54,21 @@ helm install omb charts/omb -n omb --create-namespace \
 ```bash
 cd terraform/gcp
 cp terraform.tfvars.example terraform.tfvars
-# Edit: project_id, region, zone, cluster_name, target_network, target_cidr
+# Edit: project_id, region, zone, target_network, target_cidr
+# cluster_name is optional — omit to auto-generate (e.g. omb-relaxed-lemur)
 export KUBECONFIG=$(pwd)/kubeconfig
 terraform init && terraform apply
-
 $(terraform output -raw kubeconfig_command)
+cd ../..
 
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
 helm dependency build charts/omb
-
 helm install omb charts/omb -n omb --create-namespace \
-  -f charts/omb/values-gcp.yaml
+  -f charts/omb/values-gcp.yaml \
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/gcp output -raw terraform_operator_ip)/32"
+
+# GCP returns an IP address
+kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 ```
 
 ### Azure (AKS)
@@ -108,17 +76,21 @@ helm install omb charts/omb -n omb --create-namespace \
 ```bash
 cd terraform/azure
 cp terraform.tfvars.example terraform.tfvars
-# Edit: resource_group_name, location, cluster_name, target_vnet_id
+# Edit: resource_group_name, location, target_vnet_id
+# cluster_name is optional — omit to auto-generate (e.g. omb-relaxed-lemur)
 export KUBECONFIG=$(pwd)/kubeconfig
 terraform init && terraform apply
-
 $(terraform output -raw kubeconfig_command)
+cd ../..
 
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
 helm dependency build charts/omb
-
 helm install omb charts/omb -n omb --create-namespace \
-  -f charts/omb/values-aks.yaml
+  -f charts/omb/values-aks.yaml \
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/azure output -raw terraform_operator_ip)/32"
+
+# Azure returns an IP address
+kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 ```
 
 ### Upgrading
@@ -133,28 +105,25 @@ helm upgrade omb charts/omb -n omb \
   -f charts/omb/values-aws.yaml \
   --set clusterAutoscaler.clusterName=$(terraform -chdir=terraform/aws output -raw cluster_name) \
   --set clusterAutoscaler.region=$(terraform -chdir=terraform/aws output -raw region) \
-  --set clusterAutoscaler.roleArn=$(terraform -chdir=terraform/aws output -raw cluster_autoscaler_iam_role_arn)
+  --set clusterAutoscaler.roleArn=$(terraform -chdir=terraform/aws output -raw cluster_autoscaler_iam_role_arn) \
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/aws output -raw terraform_operator_ip)/32"
 
 # GCP
-helm upgrade omb charts/omb -n omb -f charts/omb/values-gcp.yaml
+helm upgrade omb charts/omb -n omb \
+  -f charts/omb/values-gcp.yaml \
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/gcp output -raw terraform_operator_ip)/32"
 
 # Azure
-helm upgrade omb charts/omb -n omb -f charts/omb/values-aks.yaml
+helm upgrade omb charts/omb -n omb \
+  -f charts/omb/values-aks.yaml \
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/azure output -raw terraform_operator_ip)/32"
 ```
 
 ### Connecting to a target cluster
 
-**Redpanda Cloud (BYOC):**
-- Single bootstrap server
-- TLS required
-- SASL/SCRAM-SHA-256 required
-
-**Self-hosted:**
-- One or more seed brokers (comma-separated)
-- TLS and SASL optional
-
-Configure connectivity in the UI under Settings → Cluster Connectivity after
-deployment.
+Open **Settings → Cluster Connectivity** after deployment. Enter one or more
+broker addresses, then enable TLS and SASL as required by the target cluster.
+Redpanda Cloud always requires both. Click **Save**.
 
 ## Scaling Workers
 
@@ -168,6 +137,19 @@ helm upgrade omb charts/omb -n omb \
   --set clusterAutoscaler.clusterName=$(terraform -chdir=terraform/aws output -raw cluster_name) \
   --set clusterAutoscaler.region=$(terraform -chdir=terraform/aws output -raw region) \
   --set clusterAutoscaler.roleArn=$(terraform -chdir=terraform/aws output -raw cluster_autoscaler_iam_role_arn) \
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/aws output -raw terraform_operator_ip)/32" \
+  --set worker.replicas=8
+
+# GCP
+helm upgrade omb charts/omb -n omb \
+  -f charts/omb/values-gcp.yaml \
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/gcp output -raw terraform_operator_ip)/32" \
+  --set worker.replicas=8
+
+# Azure
+helm upgrade omb charts/omb -n omb \
+  -f charts/omb/values-aks.yaml \
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/azure output -raw terraform_operator_ip)/32" \
   --set worker.replicas=8
 ```
 

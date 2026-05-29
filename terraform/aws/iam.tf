@@ -13,7 +13,7 @@ data "aws_iam_policy_document" "eks_cluster_assume" {
 }
 
 resource "aws_iam_role" "eks_cluster" {
-  name               = "${var.cluster_name}-eks-cluster-role"
+  name               = "${local.cluster_name}-eks-cluster-role"
   assume_role_policy = data.aws_iam_policy_document.eks_cluster_assume.json
   tags               = var.tags
 }
@@ -36,7 +36,7 @@ data "aws_iam_policy_document" "node_group_assume" {
 }
 
 resource "aws_iam_role" "node_group" {
-  name               = "${var.cluster_name}-node-group-role"
+  name               = "${local.cluster_name}-node-group-role"
   assume_role_policy = data.aws_iam_policy_document.node_group_assume.json
   tags               = var.tags
 }
@@ -116,14 +116,14 @@ data "aws_iam_policy_document" "cluster_autoscaler" {
 }
 
 resource "aws_iam_policy" "cluster_autoscaler" {
-  name        = "${var.cluster_name}-cluster-autoscaler"
+  name        = "${local.cluster_name}-cluster-autoscaler"
   description = "IAM policy for EKS Cluster Autoscaler"
   policy      = data.aws_iam_policy_document.cluster_autoscaler.json
   tags        = var.tags
 }
 
 resource "aws_iam_role" "cluster_autoscaler" {
-  name               = "${var.cluster_name}-cluster-autoscaler"
+  name               = "${local.cluster_name}-cluster-autoscaler"
   assume_role_policy = data.aws_iam_policy_document.cluster_autoscaler_assume.json
   tags               = var.tags
 }
@@ -156,7 +156,7 @@ data "aws_iam_policy_document" "ebs_csi_assume" {
 }
 
 resource "aws_iam_role" "ebs_csi" {
-  name               = "${var.cluster_name}-ebs-csi"
+  name               = "${local.cluster_name}-ebs-csi"
   assume_role_policy = data.aws_iam_policy_document.ebs_csi_assume.json
   tags               = var.tags
 }

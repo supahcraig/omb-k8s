@@ -1,6 +1,7 @@
 variable "cluster_name" {
-  description = "Name of the EKS cluster and all related AWS resources"
+  description = "Name of the EKS cluster and all related AWS resources. Leave empty to auto-generate as omb-<random-pet>."
   type        = string
+  default     = ""
 }
 
 variable "region" {

@@ -5,7 +5,7 @@ resource "azurerm_resource_group" "main" {
 }
 
 resource "azurerm_virtual_network" "main" {
-  name                = "${var.cluster_name}-vnet"
+  name                = "${local.cluster_name}-vnet"
   address_space       = var.vnet_address_space
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
@@ -13,14 +13,14 @@ resource "azurerm_virtual_network" "main" {
 }
 
 resource "azurerm_subnet" "aks" {
-  name                 = "${var.cluster_name}-aks-subnet"
+  name                 = "${local.cluster_name}-aks-subnet"
   resource_group_name  = azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = [var.subnet_address_prefix]
 }
 
 resource "azurerm_network_security_group" "omb_workers" {
-  name                = "${var.cluster_name}-omb-nsg"
+  name                = "${local.cluster_name}-omb-nsg"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   tags                = var.tags
@@ -44,10 +44,10 @@ resource "azurerm_subnet_network_security_group_association" "aks" {
 }
 
 resource "azurerm_kubernetes_cluster" "main" {
-  name                = var.cluster_name
+  name                = local.cluster_name
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
-  dns_prefix          = var.cluster_name
+  dns_prefix          = local.cluster_name
   tags                = var.tags
 
   # ── Control-plane node pool ─────────────────────────────────────────────────
@@ -107,7 +107,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "benchmark_workers" {
 resource "azurerm_virtual_network_peering" "to_target" {
   count = var.target_vnet_id != "" ? 1 : 0
 
-  name                      = "${var.cluster_name}-to-target"
+  name                      = "${local.cluster_name}-to-target"
   resource_group_name       = azurerm_resource_group.main.name
   virtual_network_name      = azurerm_virtual_network.main.name
   remote_virtual_network_id = var.target_vnet_id

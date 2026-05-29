@@ -14,8 +14,9 @@ variable "zone" {
 }
 
 variable "cluster_name" {
-  description = "Name of the GKE cluster and related resources"
+  description = "Name of the GKE cluster and related resources. Leave empty to auto-generate as omb-<random-pet>."
   type        = string
+  default     = ""
 }
 
 variable "vpc_cidr" {

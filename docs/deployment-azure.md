@@ -47,14 +47,12 @@ All commands in this guide assume your working directory is the repo root unless
 
 ## 3. Create your engagement tfvars file
 
-The engagement-specific tfvars file lives outside the Terraform working directory so it is never accidentally committed. The `terraform/engagements/` directory is gitignored.
-
 ```bash
-mkdir -p terraform/engagements
-cp terraform/azure/terraform.tfvars.example terraform/engagements/<customer>.tfvars
+cd terraform/azure
+cp terraform.tfvars.example terraform.tfvars
 ```
 
-Open `terraform/engagements/<customer>.tfvars` in an editor and fill in every value:
+Open `terraform/azure/terraform.tfvars` in an editor and fill in your values:
 
 ```hcl
 # Azure resource group for all engagement resources.
@@ -63,15 +61,15 @@ resource_group_name = "omb-acme-20240101-rg"
 # Azure region. Use: az account list-locations --output table
 location = "eastus"
 
-# Short descriptive cluster name. Used as prefix for all resource names.
-cluster_name = "omb-acme-20240101"
+# cluster_name is optional — leave commented out to auto-generate (e.g. omb-relaxed-lemur).
+# cluster_name = "omb-acme-20240101"
 
 # Address space for the new VNet. Must not overlap with the target cluster VNet.
 vnet_address_space    = ["10.2.0.0/16"]
 subnet_address_prefix = "10.2.0.0/20"
 
 # Resource ID of the Redpanda/Kafka VNet to peer with.
-# For BYOC: obtain from the Redpanda Cloud BYOC UI (Networking tab).
+# For Redpanda Cloud: obtain this from the console (Networking tab).
 # Format: /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<vnet>
 # Leave empty ("") to skip VNet peering.
 target_vnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/redpanda-rg/providers/Microsoft.Network/virtualNetworks/redpanda-vnet"
@@ -83,33 +81,20 @@ tags = {
 }
 ```
 
-**VNet address space:** Choose a CIDR that does not overlap with the Redpanda BYOC or self-hosted VNet. The OMB VNet and the target VNet must have non-overlapping CIDRs for VNet peering to succeed.
+**VNet address space:** Choose a CIDR that does not overlap with the target cluster's VNet. Non-overlapping CIDRs are required for VNet peering to succeed.
 
-**`target_vnet_id`:** Set to the full Azure resource ID of the Redpanda VNet. For BYOC clusters, find this in the Redpanda Cloud console under Networking. Leave as `""` if you are not using VNet peering (e.g., brokers are reachable over the public internet).
+**`target_vnet_id`:** Full Azure resource ID of the target cluster's VNet. For Redpanda Cloud, find this in the console under Networking. Leave as `""` to skip peering.
 
-> **Keep this file out of git.** The `terraform/engagements/` directory is already listed in `.gitignore`. Never commit a filled-in tfvars file — it contains network topology details specific to the customer engagement.
+> **Keep this file out of git.** `terraform.tfvars` is gitignored by default. Never commit a filled-in tfvars file.
 
 ---
 
 ## 4. Run Terraform
 
-Change into the Azure Terraform directory and initialize:
-
 ```bash
-cd terraform/azure
+# Still inside terraform/azure/
 terraform init
-```
-
-Plan to review what will be created:
-
-```bash
-terraform plan -var-file=../../terraform/engagements/<customer>.tfvars
-```
-
-Apply:
-
-```bash
-terraform apply -var-file=../../terraform/engagements/<customer>.tfvars
+terraform apply
 ```
 
 Type `yes` when prompted. Provisioning an AKS cluster typically takes 8–12 minutes.
@@ -141,16 +126,7 @@ Set `KUBECONFIG` to an engagement-specific file **before** running `get-credenti
 export KUBECONFIG=$(pwd)/kubeconfig
 ```
 
-Fetch credentials from AKS, writing them to the file specified by `KUBECONFIG`:
-
-```bash
-az aks get-credentials \
-  --resource-group "$(cd terraform/azure && terraform output -raw -var-file=../../terraform/engagements/<customer>.tfvars resource_group_name 2>/dev/null || echo '<resource-group>')" \
-  --name "$(cd terraform/azure && terraform output -raw cluster_name 2>/dev/null || echo '<cluster-name>')" \
-  --file $(pwd)/kubeconfig
-```
-
-Or use the pre-formatted command from Terraform output (append `--file $(pwd)/kubeconfig`):
+Use the pre-formatted command from Terraform output:
 
 ```bash
 az aks get-credentials \
@@ -193,7 +169,8 @@ Install the chart into the `omb` namespace:
 
 ```bash
 helm install omb charts/omb -n omb --create-namespace \
-  -f charts/omb/values-aks.yaml
+  -f charts/omb/values-aks.yaml \
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/azure output -raw terraform_operator_ip)/32"
 ```
 
 The AKS values file sets:
@@ -236,37 +213,17 @@ http://<EXTERNAL-IP>
 
 Open the UI, navigate to **Settings**, and select the **Cluster** tab.
 
-### BYOC (Redpanda Cloud)
-
-BYOC clusters require TLS and SASL authentication.
-
 | Field | Value |
 |-------|-------|
-| Seed brokers | Single bootstrap server (e.g. `seed-abc123.us-east-1.aws.redpanda.cloud:9092`) |
-| TLS | Enabled |
-| SASL | Enabled |
-| SASL mechanism | `SCRAM-SHA-256` |
-| SASL username | Your Redpanda Cloud service account username |
-| SASL password | Your Redpanda Cloud service account password |
+| Seed brokers | One or more broker addresses. Type each one and press Enter. Redpanda Cloud: single bootstrap server (e.g. `seed-abc123.us-east-1.aws.redpanda.cloud:9092`). Self-managed: one address per broker. |
+| TLS | Enable if the cluster requires it. Redpanda Cloud always requires TLS. |
+| SASL | Enable if the cluster requires authentication. Redpanda Cloud always requires SASL. |
+| SASL mechanism | SCRAM-SHA-256 for Redpanda Cloud. SCRAM-SHA-256, SCRAM-SHA-512, or PLAIN for self-managed. |
+| Username / Password | Your broker credentials. |
 
 Click **Save**.
 
-### Self-hosted
-
-Self-hosted clusters may or may not require TLS or SASL.
-
-| Field | Value |
-|-------|-------|
-| Seed brokers | Comma-separated broker addresses (e.g. `10.2.1.10:9092,10.2.1.11:9092,10.2.1.12:9092`) |
-| TLS | Enable if the cluster uses TLS |
-| SASL | Enable if the cluster requires authentication |
-| SASL mechanism | `SCRAM-SHA-256`, `SCRAM-SHA-512`, or `PLAIN` as appropriate |
-| SASL username | Your cluster username (if SASL enabled) |
-| SASL password | Your cluster password (if SASL enabled) |
-
-Click **Save**.
-
-> **VNet peering:** Worker pods communicate with brokers over the internal VNet peering connection established by Terraform. Broker addresses should be the private IPs or internal DNS names, not public endpoints. If peering was skipped (`target_vnet_id = ""`), brokers must be reachable over the public internet.
+> **VNet peering:** Worker pods communicate with brokers over the internal VNet peering connection established by Terraform. Use private IPs or internal DNS names, not public endpoints. If peering was skipped (`target_vnet_id = ""`), brokers must be reachable over the public internet.
 
 ---
 
@@ -332,7 +289,7 @@ helm uninstall omb -n omb
 
 ```bash
 cd terraform/azure
-terraform destroy -var-file=../../terraform/engagements/<customer>.tfvars
+terraform destroy
 ```
 
 Type `yes` when prompted. This removes the AKS cluster, VNet, resource group, and all associated Azure resources.

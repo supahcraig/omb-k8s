@@ -9,8 +9,9 @@ variable "location" {
 }
 
 variable "cluster_name" {
-  description = "Name of the AKS cluster and related resources"
+  description = "Name of the AKS cluster and related resources. Leave empty to auto-generate as omb-<random-pet>."
   type        = string
+  default     = ""
 }
 
 variable "vnet_address_space" {

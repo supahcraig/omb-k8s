@@ -4,7 +4,7 @@ output "cluster_endpoint" {
 }
 
 output "cluster_name" {
-  description = "AKS cluster name"
+  description = "AKS cluster name (auto-generated if not specified in tfvars)"
   value       = azurerm_kubernetes_cluster.main.name
 }
 
@@ -26,5 +26,10 @@ output "kubeconfig" {
 
 output "kubeconfig_command" {
   description = "Run this command to configure kubectl after apply"
-  value       = "az aks get-credentials --resource-group ${var.resource_group_name} --name ${var.cluster_name}"
+  value       = "az aks get-credentials --resource-group ${var.resource_group_name} --name ${local.cluster_name}"
+}
+
+output "terraform_operator_ip" {
+  description = "Public IP detected at plan time — use as controlPlane.allowedCIDRs[0] in helm install"
+  value       = chomp(data.http.my_ip.response_body)
 }

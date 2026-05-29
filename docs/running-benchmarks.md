@@ -45,10 +45,9 @@ Before running any benchmarks, tell omb-k8s how to reach the target cluster.
 
 Go to **Settings** (sidebar, Infrastructure group) → **Cluster Connectivity** tab.
 
-### BYOC (Redpanda Cloud)
-
-Get the bootstrap server from the Redpanda Cloud console (Cluster Overview →
-Bootstrap URL). Create a service account user with the ACLs your workload needs.
+Type each broker address and press Enter to add it as a chip. Enable TLS and SASL
+as required by your cluster. Redpanda Cloud always requires both; self-managed
+clusters vary.
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -64,34 +63,9 @@ Bootstrap URL). Create a service account user with the ACLs your workload needs.
 └──────────────────────────────────────────────────┘
 ```
 
-- **Seed Brokers:** paste the single bootstrap server, press Enter to add it as a chip
-- **TLS:** enabled (always required for BYOC)
-- **SASL:** enabled, mechanism SCRAM-SHA-256
-- Fill in the service account username and password
-
-### Self-hosted Redpanda or Kafka
-
-Self-hosted clusters typically expose multiple seed brokers. Add each one
-separately (type each address, press Enter):
-
-```
-┌────────────────────────────────────────┐
-│ Cluster Connectivity                   │
-│                                        │
-│ Seed Brokers                           │
-│ [10.0.1.10:9092] [10.0.1.11:9092]     │
-│ [10.0.1.12:9092]                       │
-│                                        │
-│ [ ] Enable TLS                         │
-│ [ ] Enable SASL                        │
-└────────────────────────────────────────┘
-```
-
-Enable TLS and SASL only if your cluster is configured for them. When SASL is
-enabled, choose the mechanism that matches your broker's `sasl.mechanism` setting.
-
-Save settings before moving on. The seed brokers will pre-fill the Driver form
-on the New Run page.
+When SASL is enabled, choose the mechanism that matches your broker config
+(SCRAM-SHA-256, SCRAM-SHA-512, or PLAIN). Click **Save**. The seed brokers
+will pre-fill the Driver form on the New Run page.
 
 ---
 

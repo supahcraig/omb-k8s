@@ -1,17 +1,17 @@
 resource "google_compute_network" "main" {
-  name                    = "${var.cluster_name}-vpc"
+  name                    = "${local.cluster_name}-vpc"
   auto_create_subnetworks = false
 }
 
 resource "google_compute_subnetwork" "main" {
-  name          = "${var.cluster_name}-subnet"
+  name          = "${local.cluster_name}-subnet"
   ip_cidr_range = var.vpc_cidr
   region        = var.region
   network       = google_compute_network.main.id
 }
 
 resource "google_container_cluster" "main" {
-  name     = var.cluster_name
+  name     = local.cluster_name
   location = var.zone
 
   # Remove default node pool immediately; manage nodes via google_container_node_pool
@@ -30,7 +30,7 @@ resource "google_container_cluster" "main" {
 # Runs: control-plane, Prometheus, Grafana, driver Jobs.
 
 resource "google_container_node_pool" "control_plane" {
-  name       = "${var.cluster_name}-control-plane"
+  name       = "${local.cluster_name}-control-plane"
   location   = var.zone
   cluster    = google_container_cluster.main.name
 
@@ -65,7 +65,7 @@ resource "google_container_node_pool" "control_plane" {
 # Tainted dedicated=benchmark:NoSchedule — toleration must use NoSchedule (camelCase).
 
 resource "google_container_node_pool" "benchmark_workers" {
-  name     = "${var.cluster_name}-benchmark-workers"
+  name     = "${local.cluster_name}-benchmark-workers"
   location = var.zone
   cluster  = google_container_cluster.main.name
 
@@ -115,13 +115,13 @@ resource "google_container_node_pool" "benchmark_workers" {
 resource "google_compute_network_peering" "to_target" {
   count = var.target_network != "" ? 1 : 0
 
-  name         = "${var.cluster_name}-to-target"
+  name         = "${local.cluster_name}-to-target"
   network      = google_compute_network.main.self_link
   peer_network = var.target_network
 }
 
 resource "google_compute_firewall" "omb_workers_8080" {
-  name    = "${var.cluster_name}-omb-worker"
+  name    = "${local.cluster_name}-omb-worker"
   network = google_compute_network.main.name
 
   allow {
