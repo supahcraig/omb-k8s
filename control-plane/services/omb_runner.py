@@ -103,28 +103,49 @@ class OmbRunner:
         except Exception:
             message_size = 1024
 
+        results_path = f"/data/results/run-{run_id}"
+
         # 4. Create Job
         job = k8s_client.V1Job(
             metadata=k8s_client.V1ObjectMeta(name=job_name, namespace=namespace),
             spec=k8s_client.V1JobSpec(
-                ttl_seconds_after_finished=300,
+                ttl_seconds_after_finished=600,
                 backoff_limit=0,
                 template=k8s_client.V1PodTemplateSpec(
                     spec=k8s_client.V1PodSpec(
                         restart_policy="Never",
+                        # Must run on the same node as the control-plane pod so
+                        # the ReadWriteOnce data PVC can be mounted by both pods
+                        # simultaneously (EBS allows multiple pods per node).
+                        affinity=k8s_client.V1Affinity(
+                            pod_affinity=k8s_client.V1PodAffinity(
+                                required_during_scheduling_ignored_during_execution=[
+                                    k8s_client.V1PodAffinityTerm(
+                                        label_selector=k8s_client.V1LabelSelector(
+                                            match_labels={"app": "omb-control-plane"}
+                                        ),
+                                        topology_key="kubernetes.io/hostname",
+                                    )
+                                ]
+                            )
+                        ),
                         init_containers=[
                             k8s_client.V1Container(
                                 name="gen-payload",
                                 image="busybox:latest",
                                 command=[
-                                    "dd", "if=/dev/urandom",
-                                    "of=/payload/payload.data",
-                                    f"bs={message_size}", "count=1",
+                                    "sh", "-c",
+                                    f"mkdir -p /data/results && "
+                                    f"dd if=/dev/urandom of=/payload/payload.data "
+                                    f"bs={message_size} count=1",
                                 ],
                                 volume_mounts=[
                                     k8s_client.V1VolumeMount(
                                         name="payload", mount_path="/payload"
-                                    )
+                                    ),
+                                    k8s_client.V1VolumeMount(
+                                        name="data", mount_path="/data"
+                                    ),
                                 ],
                             )
                         ],
@@ -143,7 +164,7 @@ class OmbRunner:
                                     "--workers",
                                     workers_arg,
                                     "--output",
-                                    "/tmp/omb-results",
+                                    results_path,
                                 ],
                                 volume_mounts=[
                                     k8s_client.V1VolumeMount(
@@ -153,6 +174,10 @@ class OmbRunner:
                                     k8s_client.V1VolumeMount(
                                         name="payload",
                                         mount_path="/payload",
+                                    ),
+                                    k8s_client.V1VolumeMount(
+                                        name="data",
+                                        mount_path="/data",
                                     ),
                                 ],
                             )
@@ -167,6 +192,12 @@ class OmbRunner:
                             k8s_client.V1Volume(
                                 name="payload",
                                 empty_dir=k8s_client.V1EmptyDirVolumeSource(),
+                            ),
+                            k8s_client.V1Volume(
+                                name="data",
+                                persistent_volume_claim=k8s_client.V1PersistentVolumeClaimVolumeSource(
+                                    claim_name="omb-control-plane-data"
+                                ),
                             ),
                         ],
                     )

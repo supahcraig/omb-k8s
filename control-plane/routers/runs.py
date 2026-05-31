@@ -19,7 +19,7 @@ from schemas import RunListItem, RunOut, RunStatus
 from services.k8s_resources import read_worker_resources
 from services.omb_runner import runner
 from services.prometheus_collector import collect_prometheus, probe_broker_prometheus
-from services.result_parser import parse_result_from_logs
+from services.result_parser import parse_result_from_file, parse_result_from_logs
 
 logger = logging.getLogger(__name__)
 
@@ -243,7 +243,20 @@ async def _finish_run(run_id: int) -> None:
         lines = runner.get_lines(run_id)
         success = runner.succeeded(run_id)
 
-        metrics_data = parse_result_from_logs(lines)
+        # Prefer the high-fidelity JSON file written by OMB's --output flag.
+        # Fall back to log parsing if the file isn't present (old runs, file
+        # write failure, or first run before the PVC path existed).
+        results_file_path = f"/data/results/run-{run_id}"
+        metrics_data = parse_result_from_file(results_file_path) or parse_result_from_logs(lines)
+
+        # Clean up the result file regardless of parse outcome.
+        import glob as _glob
+        import os as _os
+        for f in _glob.glob(results_file_path) + _glob.glob(f"{results_file_path}*.json"):
+            try:
+                _os.unlink(f)
+            except Exception:
+                pass
 
         # Mark completed if we parsed metrics, regardless of Job exit code.
         # The aggregate summary line only appears on clean OMB completion, so

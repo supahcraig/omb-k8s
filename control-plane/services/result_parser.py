@@ -50,6 +50,33 @@ def _num(s: str) -> float:
     return float(s.replace(',', ''))
 
 
+def parse_result_from_file(base_path: str) -> Optional[dict]:
+    """
+    Read the OMB JSON output file written by --output.
+
+    OMB may write the file at exactly base_path or with a timestamp suffix
+    (e.g. base_path-1717000000.json).  Globs for both patterns and uses the
+    most recently modified match.
+    """
+    import glob
+    import os
+
+    candidates = sorted(
+        glob.glob(f"{base_path}") + glob.glob(f"{base_path}*.json"),
+        key=lambda p: os.path.getmtime(p),
+    )
+    if not candidates:
+        return None
+    try:
+        with open(candidates[-1]) as f:
+            data = json.load(f)
+        if "publishRate" not in data:
+            return None
+        return _extract_metrics_from_json(data)
+    except Exception:
+        return None
+
+
 def parse_result_from_logs(lines: list[str]) -> Optional[dict]:
     """
     Parse OMB result metrics from log lines.
