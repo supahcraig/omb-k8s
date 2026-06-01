@@ -249,14 +249,20 @@ async def _finish_run(run_id: int) -> None:
         results_file_path = f"/data/results/run-{run_id}"
         metrics_data = parse_result_from_file(results_file_path) or parse_result_from_logs(lines)
 
-        # Clean up the result file regardless of parse outcome.
+        # Rename the result file to a descriptive name so it persists on the PVC.
         import glob as _glob
         import os as _os
-        for f in _glob.glob(results_file_path) + _glob.glob(f"{results_file_path}*.json"):
+        candidates = _glob.glob(results_file_path) + _glob.glob(f"{results_file_path}*.json")
+        if candidates:
+            source = max(candidates, key=_os.path.getmtime)
+            if run.sweep_id:
+                dest = f"/data/results/sweep-{run.sweep_id}-run-{run_id}.json"
+            else:
+                dest = f"/data/results/run-{run_id}.json"
             try:
-                _os.unlink(f)
-            except Exception:
-                pass
+                _os.rename(source, dest)
+            except Exception as exc:
+                logger.warning("Could not rename result file %s -> %s: %s", source, dest, exc)
 
         # Mark completed if we parsed metrics, regardless of Job exit code.
         # The aggregate summary line only appears on clean OMB completion, so

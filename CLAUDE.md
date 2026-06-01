@@ -299,7 +299,9 @@ do not duplicate the three-step sequence elsewhere.
    The collector silently no-ops if Prometheus is unreachable.
 8. On completion, `_finish_run` reads `/data/results/run-{id}` from the PVC
    (high-fidelity JSON with full per-second arrays), falls back to log parsing
-   if the file is absent, stores metrics in SQLite, then deletes the result file
+   if the file is absent, stores metrics in SQLite, then renames the result file
+   to `run-{id}.json` (standalone run) or `sweep-{sweep_id}-run-{id}.json`
+   (sweep run). Files persist on the PVC for later analysis.
 
 ## OMB runtime quirks — do not remove these workarounds
 
@@ -307,9 +309,11 @@ do not duplicate the three-step sequence elsewhere.
 in `WorkloadGenerator.run()` before checking for null. Omitting `--output` causes
 an immediate NPE. The output is written to `/data/results/run-{id}` on the
 control-plane PVC. `_finish_run` reads this file for high-fidelity results (full
-per-second arrays) and falls back to log parsing if the file is absent. Do not
-change `--output` back to `/tmp` — that path is ephemeral and inaccessible after
-the container exits.
+per-second arrays), falls back to log parsing if absent, then renames the file to
+`run-{id}.json` or `sweep-{sweep_id}-run-{id}.json`. Files are inspectable via
+`kubectl exec -n omb <control-plane-pod> -- ls /data/results/`. Do not change
+`--output` back to `/tmp` — that path is ephemeral and inaccessible after the
+container exits.
 
 **`topicConfig: ""` is required in driver YAML.** `Config.topicConfig` has no Java
 default value. If absent from the driver YAML, Jackson leaves it null and
