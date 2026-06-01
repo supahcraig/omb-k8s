@@ -311,7 +311,9 @@ an immediate NPE. The output is written to `/data/results/run-{id}` on the
 control-plane PVC. `_finish_run` reads this file for high-fidelity results (full
 per-second arrays), falls back to log parsing if absent, then renames the file to
 `run-{id}.json` or `sweep-{sweep_id}-run-{id}.json`. Files are inspectable via
-`kubectl exec -n omb <control-plane-pod> -- ls /data/results/`. Do not change
+`kubectl exec -n omb <control-plane-pod> -- ls /data/results/` and copyable to
+local with `kubectl cp -n omb <control-plane-pod>:/data/results/run-{id}.json ./run-{id}.json`.
+Do not change
 `--output` back to `/tmp` — that path is ephemeral and inaccessible after the
 container exits.
 
