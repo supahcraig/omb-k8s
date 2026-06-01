@@ -5,9 +5,11 @@ import asyncio
 import glob
 import json
 import logging
-import os
 from datetime import datetime
 from typing import Optional
+
+from database import AsyncSessionLocal
+from models import RunResult
 
 logger = logging.getLogger(__name__)
 
@@ -152,9 +154,6 @@ async def parse_and_store_hdr_results(
     Find, parse, and store HDR results for run_id. Retries if file not found.
     Skips silently if row already exists. Returns True on success.
     """
-    from database import AsyncSessionLocal
-    from models import RunResult
-
     path = None
     for attempt in range(max_retries):
         path = _find_result_file(run_id)
