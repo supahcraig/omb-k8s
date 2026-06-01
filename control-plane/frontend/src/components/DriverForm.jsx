@@ -1,188 +1,103 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSettings } from '../context/SettingsContext.jsx'
+import {
+  DRIVER_OPTIONS,
+  parseDriverYaml,
+  buildDriverYaml,
+  buildCommonConfigFromCluster,
+  deriveProtocol,
+} from '../lib/driverFormUtils.js'
 
-const DRIVER_OPTIONS = [
-  { label: 'Redpanda', value: 'redpanda', driverClass: 'io.openmessaging.benchmark.driver.redpanda.RedpandaBenchmarkDriver' },
-  { label: 'Kafka',    value: 'kafka',    driverClass: 'io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver' },
-]
+export { buildDriverYaml }
 
 const DEFAULTS = {
   driver: 'redpanda',
   replicationFactor: 3,
   reset: true,
-  retentionMs: 3600000,
-  acks: 'all',
-  lingerMs: 1,
-  batchSize: 131072,
-  compression: 'none',
-  autoOffsetReset: 'earliest',
-  autoCommit: false,
 }
 
-const KNOWN_TOP = new Set(['name', 'driverClass', 'replicationFactor', 'commonConfig', 'topicConfig', 'producerConfig', 'consumerConfig'])
+const DEFAULT_TOPIC_CONFIG = [
+  { key: 'retention.ms', value: '3600000' },
+]
 
-function parseDriverYaml(yamlStr) {
-  if (!yamlStr) return { values: {}, customFields: [] }
-  const values = {}
-  const customFields = []
-  const sections = {}
-  let currentSection = null
+const DEFAULT_PRODUCER_CONFIG = [
+  { key: 'acks',       value: 'all'    },
+  { key: 'linger.ms',  value: '1'      },
+  { key: 'batch.size', value: '131072' },
+]
 
-  for (const line of yamlStr.split('\n')) {
-    const topMatch = line.match(/^([\w.]+):\s*(.*)$/)
-    if (topMatch) {
-      const [, key, rest] = topMatch
-      currentSection = null
-      const val = rest.trim()
-      if (key === 'name') {
-        const opt = DRIVER_OPTIONS.find(d => d.label === val)
-        if (opt) values.driver = opt.value
-      } else if (key === 'replicationFactor') {
-        values.replicationFactor = Number(val)
-      } else if (key === 'reset') {
-        values.reset = val !== 'false'
-      } else if (KNOWN_TOP.has(key)) {
-        if (val === '|') { sections[key] = []; currentSection = key }
-        else sections[key] = val
-      } else {
-        customFields.push({ key, value: val })
-      }
-      continue
-    }
-    const indented = line.match(/^  (.+)$/)
-    if (indented && currentSection) sections[currentSection].push(indented[1])
-    else currentSection = null
+const DEFAULT_CONSUMER_CONFIG = [
+  { key: 'auto.offset.reset',  value: 'earliest' },
+  { key: 'enable.auto.commit', value: 'false'    },
+]
+
+function PropertySection({ title, rows, onChange }) {
+  function addRow() {
+    onChange([...rows, { key: '', value: '' }])
   }
-
-  for (const item of sections.producerConfig || []) {
-    const m = item.match(/^([\w.]+)=(.+)$/)
-    if (!m) continue
-    if (m[1] === 'acks')             values.acks        = m[2]
-    if (m[1] === 'linger.ms')        values.lingerMs    = Number(m[2])
-    if (m[1] === 'batch.size')       values.batchSize   = Number(m[2])
-    if (m[1] === 'compression.type') values.compression = m[2]
+  function updateRow(i, field, val) {
+    onChange(rows.map((r, idx) => idx === i ? { ...r, [field]: val } : r))
   }
-  for (const item of sections.consumerConfig || []) {
-    const m = item.match(/^([\w.]+)=(.+)$/)
-    if (!m) continue
-    if (m[1] === 'auto.offset.reset')  values.autoOffsetReset = m[2]
-    if (m[1] === 'enable.auto.commit') values.autoCommit = m[2] === 'true'
+  function removeRow(i) {
+    onChange(rows.filter((_, idx) => idx !== i))
   }
-  for (const item of sections.topicConfig || []) {
-    const m = item.match(/^retention\.ms=(.+)$/)
-    if (m) values.retentionMs = m[1]
-  }
-
-  return { values, customFields }
-}
-
-function fmtRetentionMs(val) {
-  const ms = Number(val)
-  if (val === '' || val == null) return ''
-  if (ms === -1) return 'unlimited'
-  if (ms <= 0) return ''
-  if (ms < 60_000)     return `${+(ms / 1_000).toFixed(1)} sec`
-  if (ms < 3_600_000)  return `${+(ms / 60_000).toFixed(1)} min`
-  if (ms < 86_400_000) return `${+(ms / 3_600_000).toFixed(1)} hr`
-  return `${+(ms / 86_400_000).toFixed(2)} days`
-}
-
-function deriveProtocol(cluster) {
-  if (!cluster) return ''
-  if (cluster.tls_enabled && cluster.sasl_enabled) return 'SASL_SSL'
-  if (cluster.tls_enabled) return 'SSL'
-  if (cluster.sasl_enabled) return 'SASL_PLAINTEXT'
-  return 'PLAINTEXT'
-}
-
-export function buildDriverYaml(values, customFields, cluster) {
-  const driverOpt = DRIVER_OPTIONS.find(d => d.value === values.driver) || DRIVER_OPTIONS[0]
-
-  const commonLines = []
-  if (cluster?.bootstrap_servers) {
-    commonLines.push(`bootstrap.servers=${cluster.bootstrap_servers}`)
-    const protocol = deriveProtocol(cluster)
-    if (protocol) commonLines.push(`security.protocol=${protocol}`)
-    if (cluster.sasl_enabled && cluster.sasl_mechanism) {
-      commonLines.push(`sasl.mechanism=${cluster.sasl_mechanism}`)
-      const loginModule = cluster.sasl_mechanism === 'PLAIN'
-        ? 'org.apache.kafka.common.security.plain.PlainLoginModule'
-        : 'org.apache.kafka.common.security.scram.ScramLoginModule'
-      if (cluster.sasl_username) {
-        commonLines.push(`sasl.jaas.config=${loginModule} required username="${cluster.sasl_username}" password="${cluster.sasl_password || ''}";`)
-      }
-    }
-  }
-
-  const out = [
-    `name: ${driverOpt.label}`,
-    `driverClass: ${driverOpt.driverClass}`,
-    ``,
-    `replicationFactor: ${values.replicationFactor}`,
-    `reset: ${values.reset}`,
-  ]
-
-  if (commonLines.length) {
-    out.push(``, `commonConfig: |`)
-    commonLines.forEach(l => out.push(`  ${l}`))
-  }
-
-  if (values.retentionMs !== '' && values.retentionMs != null) {
-    out.push(``, `topicConfig: |`)
-    out.push(`  retention.ms=${values.retentionMs}`)
-  } else {
-    out.push(``, `topicConfig: ""`)
-  }
-  out.push(``, `producerConfig: |`)
-  out.push(`  acks=${values.acks}`)
-  out.push(`  linger.ms=${values.lingerMs}`)
-  out.push(`  batch.size=${values.batchSize}`)
-  if (values.compression && values.compression !== 'none') {
-    out.push(`  compression.type=${values.compression}`)
-  }
-
-  out.push(``, `consumerConfig: |`)
-  out.push(`  auto.offset.reset=${values.autoOffsetReset}`)
-  out.push(`  enable.auto.commit=${values.autoCommit}`)
-
-  for (const { key, value } of customFields) {
-    if (key.trim()) out.push(`${key}: ${value}`)
-  }
-
-  return out.join('\n')
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div className="section-label">{title}</div>
+      {rows.map((row, i) => (
+        <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 6 }}>
+          <input
+            className="form-input"
+            placeholder="key"
+            value={row.key}
+            onChange={e => updateRow(i, 'key', e.target.value)}
+          />
+          <input
+            className="form-input"
+            placeholder="value"
+            value={row.value}
+            onChange={e => updateRow(i, 'value', e.target.value)}
+          />
+          <button type="button" className="btn btn-danger btn-sm" onClick={() => removeRow(i)}>×</button>
+        </div>
+      ))}
+      <button type="button" className="btn btn-secondary btn-sm" onClick={addRow}>
+        + Add property
+      </button>
+    </div>
+  )
 }
 
 export default function DriverForm({ onChange, initialYaml }) {
   const { settings, hasClusterConfig } = useSettings()
   const cluster = settings?.cluster
 
-  const { values: parsedValues, customFields: parsedFields } = parseDriverYaml(initialYaml)
-  const [values, setValues] = useState({ ...DEFAULTS, ...parsedValues })
-  const [customFields, setCustomFields] = useState(parsedFields)
+  const {
+    values: parsedValues,
+    topicConfig:    pt,
+    producerConfig: pp,
+    consumerConfig: pc,
+    commonConfig:   pcc,
+  } = parseDriverYaml(initialYaml)
+
+  const [values,         setValues]         = useState({ ...DEFAULTS, ...parsedValues })
+  const [topicConfig,    setTopicConfig]    = useState(pt.length  > 0 ? pt  : DEFAULT_TOPIC_CONFIG)
+  const [producerConfig, setProducerConfig] = useState(pp.length  > 0 ? pp  : DEFAULT_PRODUCER_CONFIG)
+  const [consumerConfig, setConsumerConfig] = useState(pc.length  > 0 ? pc  : DEFAULT_CONSUMER_CONFIG)
+  const [commonConfig,   setCommonConfig]   = useState(pcc.length > 0 ? pcc : buildCommonConfigFromCluster(cluster))
 
   useEffect(() => {
-    onChange?.(buildDriverYaml(values, customFields, cluster))
-  }, [values, customFields, cluster])
+    onChange?.(buildDriverYaml(values, { topicConfig, producerConfig, consumerConfig, commonConfig }))
+  }, [values, topicConfig, producerConfig, consumerConfig, commonConfig])
 
   function setField(key, val) {
     setValues(prev => ({ ...prev, [key]: val }))
   }
 
-  function addCustomField() {
-    setCustomFields(prev => [...prev, { key: '', value: '' }])
-  }
-
-  function updateCustomField(i, field, val) {
-    setCustomFields(prev => prev.map((f, idx) => idx === i ? { ...f, [field]: val } : f))
-  }
-
-  function removeCustomField(i) {
-    setCustomFields(prev => prev.filter((_, idx) => idx !== i))
-  }
-
   return (
     <div>
+      {/* Connection info — read-only, from Settings */}
       <div className="connection-box">
         <div className="section-label">Connection — from Settings</div>
         {hasClusterConfig ? (
@@ -207,93 +122,44 @@ export default function DriverForm({ onChange, initialYaml }) {
         )}
       </div>
 
+      {/* Scalar fields */}
       <div className="section-label">Per-Run Settings</div>
 
       <div className="form-row">
         <div className="form-group">
           <label className="form-label">Driver</label>
-          <select className="form-select" value={values.driver}
-            onChange={e => setField('driver', e.target.value)}>
-            {DRIVER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          <select
+            className="form-select"
+            value={values.driver}
+            onChange={e => setField('driver', e.target.value)}
+          >
+            {DRIVER_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
           </select>
         </div>
         <div className="form-group">
           <label className="form-label">Replication Factor</label>
-          <input type="number" className="form-input" value={values.replicationFactor}
-            onChange={e => setField('replicationFactor', Number(e.target.value))} />
-        </div>
-      </div>
-
-      <div className="form-group">
-        <label className="form-label">retention.ms</label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <input type="number" className="form-input" value={values.retentionMs}
-            placeholder="broker default"
-            onChange={e => setField('retentionMs', e.target.value)} />
-          {fmtRetentionMs(values.retentionMs) && (
-            <span style={{ fontSize: 13, color: 'var(--color-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>
-              ≈ {fmtRetentionMs(values.retentionMs)}
-            </span>
-          )}
-        </div>
-        <span className="form-hint">-1 for unlimited. Empty = broker default.</span>
-      </div>
-
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">acks</label>
-          <select className="form-select" value={values.acks}
-            onChange={e => setField('acks', e.target.value)}>
-            <option value="all">all</option>
-            <option value="1">1</option>
-            <option value="0">0</option>
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">linger.ms</label>
-          <input type="number" className="form-input" value={values.lingerMs}
-            onChange={e => setField('lingerMs', Number(e.target.value))} />
-        </div>
-      </div>
-
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">batch.size</label>
-          <input type="number" className="form-input" value={values.batchSize}
-            onChange={e => setField('batchSize', Number(e.target.value))} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">compression.type</label>
-          <select className="form-select" value={values.compression}
-            onChange={e => setField('compression', e.target.value)}>
-            <option value="none">none</option>
-            <option value="snappy">snappy</option>
-            <option value="lz4">lz4</option>
-            <option value="zstd">zstd</option>
-            <option value="gzip">gzip</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">auto.offset.reset</label>
-          <select className="form-select" value={values.autoOffsetReset}
-            onChange={e => setField('autoOffsetReset', e.target.value)}>
-            <option value="earliest">earliest</option>
-            <option value="latest">latest</option>
-          </select>
+          <input
+            type="number"
+            className="form-input"
+            value={values.replicationFactor}
+            onChange={e => setField('replicationFactor', Number(e.target.value))}
+          />
         </div>
       </div>
 
       <div className="form-group">
         <div className="toggle-row">
           <label className="toggle">
-            <input type="checkbox" checked={values.reset}
-              onChange={e => setField('reset', e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={values.reset}
+              onChange={e => setField('reset', e.target.checked)}
+            />
             <span className="toggle-slider" />
           </label>
-          <span className="toggle-label">Topic Reset</span>
+          <span className="toggle-label">Reset Topic on Startup</span>
           <span
             className="chart-info-icon"
             title="When enabled, OMB deletes and recreates the benchmark topic before each run. This ensures a clean slate with no residual messages or offsets. Disable to reuse an existing topic — useful for consumer backlog tests or when you want to avoid topic recreation overhead between sweep runs."
@@ -301,33 +167,11 @@ export default function DriverForm({ onChange, initialYaml }) {
         </div>
       </div>
 
-      <div className="form-group">
-        <div className="toggle-row">
-          <label className="toggle">
-            <input type="checkbox" checked={values.autoCommit}
-              onChange={e => setField('autoCommit', e.target.checked)} />
-            <span className="toggle-slider" />
-          </label>
-          <span className="toggle-label">enable.auto.commit</span>
-        </div>
-      </div>
-
-      {customFields.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          {customFields.map((f, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 6 }}>
-              <input className="form-input" placeholder="key" value={f.key}
-                onChange={e => updateCustomField(i, 'key', e.target.value)} />
-              <input className="form-input" placeholder="value" value={f.value}
-                onChange={e => updateCustomField(i, 'value', e.target.value)} />
-              <button type="button" className="btn btn-danger btn-sm" onClick={() => removeCustomField(i)}>×</button>
-            </div>
-          ))}
-        </div>
-      )}
-      <button type="button" className="btn btn-secondary btn-sm" onClick={addCustomField}>
-        + Add field
-      </button>
+      {/* Sectioned config */}
+      <PropertySection title="Topic Config"    rows={topicConfig}    onChange={setTopicConfig} />
+      <PropertySection title="Producer Config" rows={producerConfig} onChange={setProducerConfig} />
+      <PropertySection title="Consumer Config" rows={consumerConfig} onChange={setConsumerConfig} />
+      <PropertySection title="Common Config"   rows={commonConfig}   onChange={setCommonConfig} />
     </div>
   )
 }
