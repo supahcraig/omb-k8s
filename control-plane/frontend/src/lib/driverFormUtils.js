@@ -30,8 +30,15 @@ export function parseDriverYaml(yamlStr) {
         result.values.replicationFactor = Number(val)
       } else if (key === 'reset') {
         result.values.reset = val !== 'false'
-      } else if (SECTION_KEYS.has(key) && val === '|') {
-        currentSection = key
+      } else if (SECTION_KEYS.has(key)) {
+        if (val === '|') {
+          currentSection = key
+        } else if (val && val !== '""' && val !== "''") {
+          const stripped = val.replace(/^['"]|['"]$/g, '')
+          stripped.split(/\\n|\n/).map(s => s.trim()).filter(Boolean).forEach(line => {
+            result[key].push(parsePropLine(line))
+          })
+        }
       }
       continue
     }

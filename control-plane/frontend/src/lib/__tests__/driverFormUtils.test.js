@@ -86,6 +86,13 @@ describe('parseDriverYaml', () => {
     expect(r.values).toEqual({})
     expect(r.topicConfig).toEqual([])
   })
+
+  it('parses single-quoted scalar section from yaml.dump output', () => {
+    const yaml = `name: Redpanda\ndriverClass: x\nreplicationFactor: 1\nreset: true\nproducerConfig: 'acks=0'\nconsumerConfig: 'auto.offset.reset=earliest\\nlinger.ms=1'`
+    const result = parseDriverYaml(yaml)
+    expect(result.producerConfig).toEqual([{ key: 'acks', value: '0' }])
+    expect(result.consumerConfig).toContainEqual({ key: 'auto.offset.reset', value: 'earliest' })
+  })
 })
 
 describe('buildDriverYaml', () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSettings } from '../context/SettingsContext.jsx'
 import {
@@ -17,24 +17,27 @@ const DEFAULTS = {
   reset: true,
 }
 
+let _nextId = 0
+function makeRow(key = '', value = '') { return { _id: ++_nextId, key, value } }
+
 const DEFAULT_TOPIC_CONFIG = [
-  { key: 'retention.ms', value: '3600000' },
+  makeRow('retention.ms', '3600000'),
 ]
 
 const DEFAULT_PRODUCER_CONFIG = [
-  { key: 'acks',       value: 'all'    },
-  { key: 'linger.ms',  value: '1'      },
-  { key: 'batch.size', value: '131072' },
+  makeRow('acks',       'all'    ),
+  makeRow('linger.ms',  '1'      ),
+  makeRow('batch.size', '131072' ),
 ]
 
 const DEFAULT_CONSUMER_CONFIG = [
-  { key: 'auto.offset.reset',  value: 'earliest' },
-  { key: 'enable.auto.commit', value: 'false'    },
+  makeRow('auto.offset.reset',  'earliest'),
+  makeRow('enable.auto.commit', 'false'   ),
 ]
 
 function PropertySection({ title, rows, onChange }) {
   function addRow() {
-    onChange([...rows, { key: '', value: '' }])
+    onChange([...rows, makeRow()])
   }
   function updateRow(i, field, val) {
     onChange(rows.map((r, idx) => idx === i ? { ...r, [field]: val } : r))
@@ -46,7 +49,7 @@ function PropertySection({ title, rows, onChange }) {
     <div style={{ marginBottom: 16 }}>
       <div className="section-label">{title}</div>
       {rows.map((row, i) => (
-        <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 6 }}>
+        <div key={row._id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 6 }}>
           <input
             className="form-input"
             placeholder="key"
@@ -81,15 +84,25 @@ export default function DriverForm({ onChange, initialYaml }) {
     commonConfig:   pcc,
   } = parseDriverYaml(initialYaml)
 
+  const hasInitialYaml = !!initialYaml
+  const wrap = rows => rows.map(r => makeRow(r.key, r.value))
+
   const [values,         setValues]         = useState({ ...DEFAULTS, ...parsedValues })
-  const [topicConfig,    setTopicConfig]    = useState(pt.length  > 0 ? pt  : DEFAULT_TOPIC_CONFIG)
-  const [producerConfig, setProducerConfig] = useState(pp.length  > 0 ? pp  : DEFAULT_PRODUCER_CONFIG)
-  const [consumerConfig, setConsumerConfig] = useState(pc.length  > 0 ? pc  : DEFAULT_CONSUMER_CONFIG)
-  const [commonConfig,   setCommonConfig]   = useState(pcc.length > 0 ? pcc : buildCommonConfigFromCluster(cluster))
+  const [topicConfig,    setTopicConfig]    = useState(pt.length  > 0 ? wrap(pt)  : hasInitialYaml ? []   : DEFAULT_TOPIC_CONFIG)
+  const [producerConfig, setProducerConfig] = useState(pp.length  > 0 ? wrap(pp)  : hasInitialYaml ? []   : DEFAULT_PRODUCER_CONFIG)
+  const [consumerConfig, setConsumerConfig] = useState(pc.length  > 0 ? wrap(pc)  : hasInitialYaml ? []   : DEFAULT_CONSUMER_CONFIG)
+  const [commonConfig,   setCommonConfig]   = useState(pcc.length > 0 ? wrap(pcc) : hasInitialYaml ? []   : buildCommonConfigFromCluster(cluster))
 
   useEffect(() => {
     onChange?.(buildDriverYaml(values, { topicConfig, producerConfig, consumerConfig, commonConfig }))
   }, [values, topicConfig, producerConfig, consumerConfig, commonConfig])
+
+  const commonSeededRef = useRef(false)
+  useEffect(() => {
+    if (!cluster || commonSeededRef.current) return
+    commonSeededRef.current = true
+    setCommonConfig(prev => prev.length === 0 ? buildCommonConfigFromCluster(cluster).map(r => makeRow(r.key, r.value)) : prev)
+  }, [cluster])
 
   function setField(key, val) {
     setValues(prev => ({ ...prev, [key]: val }))
