@@ -29,8 +29,6 @@ const PLOTLY_BASE_LAYOUT = {
   showlegend: false,
 }
 
-const PCT_TICKS = [50, 90, 99, 99.9, 99.99, 99.999]
-const PCT_TICK_LABELS = ['50', '90', '99', '99.9', '99.99', '99.999']
 
 function fmtMs(v, decimals = 3) {
   if (v == null) return '—'
@@ -100,24 +98,26 @@ function NinesTable({ aggregates }) {
 
 function PercentileCurveRecharts({ data, title, color }) {
   if (!data || data.length === 0) return <div style={{ color: C.axis, fontSize: 12, padding: 8 }}>No data</div>
+  const ninesX = p => 100 / (100 - Math.min(p, 99.9999))
+  const transformed = data.map(pt => ({ ...pt, ninesX: ninesX(pt.percentile) }))
   return (
     <div>
       <div style={{ fontSize: 12, color: C.text, marginBottom: 6, fontWeight: 500 }}>{title}</div>
       <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={data} margin={{ top: 4, right: 16, bottom: 20, left: 10 }}>
+        <LineChart data={transformed} margin={{ top: 4, right: 16, bottom: 20, left: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
           <XAxis
-            dataKey="percentile"
+            dataKey="ninesX"
             scale="log"
             type="number"
-            domain={[50, 99.999]}
-            ticks={PCT_TICKS}
+            domain={[2, 100001]}
+            ticks={[2, 10, 100, 1000, 10000, 100000]}
             tickFormatter={v => {
-              if (v >= 99.999) return '99.999'
-              if (v >= 99.99)  return '99.99'
-              if (v >= 99.9)   return '99.9'
-              if (v >= 99)     return '99'
-              if (v >= 90)     return '90'
+              if (v >= 100000) return '99.999'
+              if (v >= 10000)  return '99.99'
+              if (v >= 1000)   return '99.9'
+              if (v >= 100)    return '99'
+              if (v >= 10)     return '90'
               return '50'
             }}
             stroke={C.axis}
@@ -132,8 +132,16 @@ function PercentileCurveRecharts({ data, title, color }) {
           />
           <Tooltip
             contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: C.text, fontSize: 11 }}
-            formatter={(v) => [`${v.toFixed(3)} ms`, 'latency']}
-            labelFormatter={v => `P${v}`}
+            formatter={v => [`${v.toFixed(3)} ms`, 'latency']}
+            labelFormatter={v => {
+              const p = 100 - 100 / v
+              if (p >= 99.999) return 'P99.999'
+              if (p >= 99.99)  return 'P99.99'
+              if (p >= 99.9)   return 'P99.9'
+              if (p >= 99)     return 'P99'
+              if (p >= 90)     return 'P90'
+              return 'P50'
+            }}
           />
           <Line type="monotone" dataKey="latencyMs" stroke={color} dot={false} strokeWidth={2} />
         </LineChart>
@@ -146,13 +154,15 @@ function PercentileCurveRecharts({ data, title, color }) {
 
 function PercentileCurvePlotly({ data, title, color }) {
   if (!data || data.length === 0) return <div style={{ color: C.axis, fontSize: 12, padding: 8 }}>No data</div>
+  const ninesX = p => 100 / (100 - Math.min(p, 99.9999))
   const plotData = [{
-    x: data.map(p => p.percentile),
-    y: data.map(p => p.latencyMs),
+    x: data.map(pt => ninesX(pt.percentile)),
+    y: data.map(pt => pt.latencyMs),
+    customdata: data.map(pt => pt.percentile),
     type: 'scatter',
     mode: 'lines',
     line: { color, width: 2 },
-    hovertemplate: 'P%{x:.3f}<br>%{y:.3f} ms<extra></extra>',
+    hovertemplate: 'P%{customdata:.3f}<br>%{y:.3f} ms<extra></extra>',
   }]
   const layout = {
     ...PLOTLY_BASE_LAYOUT,
@@ -163,8 +173,8 @@ function PercentileCurvePlotly({ data, title, color }) {
       ...PLOTLY_BASE_LAYOUT.xaxis,
       type: 'log',
       tickmode: 'array',
-      tickvals: PCT_TICKS,
-      ticktext: PCT_TICK_LABELS,
+      tickvals: [2, 10, 100, 1000, 10000, 100000],
+      ticktext: ['50', '90', '99', '99.9', '99.99', '99.999'],
       title: { text: 'Percentile', font: { size: 10, color: C.axis }, standoff: 8 },
     },
     yaxis: {
