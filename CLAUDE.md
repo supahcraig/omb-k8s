@@ -278,11 +278,16 @@ do not duplicate the three-step sequence elsewhere.
 3. SE clicks Run
 4. Control plane writes driver + workload YAML into a k8s ConfigMap
 5. Control plane creates a k8s Job with:
-   - An init container (busybox) that generates `/payload/payload.data` with
-     exactly `messageSize` random bytes via `dd if=/dev/urandom`
-   - The driver container mounting both the ConfigMap and the payload emptyDir:
+   - An init container (busybox) that creates `/data/results/` on the PVC and
+     generates `/payload/payload.data` with exactly `messageSize` random bytes
+     via `dd if=/dev/urandom`
+   - The driver container mounting the ConfigMap, the payload emptyDir, and the
+     control-plane data PVC (`omb-control-plane-data`) at `/data`:
      bin/benchmark --drivers /etc/omb/driver.yaml /etc/omb/workload.yaml \
-       --workers http://omb-worker-0.omb-worker:9080,... --output /tmp/omb-results
+       --workers http://omb-worker-0.omb-worker:9080,... --output /data/results/run-{id}
+   - A `podAffinity` rule that forces the Job pod onto the same node as the
+     control-plane pod (required for the ReadWriteOnce EBS PVC to be mountable
+     by both pods simultaneously)
 6. UI streams Job logs via websocket
 7. Concurrently, `services/prometheus_collector.py` polls the in-cluster
    kube-prometheus-stack Prometheus every 15 s for cAdvisor worker metrics and
@@ -292,14 +297,19 @@ do not duplicate the three-step sequence elsewhere.
    pod name. The Prometheus service is at:
    `http://omb-kube-prometheus-stack-prometheus.{namespace}.svc.cluster.local:9090`
    The collector silently no-ops if Prometheus is unreachable.
-8. On completion, results parsed and stored in SQLite, run record finalized
+8. On completion, `_finish_run` reads `/data/results/run-{id}` from the PVC
+   (high-fidelity JSON with full per-second arrays), falls back to log parsing
+   if the file is absent, stores metrics in SQLite, then deletes the result file
 
 ## OMB runtime quirks — do not remove these workarounds
 
 **`--output` is required.** This OMB build calls `new File(output)` unconditionally
 in `WorkloadGenerator.run()` before checking for null. Omitting `--output` causes
-an immediate NPE. The value `/tmp/omb-results` is a throwaway path — results are
-parsed from logs, not from this file.
+an immediate NPE. The output is written to `/data/results/run-{id}` on the
+control-plane PVC. `_finish_run` reads this file for high-fidelity results (full
+per-second arrays) and falls back to log parsing if the file is absent. Do not
+change `--output` back to `/tmp` — that path is ephemeral and inaccessible after
+the container exits.
 
 **`topicConfig: ""` is required in driver YAML.** `Config.topicConfig` has no Java
 default value. If absent from the driver YAML, Jackson leaves it null and
