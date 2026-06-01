@@ -125,6 +125,7 @@ export default function RunDetailPage() {
   const [workerResources, setWorkerResources] = useState(null)
   const [hdrResults, setHdrResults] = useState(null)
   const [hdrLoading, setHdrLoading] = useState(false)
+  const [logOpen, setLogOpen] = useState(true)
   const wsRef = useRef(null)
   const logEndRef = useRef(null)
   const liveMatchedRef = useRef(false)
@@ -307,6 +308,10 @@ export default function RunDetailPage() {
     fetchWithRetry()
     return () => { cancelled = true }
   }, [id, run?.status])
+
+  useEffect(() => {
+    if (run?.status === 'completed') setLogOpen(false)
+  }, [run?.status])
 
   // Fetch sweep sibling runs and keep pills fresh while sweep is in progress.
   // Also fetch the sweep object itself to get cooldown_seconds for the timer.
@@ -527,37 +532,27 @@ export default function RunDetailPage() {
               Loading results…
             </div>
           )}
-          {hdrResults && <FinalizedCharts results={hdrResults} />}
+          {hdrResults && <FinalizedCharts results={hdrResults} warmupSamples={warmupSamples} />}
 
-          {/* Collapsed live charts */}
-          <details style={{ marginTop: 20 }}>
-            <summary style={{
-              cursor: 'pointer', fontWeight: 600, fontSize: 14,
-              color: 'var(--color-text-muted)', padding: '8px 0', userSelect: 'none',
-            }}>
-              Raw time series data ▶
-            </summary>
-            <div style={{ marginTop: 12 }}>
-              <RunCharts
-                livePoints={livePoints}
-                metricsOut={run?.metrics ?? null}
-                promSamples={promSamples}
-                isLive={false}
-                messageSize={messageSize}
-                warmupSamples={warmupSamples}
-                totalSamples={totalSamples}
-                warmupStartedAt={warmupStartedAt}
-                benchmarkStartedAt={benchmarkStartedAt}
-                workerMemLimitMiB={workerResources?.memory_limit_mib ?? null}
-                workerCpuCores={workerResources?.cpu_request_cores ?? null}
-                runStartedAt={run?.started_at ?? null}
-                expectedMsgSec={expectedMsgSec}
-                expectedMBSec={expectedMBSec}
-                expectedConsMsgSec={expectedConsMsgSec}
-                expectedConsMBSec={expectedConsMBSec}
-              />
-            </div>
-          </details>
+          {/* Run charts — throughput, backlog, worker metrics */}
+          <RunCharts
+            livePoints={livePoints}
+            metricsOut={run?.metrics ?? null}
+            promSamples={promSamples}
+            isLive={false}
+            messageSize={messageSize}
+            warmupSamples={warmupSamples}
+            totalSamples={totalSamples}
+            warmupStartedAt={warmupStartedAt}
+            benchmarkStartedAt={benchmarkStartedAt}
+            workerMemLimitMiB={workerResources?.memory_limit_mib ?? null}
+            workerCpuCores={workerResources?.cpu_request_cores ?? null}
+            runStartedAt={run?.started_at ?? null}
+            expectedMsgSec={expectedMsgSec}
+            expectedMBSec={expectedMBSec}
+            expectedConsMsgSec={expectedConsMsgSec}
+            expectedConsMBSec={expectedConsMBSec}
+          />
         </>
       )}
 
@@ -584,22 +579,27 @@ export default function RunDetailPage() {
       )}
 
       {/* Log output */}
-      <div className="card mt-20">
-        <div className="card-header">
-          <h3>Run Log</h3>
+      <details
+        className="card mt-20"
+        style={{ padding: 0 }}
+        open={logOpen}
+        onToggle={e => setLogOpen(e.target.open)}
+      >
+        <summary style={{ padding: '12px 20px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+          Run Log
           {!logDone && run.status === 'running' && (
             <span className="text-small text-muted flex items-center gap-8">
               <span className="spinner spinner-dark" /> Live streaming…
             </span>
           )}
-        </div>
+        </summary>
         <div className="card-body" style={{ padding: 0 }}>
           <div className="log-viewer">
             {logs.length === 0 && !logDone ? 'Waiting for log output…' : logs.join('\n')}
             <div ref={logEndRef} />
           </div>
         </div>
-      </div>
+      </details>
 
       {/* Config details */}
       <details className="card mt-20" style={{ padding: 0 }}>
