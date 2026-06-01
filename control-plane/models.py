@@ -143,3 +143,28 @@ class Setting(Base):
 
     key = Column(String, primary_key=True)
     value = Column(Text, nullable=False)
+
+
+class RunResult(Base):
+    __tablename__ = "run_results"
+
+    run_id = Column(Integer, primary_key=True)
+    publish_p50    = Column(Float, nullable=True)
+    publish_p75    = Column(Float, nullable=True)
+    publish_p95    = Column(Float, nullable=True)
+    publish_p99    = Column(Float, nullable=True)
+    publish_p999   = Column(Float, nullable=True)
+    publish_p9999  = Column(Float, nullable=True)
+    publish_max    = Column(Float, nullable=True)
+    publish_avg    = Column(Float, nullable=True)
+    e2e_p50        = Column(Float, nullable=True)
+    e2e_p75        = Column(Float, nullable=True)
+    e2e_p95        = Column(Float, nullable=True)
+    e2e_p99        = Column(Float, nullable=True)
+    e2e_p999       = Column(Float, nullable=True)
+    e2e_p9999      = Column(Float, nullable=True)
+    e2e_max        = Column(Float, nullable=True)
+    e2e_avg        = Column(Float, nullable=True)
+    publish_quantiles_json = Column(Text, nullable=True)
+    e2e_quantiles_json     = Column(Text, nullable=True)
+    parsed_at = Column(DateTime, default=datetime.utcnow)
