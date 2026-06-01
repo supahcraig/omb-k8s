@@ -3,10 +3,6 @@ import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import Plotly from 'plotly.js-dist-min'
-import createPlotlyComponent from 'react-plotly.js/factory'
-
-const Plot = createPlotlyComponent(Plotly)
 
 // Dark theme palette matching the existing RunCharts color scheme
 const C = {
@@ -17,16 +13,6 @@ const C = {
   bg:       '#171c28',
   paper:    '#1e2538',
   text:     '#e8edf8',
-}
-
-const PLOTLY_BASE_LAYOUT = {
-  paper_bgcolor: C.bg,
-  plot_bgcolor:  C.bg,
-  font:   { color: C.text, size: 11 },
-  margin: { t: 36, r: 16, b: 50, l: 60 },
-  xaxis: { gridcolor: C.grid, linecolor: C.grid, tickcolor: C.axis, color: C.axis },
-  yaxis: { gridcolor: C.grid, linecolor: C.grid, tickcolor: C.axis, color: C.axis },
-  showlegend: false,
 }
 
 
@@ -150,49 +136,6 @@ function PercentileCurveRecharts({ data, title, color }) {
   )
 }
 
-// ── Percentile Curve — Plotly ────────────────────────────────────────────────
-
-function PercentileCurvePlotly({ data, title, color }) {
-  if (!data || data.length === 0) return <div style={{ color: C.axis, fontSize: 12, padding: 8 }}>No data</div>
-  const ninesX = p => 100 / (100 - Math.min(p, 99.9999))
-  const plotData = [{
-    x: data.map(pt => ninesX(pt.percentile)),
-    y: data.map(pt => pt.latencyMs),
-    customdata: data.map(pt => pt.percentile),
-    type: 'scatter',
-    mode: 'lines',
-    line: { color, width: 2 },
-    hovertemplate: 'P%{customdata:.3f}<br>%{y:.3f} ms<extra></extra>',
-  }]
-  const layout = {
-    ...PLOTLY_BASE_LAYOUT,
-    hovermode: 'x',
-    title: { text: title, font: { color: C.text, size: 12 }, x: 0.05, y: 0.97 },
-    height: 250,
-    xaxis: {
-      ...PLOTLY_BASE_LAYOUT.xaxis,
-      type: 'log',
-      tickmode: 'array',
-      tickvals: [2, 10, 100, 1000, 10000, 100000],
-      ticktext: ['50', '90', '99', '99.9', '99.99', '99.999'],
-      title: { text: 'Percentile', font: { size: 10, color: C.axis }, standoff: 8 },
-    },
-    yaxis: {
-      ...PLOTLY_BASE_LAYOUT.yaxis,
-      title: { text: 'Latency (ms)', font: { size: 10, color: C.axis }, standoff: 8 },
-    },
-  }
-  return (
-    <Plot
-      data={plotData}
-      layout={layout}
-      config={{ displayModeBar: false, responsive: true }}
-      style={{ width: '100%' }}
-      useResizeHandler
-    />
-  )
-}
-
 // ── Histogram — Recharts ─────────────────────────────────────────────────────
 
 function HistogramRecharts({ data, title, color }) {
@@ -226,56 +169,6 @@ function HistogramRecharts({ data, title, color }) {
           <Bar dataKey="percentage" fill={color} opacity={0.8} />
         </BarChart>
       </ResponsiveContainer>
-    </div>
-  )
-}
-
-// ── Histogram — Plotly ───────────────────────────────────────────────────────
-
-function HistogramPlotly({ data, title, color }) {
-  if (!data || data.length === 0) return <div style={{ color: C.axis, fontSize: 12, padding: 8 }}>No data</div>
-  const plotData = [{
-    x: data.map(b => parseFloat(b.bucketLabel)),
-    y: data.map(b => b.percentage),
-    type: 'bar',
-    marker: { color, opacity: 0.8 },
-    hovertemplate: '~%{x:.2f} ms<br>%{y:.2f}%<extra></extra>',
-  }]
-  const layout = {
-    ...PLOTLY_BASE_LAYOUT,
-    title: { text: title, font: { color: C.text, size: 12 }, x: 0.05, y: 0.97 },
-    height: 250,
-    xaxis: {
-      ...PLOTLY_BASE_LAYOUT.xaxis,
-      title: { text: 'Latency (ms)', font: { size: 10, color: C.axis }, standoff: 8 },
-    },
-    yaxis: {
-      ...PLOTLY_BASE_LAYOUT.yaxis,
-      title: { text: '% messages', font: { size: 10, color: C.axis }, standoff: 8 },
-      ticksuffix: '%',
-    },
-  }
-  return (
-    <Plot
-      data={plotData}
-      layout={layout}
-      config={{ displayModeBar: false, responsive: true }}
-      style={{ width: '100%' }}
-      useResizeHandler
-    />
-  )
-}
-
-// ── Library comparison label ─────────────────────────────────────────────────
-
-function LibLabel({ children }) {
-  return (
-    <div style={{
-      fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em',
-      color: C.axis, marginBottom: 4, paddingBottom: 4,
-      borderBottom: `1px solid ${C.grid}`,
-    }}>
-      {children}
     </div>
   )
 }
@@ -316,36 +209,10 @@ export default function FinalizedCharts({ results }) {
       <SectionHeading>Latency distribution — percentile curves</SectionHeading>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div className="chart-card">
-          <LibLabel>Recharts</LibLabel>
-          <PercentileCurveRecharts
-            data={pubCurve}
-            title="Publish latency percentile curve"
-            color={C.publish}
-          />
+          <PercentileCurveRecharts data={pubCurve} title="Publish latency percentile curve" color={C.publish} />
         </div>
         <div className="chart-card">
-          <LibLabel>Plotly</LibLabel>
-          <PercentileCurvePlotly
-            data={pubCurve}
-            title="Publish latency percentile curve"
-            color={C.publish}
-          />
-        </div>
-        <div className="chart-card">
-          <LibLabel>Recharts</LibLabel>
-          <PercentileCurveRecharts
-            data={e2eCurve}
-            title="End-to-end latency percentile curve"
-            color={C.e2e}
-          />
-        </div>
-        <div className="chart-card">
-          <LibLabel>Plotly</LibLabel>
-          <PercentileCurvePlotly
-            data={e2eCurve}
-            title="End-to-end latency percentile curve"
-            color={C.e2e}
-          />
+          <PercentileCurveRecharts data={e2eCurve} title="End-to-end latency percentile curve" color={C.e2e} />
         </div>
       </div>
 
@@ -353,36 +220,10 @@ export default function FinalizedCharts({ results }) {
       <SectionHeading>Latency distribution — histograms</SectionHeading>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div className="chart-card">
-          <LibLabel>Recharts</LibLabel>
-          <HistogramRecharts
-            data={pubHist}
-            title="Publish latency histogram"
-            color={C.publish}
-          />
+          <HistogramRecharts data={pubHist} title="Publish latency histogram" color={C.publish} />
         </div>
         <div className="chart-card">
-          <LibLabel>Plotly</LibLabel>
-          <HistogramPlotly
-            data={pubHist}
-            title="Publish latency histogram"
-            color={C.publish}
-          />
-        </div>
-        <div className="chart-card">
-          <LibLabel>Recharts</LibLabel>
-          <HistogramRecharts
-            data={e2eHist}
-            title="End-to-end latency histogram"
-            color={C.e2e}
-          />
-        </div>
-        <div className="chart-card">
-          <LibLabel>Plotly</LibLabel>
-          <HistogramPlotly
-            data={e2eHist}
-            title="End-to-end latency histogram"
-            color={C.e2e}
-          />
+          <HistogramRecharts data={e2eHist} title="End-to-end latency histogram" color={C.e2e} />
         </div>
       </div>
     </div>
