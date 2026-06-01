@@ -40,6 +40,7 @@ export const listRuns = () => request('GET', '/runs')
 export const getRun = (id) => request('GET', `/runs/${id}`)
 export const createRun = (body) => request('POST', '/runs', body)
 export const cancelRun = (id) => request('DELETE', `/runs/${id}`)
+export const getRunResults = (runId) => request('GET', `/runs/${runId}/results`)
 
 // Sweeps
 export const listSweeps = () => request('GET', '/sweeps')

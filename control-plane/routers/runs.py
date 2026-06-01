@@ -137,6 +137,22 @@ async def delete_run(run_id: int, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
 
+@router.get("/{run_id}/results")
+async def get_run_results(run_id: int):
+    """Return HDR percentile results for a completed run. 404 if not yet available."""
+    from services.hdr_result_parser import _find_result_file, parse_hdr_results_from_file
+
+    path = _find_result_file(run_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="Result file not available yet")
+
+    parsed = parse_hdr_results_from_file(path)
+    if not parsed:
+        raise HTTPException(status_code=404, detail="Result file could not be parsed")
+
+    return parsed
+
+
 # ---------------------------------------------------------------------------
 # Broker Prometheus probe helpers
 # ---------------------------------------------------------------------------
@@ -263,6 +279,10 @@ async def _finish_run(run_id: int) -> None:
                 _os.rename(source, dest)
             except Exception as exc:
                 logger.warning("Could not rename result file %s -> %s: %s", source, dest, exc)
+
+        # Parse HDR percentile data after the rename completes.
+        from services.hdr_result_parser import parse_and_store_hdr_results as _parse_hdr
+        asyncio.create_task(_parse_hdr(run_id))
 
         # Mark completed if we parsed metrics, regardless of Job exit code.
         # The aggregate summary line only appears on clean OMB completion, so

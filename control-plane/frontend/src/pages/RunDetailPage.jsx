@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { getRun, cancelRun, getPrometheusSamples, getSweepRuns, getSweep, getWorkerResources } from '../api.js'
+import { getRun, cancelRun, getPrometheusSamples, getSweepRuns, getSweep, getWorkerResources, getRunResults } from '../api.js'
 import RunCharts from '../components/RunCharts.jsx'
+import FinalizedCharts from '../components/FinalizedCharts.jsx'
 import { parseLiveMetric, parseE2ELatency } from '../lib/ombLogParser.js'
 import { parseWorkloadYaml } from '../components/WorkloadForm.jsx'
 
@@ -122,6 +123,8 @@ export default function RunDetailPage() {
   const [sweep, setSweep] = useState(null)
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
   const [workerResources, setWorkerResources] = useState(null)
+  const [hdrResults, setHdrResults] = useState(null)
+  const [hdrLoading, setHdrLoading] = useState(false)
   const wsRef = useRef(null)
   const logEndRef = useRef(null)
   const liveMatchedRef = useRef(false)
@@ -279,6 +282,30 @@ export default function RunDetailPage() {
       getPrometheusSamples(id).then(setPromSamples).catch(() => {})
     }, 5000)
     return () => clearInterval(interval)
+  }, [id, run?.status])
+
+  // Fetch HDR results from the results file once run completes.
+  // Retries on 404 — the file typically appears within 2-5s after completion.
+  useEffect(() => {
+    if (run?.status !== 'completed') return
+    setHdrLoading(true)
+    let cancelled = false
+    async function fetchWithRetry(attempts = 8, delay = 1500) {
+      for (let i = 0; i < attempts; i++) {
+        if (cancelled) return
+        try {
+          const data = await getRunResults(id)
+          if (!cancelled) { setHdrResults(data); setHdrLoading(false) }
+          return
+        } catch (e) {
+          if (e.status !== 404) { setHdrLoading(false); return }
+          if (i < attempts - 1) await new Promise(r => setTimeout(r, delay))
+        }
+      }
+      if (!cancelled) setHdrLoading(false)
+    }
+    fetchWithRetry()
+    return () => { cancelled = true }
   }, [id, run?.status])
 
   // Fetch sweep sibling runs and keep pills fresh while sweep is in progress.
@@ -478,10 +505,11 @@ export default function RunDetailPage() {
         </div>
       )}
 
-      {/* Summary metrics — only shown after run completes */}
-      {m && (
+      {/* Post-completion finalized view */}
+      {run.status === 'completed' && m && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+          {/* Throughput tiles — 2 columns only (actual vs target) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
             <TileColumn label="Avg Publish Rate" badge="omb">
               <MetricCard value={fmt(m.publish_rate_avg)} unit="msg/s" expected={expectedMsgSec > 0 ? expectedMsgSec : undefined} />
               <MetricCard value={fmt(m.publish_rate_avg * messageSize / 1_048_576, 2)} unit="MB/s" expected={expectedMBSec > 0 ? expectedMBSec : undefined} />
@@ -490,43 +518,70 @@ export default function RunDetailPage() {
               <MetricCard value={fmt(m.consume_rate_avg)} unit="msg/s" expected={expectedMsgSec > 0 ? expectedMsgSec : undefined} />
               <MetricCard value={fmt(m.consume_rate_avg * messageSize / 1_048_576, 2)} unit="MB/s" expected={expectedMBSec > 0 ? expectedMBSec : undefined} />
             </TileColumn>
-            <LatencyColumn label="Pub Latency" metrics={m} prefix="publish" badge="omb" />
-            <LatencyColumn label="E2E Latency" metrics={m} prefix="end_to_end" badge="omb" />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
-            <TileColumn label="Broker Publish Rate" badge="redpanda">
-              <StubTile unit="msg/s" />
-              <StubTile unit="MB/s" />
-            </TileColumn>
-            <TileColumn label="Broker Consume Rate" badge="redpanda">
-              <StubTile unit="msg/s" />
-              <StubTile unit="MB/s" />
-            </TileColumn>
-            <div /><div />
-          </div>
+          {/* HDR finalized charts */}
+          {hdrLoading && (
+            <div style={{ color: 'var(--color-text-muted)', fontSize: 13, padding: '12px 0' }}>
+              <span className="spinner spinner-dark" style={{ marginRight: 8 }} />
+              Loading results…
+            </div>
+          )}
+          {hdrResults && <FinalizedCharts results={hdrResults} />}
+
+          {/* Collapsed live charts */}
+          <details style={{ marginTop: 20 }}>
+            <summary style={{
+              cursor: 'pointer', fontWeight: 600, fontSize: 14,
+              color: 'var(--color-text-muted)', padding: '8px 0', userSelect: 'none',
+            }}>
+              Raw time series data ▶
+            </summary>
+            <div style={{ marginTop: 12 }}>
+              <RunCharts
+                livePoints={livePoints}
+                metricsOut={run?.metrics ?? null}
+                promSamples={promSamples}
+                isLive={false}
+                messageSize={messageSize}
+                warmupSamples={warmupSamples}
+                totalSamples={totalSamples}
+                warmupStartedAt={warmupStartedAt}
+                benchmarkStartedAt={benchmarkStartedAt}
+                workerMemLimitMiB={workerResources?.memory_limit_mib ?? null}
+                workerCpuCores={workerResources?.cpu_request_cores ?? null}
+                runStartedAt={run?.started_at ?? null}
+                expectedMsgSec={expectedMsgSec}
+                expectedMBSec={expectedMBSec}
+                expectedConsMsgSec={expectedConsMsgSec}
+                expectedConsMBSec={expectedConsMBSec}
+              />
+            </div>
+          </details>
         </>
       )}
 
-      {/* Charts — live during run, post-run from stored metrics + Prometheus */}
-      <RunCharts
-        livePoints={livePoints}
-        metricsOut={run?.metrics ?? null}
-        promSamples={promSamples}
-        isLive={run?.status === 'running'}
-        messageSize={messageSize}
-        warmupSamples={warmupSamples}
-        totalSamples={totalSamples}
-        warmupStartedAt={warmupStartedAt}
-        benchmarkStartedAt={benchmarkStartedAt}
-        workerMemLimitMiB={workerResources?.memory_limit_mib ?? null}
-        workerCpuCores={workerResources?.cpu_request_cores ?? null}
-        runStartedAt={run?.started_at ?? null}
-        expectedMsgSec={expectedMsgSec}
-        expectedMBSec={expectedMBSec}
-        expectedConsMsgSec={expectedConsMsgSec}
-        expectedConsMBSec={expectedConsMBSec}
-      />
+      {/* Live run charts — shown during active run */}
+      {run.status !== 'completed' && (
+        <RunCharts
+          livePoints={livePoints}
+          metricsOut={run?.metrics ?? null}
+          promSamples={promSamples}
+          isLive={run?.status === 'running'}
+          messageSize={messageSize}
+          warmupSamples={warmupSamples}
+          totalSamples={totalSamples}
+          warmupStartedAt={warmupStartedAt}
+          benchmarkStartedAt={benchmarkStartedAt}
+          workerMemLimitMiB={workerResources?.memory_limit_mib ?? null}
+          workerCpuCores={workerResources?.cpu_request_cores ?? null}
+          runStartedAt={run?.started_at ?? null}
+          expectedMsgSec={expectedMsgSec}
+          expectedMBSec={expectedMBSec}
+          expectedConsMsgSec={expectedConsMsgSec}
+          expectedConsMBSec={expectedConsMBSec}
+        />
+      )}
 
       {/* Log output */}
       <div className="card mt-20">
