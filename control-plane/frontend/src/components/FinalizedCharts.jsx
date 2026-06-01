@@ -20,7 +20,7 @@ const C = {
 }
 
 const PLOTLY_BASE_LAYOUT = {
-  paper_bgcolor: C.paper,
+  paper_bgcolor: C.bg,
   plot_bgcolor:  C.bg,
   font:   { color: C.text, size: 11 },
   margin: { t: 36, r: 16, b: 50, l: 60 },
@@ -156,6 +156,7 @@ function PercentileCurvePlotly({ data, title, color }) {
   }]
   const layout = {
     ...PLOTLY_BASE_LAYOUT,
+    hovermode: 'x',
     title: { text: title, font: { color: C.text, size: 12 }, x: 0.05, y: 0.97 },
     height: 250,
     xaxis: {
