@@ -396,6 +396,29 @@ operations after initial deployment.
 8. Run benchmarks
 9. helm uninstall omb && terraform destroy when engagement is complete
 
+## CI/CD — image builds
+
+Both `.github/workflows/build-control-plane.yml` and `.github/workflows/build-worker.yml` trigger automatically on `push: branches: [main]`. Pushing to main is sufficient — do not manually trigger `gh workflow run` for main branch deploys.
+
+To test a feature branch before merging, use:
+```bash
+gh workflow run build-control-plane.yml --repo supahcraig/omb-k8s --ref <branch-name>
+```
+
+Images are tagged with the full git SHA (`github.sha`) and also `latest`. To deploy a new image after a push to main:
+```bash
+# Get the SHA that was pushed
+git rev-parse main
+
+# Roll out the new image
+kubectl -n omb set image deployment/omb-control-plane \
+  control-plane=ghcr.io/supahcraig/omb-control-plane:<sha>
+kubectl -n omb rollout status deployment/omb-control-plane
+
+# Or simply restart to pull :latest (if already on latest tag)
+kubectl -n omb rollout restart deployment/omb-control-plane
+```
+
 ## Current environment
 
 - **Cloud:** AWS (EKS)
