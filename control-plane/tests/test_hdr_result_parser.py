@@ -17,8 +17,10 @@ def _make_result_file(path: str, extra: dict = None):
         "publishRate": [10000.0, 10100.0],
         "consumeRate": [10000.0, 10100.0],
         "backlog": [0.0, 0.0],
+        "publishLatency50pct": [3.0, 3.1],
         "publishLatency99pct": [8.2, 8.3],
         "publishLatency999pct": [15.0, 15.1],
+        "endToEndLatency50pct": [3.5, 3.6],
         "endToEndLatency99pct": [9.1, 9.2],
         "endToEndLatency999pct": [18.0, 18.1],
         "aggregatedPublishLatencyAvg": 3.5,
@@ -110,6 +112,22 @@ def test_parse_hdr_results_from_file_returns_all_sections():
         assert result["aggregates"]["endToEnd"]["p99"] == 9.4
         assert len(result["percentileCurves"]["publish"]) > 0
         assert len(result["histograms"]["publish"]) == 30
+    finally:
+        os.unlink(path)
+
+
+def test_parse_hdr_results_timeseries_includes_p50():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        path = f.name
+    try:
+        _make_result_file(path)
+        result = parse_hdr_results_from_file(path)
+        assert result is not None
+        ts = result["timeSeries"]
+        assert "publishLatencyP50"  in ts
+        assert "endToEndLatencyP50" in ts
+        assert ts["publishLatencyP50"]  == [3.0, 3.1]
+        assert ts["endToEndLatencyP50"] == [3.5, 3.6]
     finally:
         os.unlink(path)
 
