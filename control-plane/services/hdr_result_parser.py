@@ -104,6 +104,7 @@ def parse_hdr_results_from_file(path: str) -> Optional[dict]:
             "producersPerTopic": data.get("producersPerTopic"),
             "consumersPerTopic": data.get("consumersPerTopic"),
             "driver":            data.get("driver"),
+            "sampleRateMillis":  data.get("sampleRateMillis"),
         },
         "aggregates": {
             "publish": {

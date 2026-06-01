@@ -228,9 +228,9 @@ function LatencyTimeSeries({ timeSeries, sampleRateMs = 1000, warmupSamples = 60
         {warmupSamples > 0 && data.length > 0 && (
           <ReferenceArea x1={0} x2={Math.min(warmupEndSec, data[data.length - 1].t)} fill="rgba(255,255,255,0.04)" />
         )}
-        <Line type="monotone" dataKey="p50"  name="p50"   stroke={p50Color}  dot={false} strokeWidth={1.5} strokeDasharray="4 2" connectNulls />
-        <Line type="monotone" dataKey="p99"  name="p99"   stroke={p99Color}  dot={false} strokeWidth={2}   connectNulls />
-        <Line type="monotone" dataKey="p999" name="p99.9" stroke={p999Color} dot={false} strokeWidth={1.5} strokeDasharray="2 2" connectNulls />
+        <Line type="monotone" dataKey="p50"  name="p50"   stroke={p50Color}  dot={false} strokeWidth={1.5} strokeDasharray="4 2" />
+        <Line type="monotone" dataKey="p99"  name="p99"   stroke={p99Color}  dot={false} strokeWidth={2} />
+        <Line type="monotone" dataKey="p999" name="p99.9" stroke={p999Color} dot={false} strokeWidth={1.5} strokeDasharray="2 2" />
       </LineChart>
     </ResponsiveContainer>
   )
