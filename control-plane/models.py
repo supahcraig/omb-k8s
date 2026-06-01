@@ -148,7 +148,11 @@ class Setting(Base):
 class RunResult(Base):
     __tablename__ = "run_results"
 
-    run_id = Column(Integer, primary_key=True)
+    run_id = Column(
+        Integer,
+        ForeignKey("runs.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
     publish_p50    = Column(Float, nullable=True)
     publish_p75    = Column(Float, nullable=True)
     publish_p95    = Column(Float, nullable=True)
