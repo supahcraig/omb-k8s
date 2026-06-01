@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { getRun, cancelRun, getPrometheusSamples, getSweepRuns, getSweep, getWorkerResources, getRunResults } from '../api.js'
 import RunCharts from '../components/RunCharts.jsx'
+import RunChartsPlotly from '../components/RunChartsPlotly.jsx'
 import FinalizedCharts from '../components/FinalizedCharts.jsx'
 import { parseLiveMetric, parseE2ELatency } from '../lib/ombLogParser.js'
 import { parseWorkloadYaml } from '../components/WorkloadForm.jsx'
@@ -125,6 +126,7 @@ export default function RunDetailPage() {
   const [workerResources, setWorkerResources] = useState(null)
   const [hdrResults, setHdrResults] = useState(null)
   const [hdrLoading, setHdrLoading] = useState(false)
+  const [chartsTab, setChartsTab] = useState('recharts')
   const wsRef = useRef(null)
   const logEndRef = useRef(null)
   const liveMatchedRef = useRef(false)
@@ -447,6 +449,53 @@ export default function RunDetailPage() {
     } catch { return `Run #${sr.id}` }
   }
 
+  const runChartsProps = {
+    livePoints,
+    metricsOut: run?.metrics ?? null,
+    promSamples,
+    isLive: run?.status === 'running',
+    messageSize,
+    warmupSamples,
+    totalSamples,
+    warmupStartedAt,
+    benchmarkStartedAt,
+    workerMemLimitMiB: workerResources?.memory_limit_mib ?? null,
+    workerCpuCores: workerResources?.cpu_request_cores ?? null,
+    runStartedAt: run?.started_at ?? null,
+    expectedMsgSec,
+    expectedMBSec,
+    expectedConsMsgSec,
+    expectedConsMBSec,
+  }
+
+  const ActiveRunCharts = chartsTab === 'plotly' ? RunChartsPlotly : RunCharts
+
+  const chartSwitcher = (
+    <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+      {['recharts', 'plotly'].map(tab => (
+        <button
+          key={tab}
+          onClick={() => setChartsTab(tab)}
+          style={{
+            padding: '3px 12px',
+            fontSize: 11,
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            borderRadius: 4,
+            border: '1px solid',
+            cursor: 'pointer',
+            background: chartsTab === tab ? 'rgba(99,102,241,0.2)' : 'transparent',
+            borderColor: chartsTab === tab ? 'rgba(99,102,241,0.6)' : 'rgba(122,131,153,0.3)',
+            color: chartsTab === tab ? '#a5b4fc' : 'var(--color-text-muted)',
+          }}
+        >
+          {tab}
+        </button>
+      ))}
+    </div>
+  )
+
   return (
     <div>
       {run?.sweep_id && sweepRuns && (
@@ -538,24 +587,8 @@ export default function RunDetailPage() {
               Raw time series data ▶
             </summary>
             <div style={{ marginTop: 12 }}>
-              <RunCharts
-                livePoints={livePoints}
-                metricsOut={run?.metrics ?? null}
-                promSamples={promSamples}
-                isLive={false}
-                messageSize={messageSize}
-                warmupSamples={warmupSamples}
-                totalSamples={totalSamples}
-                warmupStartedAt={warmupStartedAt}
-                benchmarkStartedAt={benchmarkStartedAt}
-                workerMemLimitMiB={workerResources?.memory_limit_mib ?? null}
-                workerCpuCores={workerResources?.cpu_request_cores ?? null}
-                runStartedAt={run?.started_at ?? null}
-                expectedMsgSec={expectedMsgSec}
-                expectedMBSec={expectedMBSec}
-                expectedConsMsgSec={expectedConsMsgSec}
-                expectedConsMBSec={expectedConsMBSec}
-              />
+              {chartSwitcher}
+              <ActiveRunCharts {...runChartsProps} isLive={false} />
             </div>
           </details>
         </>
@@ -563,24 +596,10 @@ export default function RunDetailPage() {
 
       {/* Live run charts — shown during active run */}
       {run.status !== 'completed' && (
-        <RunCharts
-          livePoints={livePoints}
-          metricsOut={run?.metrics ?? null}
-          promSamples={promSamples}
-          isLive={run?.status === 'running'}
-          messageSize={messageSize}
-          warmupSamples={warmupSamples}
-          totalSamples={totalSamples}
-          warmupStartedAt={warmupStartedAt}
-          benchmarkStartedAt={benchmarkStartedAt}
-          workerMemLimitMiB={workerResources?.memory_limit_mib ?? null}
-          workerCpuCores={workerResources?.cpu_request_cores ?? null}
-          runStartedAt={run?.started_at ?? null}
-          expectedMsgSec={expectedMsgSec}
-          expectedMBSec={expectedMBSec}
-          expectedConsMsgSec={expectedConsMsgSec}
-          expectedConsMBSec={expectedConsMBSec}
-        />
+        <>
+          {chartSwitcher}
+          <ActiveRunCharts {...runChartsProps} />
+        </>
       )}
 
       {/* Log output */}
