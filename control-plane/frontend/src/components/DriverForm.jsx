@@ -66,7 +66,8 @@ function PropertySection({ title, rows, onChange }) {
     <div style={{ marginBottom: 16 }}>
       <SectionDivider label={title} />
       {rows.map((row, i) => {
-        const knownProp = KNOWN_PROP_OPTIONS[row.key]
+        const def = KNOWN_PROP_OPTIONS[row.key]
+        const knownProp = def && (row.value === '' || def.options.includes(row.value)) ? def : null
         return (
           <div key={row._id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 6 }}>
             <input

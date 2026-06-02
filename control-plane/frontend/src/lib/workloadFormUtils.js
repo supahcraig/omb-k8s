@@ -89,7 +89,7 @@ export function parseWorkloadYamlToRows(yamlStr) {
 
 export function buildWorkloadYaml(allRows) {
   const lines = allRows
-    .filter(r => r.key.trim() && r.key !== 'payloadFile')
+    .filter(r => r.key.trim() && r.key !== 'payloadFile' && String(r.value).trim() !== '')
     .map(r => `${r.key}: ${r.value}`)
   lines.push('payloadFile: /payload/payload.data')
   return lines.join('\n')

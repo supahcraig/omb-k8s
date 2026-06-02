@@ -91,6 +91,15 @@ describe('buildWorkloadYaml', () => {
     expect(yaml).toContain('topics: 1')
   })
 
+  it('skips rows with empty values', () => {
+    const yaml = buildWorkloadYaml([
+      { key: 'topics', value: '' },
+      { key: 'messageSize', value: '1024' },
+    ])
+    expect(yaml).not.toContain('topics:')
+    expect(yaml).toContain('messageSize: 1024')
+  })
+
   it('does not duplicate payloadFile if already present', () => {
     const yaml = buildWorkloadYaml([
       { key: 'topics', value: '1' },
