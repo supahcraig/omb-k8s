@@ -38,6 +38,19 @@ function PropValueInput({ rowKey, value, onChange }) {
   const knownType   = WORKLOAD_KNOWN_PROP_TYPES[rowKey]
   const hint        = WORKLOAD_PROP_HINTS[rowKey]
 
+  if (knownOption?.type === 'toggle') {
+    return (
+      <label className="toggle" style={{ marginTop: 2 }}>
+        <input
+          type="checkbox"
+          checked={value === 'true'}
+          onChange={e => onChange(e.target.checked ? 'true' : 'false')}
+        />
+        <span className="toggle-slider" />
+      </label>
+    )
+  }
+
   if (knownOption?.type === 'select') {
     return (
       <select

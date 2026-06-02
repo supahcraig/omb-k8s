@@ -28,7 +28,7 @@ export const DEFAULT_PAYLOAD_ROWS = [
 // ── Smart input metadata ─────────────────────────────────────────────────────
 
 export const WORKLOAD_KNOWN_PROP_OPTIONS = {
-  'useRandomizedPayloads': { type: 'select', options: ['false', 'true'] },
+  'useRandomizedPayloads': { type: 'toggle' },
 }
 
 export const WORKLOAD_KNOWN_PROP_TYPES = {

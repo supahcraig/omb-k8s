@@ -128,6 +128,7 @@ export default function DriverForm({ onChange, initialYaml }) {
   // Stored YAML commonConfig may be in yaml.dump() format which our parser handles partially,
   // and it may also be stale if cluster settings changed since the run was created.
   const [commonConfig,   setCommonConfig]   = useState(buildCommonConfigFromCluster(cluster))
+  const [showCommon,     setShowCommon]     = useState(false)
 
   useEffect(() => {
     onChange?.(buildDriverYaml(values, { topicConfig, producerConfig, consumerConfig, commonConfig }))
@@ -221,19 +222,16 @@ export default function DriverForm({ onChange, initialYaml }) {
       <PropertySection title="Producer Config" rows={producerConfig} onChange={setProducerConfig} />
       <PropertySection title="Consumer Config" rows={consumerConfig} onChange={setConsumerConfig} />
 
-      <details style={{ marginTop: 8 }}>
-        <summary style={{
-          cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-          letterSpacing: '0.1em', color: DRIVER_COLOR, userSelect: 'none', listStyle: 'none',
-          display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <span>Common Config</span>
-          <div style={{ flex: 1, height: 1, background: DRIVER_COLOR, opacity: 0.35 }} />
-        </summary>
-        <div style={{ marginTop: 8 }}>
-          <PropertySection title="" rows={commonConfig} onChange={setCommonConfig} />
-        </div>
-      </details>
+      <div
+        onClick={() => setShowCommon(v => !v)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '16px 0 8px', cursor: 'pointer', userSelect: 'none' }}
+      >
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: DRIVER_COLOR, whiteSpace: 'nowrap' }}>
+          {showCommon ? '▼' : '▶'} Common Config
+        </span>
+        <div style={{ flex: 1, height: 1, background: DRIVER_COLOR, opacity: 0.35 }} />
+      </div>
+      {showCommon && <PropertySection title="" rows={commonConfig} onChange={setCommonConfig} />}
     </div>
   )
 }

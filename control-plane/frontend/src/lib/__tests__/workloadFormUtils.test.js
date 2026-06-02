@@ -167,9 +167,8 @@ describe('defaults', () => {
 })
 
 describe('WORKLOAD_KNOWN_PROP_OPTIONS', () => {
-  it('defines useRandomizedPayloads as select with false/true', () => {
-    expect(WORKLOAD_KNOWN_PROP_OPTIONS['useRandomizedPayloads'].type).toBe('select')
-    expect(WORKLOAD_KNOWN_PROP_OPTIONS['useRandomizedPayloads'].options).toEqual(['false', 'true'])
+  it('defines useRandomizedPayloads as toggle', () => {
+    expect(WORKLOAD_KNOWN_PROP_OPTIONS['useRandomizedPayloads'].type).toBe('toggle')
   })
 })
 
