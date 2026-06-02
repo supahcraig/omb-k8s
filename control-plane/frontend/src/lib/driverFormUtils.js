@@ -104,6 +104,7 @@ export function buildCommonConfigFromCluster(cluster) {
 }
 
 export const KNOWN_PROP_OPTIONS = {
+  'write.caching':      { type: 'select', options: ['false', 'true'] },
   'compression.type':   { type: 'select', options: ['none', 'snappy', 'lz4', 'zstd', 'gzip'] },
   'acks':               { type: 'select', options: ['all', '1', '0'] },
   'auto.offset.reset':  { type: 'select', options: ['earliest', 'latest'] },

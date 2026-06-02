@@ -21,7 +21,8 @@ export const DEFAULT_TIMING_ROWS = [
 ]
 
 export const DEFAULT_PAYLOAD_ROWS = [
-  { key: 'useRandomizedPayloads', value: 'false' },
+  { key: 'useRandomizedPayloads',      value: 'false' },
+  { key: 'randomizedPayloadPoolSize',  value: '1000'  },
 ]
 
 // ── Smart input metadata ─────────────────────────────────────────────────────
@@ -51,7 +52,8 @@ export const WORKLOAD_PROP_HINTS = {
   'consumerBacklogSizeGB':  'GB',
   'warmupDurationMinutes':  'min',
   'testDurationMinutes':    'min',
-  'sampleRateMillis':       'ms',
+  'sampleRateMillis':           'ms',
+  'randomizedPayloadPoolSize':  'distinct payloads',
 }
 
 // ── Section membership ───────────────────────────────────────────────────────
