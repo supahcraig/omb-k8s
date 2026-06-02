@@ -170,7 +170,10 @@ Install the chart into the `omb` namespace:
 ```bash
 helm install omb charts/omb -n omb --create-namespace \
   -f charts/omb/values-aks.yaml \
-  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/azure output -raw terraform_operator_ip)/32"
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/azure output -raw terraform_operator_ip)/32" \
+  --set kube-prometheus-stack.grafana.adminPassword=<your-grafana-password>
+
+> **Important:** Always set a strong Grafana password at install time. The default is `changeme` — do not use it in customer engagements.
 ```
 
 The AKS values file sets:
@@ -191,21 +194,28 @@ Press `Ctrl-C` when all pods show `Running` or `Completed`.
 
 ---
 
-## 7. Get the UI address
+## 7. Get the UI and Grafana addresses
 
-Azure LoadBalancer services expose an IP address (not a hostname). Retrieve it with:
+Azure LoadBalancer services expose an IP address (not a hostname). There are two external services after install.
+
+Retrieve both:
 
 ```bash
-kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+# Control plane UI
+kubectl get svc omb-control-plane -n omb \
+  -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+
+# Grafana
+kubectl get svc omb-grafana -n omb \
+  -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 ```
 
-It may take 2–3 minutes for Azure to assign the external IP after the Service is created. If the command returns empty output, wait a moment and retry.
+It may take 2–3 minutes for Azure to assign external IPs after the Services are created. If a command returns empty output, wait a moment and retry.
 
-Once the IP is available, open the UI in a browser:
+- Control plane UI: `http://<control-plane-ip>/`
+- Grafana: `http://<grafana-ip>/` — login with `admin` and the password set during install
 
-```
-http://<EXTERNAL-IP>
-```
+The Redpanda dashboard is pre-loaded under **Dashboards → Redpanda** in Grafana.
 
 ---
 

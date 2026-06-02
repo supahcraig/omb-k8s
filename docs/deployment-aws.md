@@ -151,7 +151,10 @@ helm install omb charts/omb -n omb --create-namespace \
   --set clusterAutoscaler.clusterName=$(terraform -chdir=terraform/aws output -raw cluster_name) \
   --set clusterAutoscaler.region=$(terraform -chdir=terraform/aws output -raw region) \
   --set clusterAutoscaler.roleArn=$(terraform -chdir=terraform/aws output -raw cluster_autoscaler_iam_role_arn) \
-  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/aws output -raw terraform_operator_ip)/32"
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/aws output -raw terraform_operator_ip)/32" \
+  --set kube-prometheus-stack.grafana.adminPassword=<your-grafana-password>
+
+> **Important:** Always set a strong Grafana password at install time. The default is `changeme` — do not use it in customer engagements.
 ```
 
 > **Note:** `helm dependency build` downloads `kube-prometheus-stack` and other
@@ -174,24 +177,30 @@ The initial rollout takes 2–3 minutes. You should eventually see:
 
 ---
 
-## 7. Get the UI address
+## 7. Get the UI and Grafana addresses
 
-AWS assigns a hostname (not an IP) to LoadBalancer services. Retrieve it with:
+AWS assigns a hostname (not an IP) to LoadBalancer services. There are two external services after install.
+
+Retrieve both:
 
 ```bash
-kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+# Control plane UI
+kubectl get svc omb-control-plane -n omb \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+# Grafana
+kubectl get svc omb-grafana -n omb \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 ```
 
-DNS propagation can take 1–3 minutes after the service is created. Open the
-hostname in your browser once it resolves:
+DNS propagation can take 1–3 minutes after the service is created. Open the hostnames in your browser once they resolve:
 
-```
-http://<hostname>/
-```
+- Control plane UI: `http://<control-plane-hostname>/`
+- Grafana: `http://<grafana-hostname>/` — login with `admin` and the password set during install
 
-> **Tip:** The LoadBalancer hostname changes if you `helm uninstall` and
-> `helm install` again. Share the new address with the customer after any
-> reinstall.
+The Redpanda dashboard is pre-loaded under **Dashboards → Redpanda** in Grafana.
+
+> **Tip:** LoadBalancer hostnames change if you `helm uninstall` and `helm install` again. Share both new addresses with the customer after any reinstall.
 
 ---
 
