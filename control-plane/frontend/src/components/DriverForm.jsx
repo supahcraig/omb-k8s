@@ -124,10 +124,11 @@ export default function DriverForm({ onChange, initialYaml }) {
   const [topicConfig,    setTopicConfig]    = useState(pt.length  > 0 ? wrap(pt)  : hasInitialYaml ? []   : DEFAULT_TOPIC_CONFIG)
   const [producerConfig, setProducerConfig] = useState(pp.length  > 0 ? wrap(pp)  : hasInitialYaml ? []   : DEFAULT_PRODUCER_CONFIG)
   const [consumerConfig, setConsumerConfig] = useState(pc.length  > 0 ? wrap(pc)  : hasInitialYaml ? []   : DEFAULT_CONSUMER_CONFIG)
-  // Always regenerate commonConfig from current cluster settings — never from stored YAML.
-  // Stored YAML commonConfig may be in yaml.dump() format which our parser handles partially,
-  // and it may also be stale if cluster settings changed since the run was created.
-  const [commonConfig,   setCommonConfig]   = useState(buildCommonConfigFromCluster(cluster))
+  // Always start empty and let the seeding effect below populate from cluster settings.
+  // Do NOT initialize from buildCommonConfigFromCluster(cluster) here — that produces rows
+  // without _id fields (duplicate React keys), which causes reconciliation crashes when the
+  // settings API response arrives before this component's first render.
+  const [commonConfig,   setCommonConfig]   = useState([])
   const [showCommon,     setShowCommon]     = useState(false)
 
   useEffect(() => {

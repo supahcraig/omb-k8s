@@ -1,6 +1,11 @@
 locals {
-  public_subnet_cidrs  = [for i, _ in var.availability_zones : cidrsubnet(var.vpc_cidr, 8, i)]
-  private_subnet_cidrs = [for i, _ in var.availability_zones : cidrsubnet(var.vpc_cidr, 8, i + 10)]
+  # Always carve /24 subnets regardless of vpc_cidr prefix length.
+  # Public subnets use the first N blocks; private subnets use the next N blocks
+  # (packed immediately after public so small VPCs work — see vpc_cidr comment in tfvars).
+  _vpc_prefix          = tonumber(split("/", var.vpc_cidr)[1])
+  _subnet_newbits      = 24 - local._vpc_prefix
+  public_subnet_cidrs  = [for i, _ in var.availability_zones : cidrsubnet(var.vpc_cidr, local._subnet_newbits, i)]
+  private_subnet_cidrs = [for i, _ in var.availability_zones : cidrsubnet(var.vpc_cidr, local._subnet_newbits, i + length(var.availability_zones))]
 }
 
 resource "aws_vpc" "main" {

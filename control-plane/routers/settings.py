@@ -286,8 +286,7 @@ async def test_connection(db: AsyncSession = Depends(get_db)) -> dict:
             ),
         }
     finally:
-        if started and not stopped:
-            try:
-                await producer.stop()
-            except Exception:
-                pass
+        try:
+            await producer.stop()
+        except Exception:
+            pass

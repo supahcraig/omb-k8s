@@ -14,8 +14,10 @@ zone = "us-central1-a"
 # Optional: leave commented out to auto-generate a unique name like "omb-relaxed-lemur".
 # cluster_name = "omb-acme-20240101"
 
-# CIDR for the new VPC subnet. Must not overlap with the target cluster.
-vpc_cidr = "10.1.0.0/16"
+# CIDR for the GKE node subnet. Must not overlap with the target cluster.
+# GCP has no VPC-level CIDR — only this subnet needs an address range.
+# Pod IPs use a separate GKE-managed range, so /24 is sufficient for up to ~250 nodes.
+subnet_cidr = "10.1.0.0/24"
 
 # Network self_link of the Redpanda/Kafka cluster VPC to peer with.
 # Format: projects/PROJECT_ID/global/networks/NETWORK_NAME

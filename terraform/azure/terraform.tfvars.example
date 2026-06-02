@@ -11,8 +11,11 @@ location = "eastus"
 # cluster_name = "omb-acme-20240101"
 
 # Address space for the new VNet. Must not overlap with the target cluster VNet.
-vnet_address_space    = ["10.2.0.0/16"]
-subnet_address_prefix = "10.2.0.0/20"
+# Azure CNI pre-allocates max_pods IPs per node (default 30) regardless of actual pod count.
+# At full scale (22 nodes × 30) = 660+ IPs needed — /22 (1019 usable) is the minimum.
+# VNet must be at least as large as the subnet.
+vnet_address_space    = ["10.2.0.0/22"]
+subnet_address_prefix = "10.2.0.0/22"
 
 # Resource ID of the Redpanda/Kafka VNet to peer with.
 # For BYOC: obtain from the Redpanda Cloud BYOC UI (Networking tab).

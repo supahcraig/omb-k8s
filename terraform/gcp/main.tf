@@ -5,7 +5,7 @@ resource "google_compute_network" "main" {
 
 resource "google_compute_subnetwork" "main" {
   name          = "${local.cluster_name}-subnet"
-  ip_cidr_range = var.vpc_cidr
+  ip_cidr_range = var.subnet_cidr
   region        = var.region
   network       = google_compute_network.main.id
 }
@@ -133,7 +133,7 @@ resource "google_compute_firewall" "omb_workers_8080" {
   # pod_cidr: control-plane pod traffic (control plane does not use hostNetwork)
   # target_cidr: peered target cluster if configured
   source_ranges = compact([
-    var.vpc_cidr,
+    var.subnet_cidr,
     var.pod_cidr,
     var.target_cidr,
   ])

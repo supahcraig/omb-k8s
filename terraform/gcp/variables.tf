@@ -19,10 +19,10 @@ variable "cluster_name" {
   default     = ""
 }
 
-variable "vpc_cidr" {
-  description = "CIDR for the VPC subnet — must not overlap with target_cidr"
+variable "subnet_cidr" {
+  description = "CIDR for the GKE node subnet — must not overlap with target_cidr. GCP has no VPC-level CIDR; only this subnet needs an address range. Pod IPs use a separate GKE-managed range and do not consume space here, so /24 is sufficient for up to ~250 nodes."
   type        = string
-  default     = "10.1.0.0/16"
+  default     = "10.1.0.0/24"
 }
 
 variable "pod_cidr" {

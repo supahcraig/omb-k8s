@@ -12,6 +12,11 @@ region = "us-east-1"
 
 # CIDR block for the new VPC.
 # Must not overlap with target_cidr or any other VPC in this AWS account.
+# Subnets are always /24 blocks — minimum vpc_cidr size depends on the number of AZs:
+#   2 AZs → /22 minimum  (4 × /24 blocks needed)
+#   3 AZs → /21 minimum  (6 × /24 blocks needed)
+#   4 AZs → /21 minimum  (8 × /24 blocks needed)
+#   5+ AZs → /20 minimum (10+ × /24 blocks needed)
 vpc_cidr = "10.0.0.0/16"
 
 # At least two AZs in the same region. EKS requires multi-AZ for the control plane.
