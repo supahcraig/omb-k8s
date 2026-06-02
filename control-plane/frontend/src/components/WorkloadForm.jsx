@@ -114,7 +114,11 @@ export default function WorkloadForm({ initialYaml, onChange }) {
   const [topology, setTopology] = useState(pt.length  > 0 ? wrap(pt)  : hasYaml ? [] : DEFAULT_TOPOLOGY_ROWS.map(r => makeRow(r.key, r.value)))
   const [load,     setLoad]     = useState(pl.length  > 0 ? wrap(pl)  : hasYaml ? [] : DEFAULT_LOAD_ROWS.map(r => makeRow(r.key, r.value)))
   const [timing,   setTiming]   = useState(pti.length > 0 ? wrap(pti) : hasYaml ? [] : DEFAULT_TIMING_ROWS.map(r => makeRow(r.key, r.value)))
-  const [payload,  setPayload]  = useState(ppa.length > 0 ? wrap(ppa) : hasYaml ? [] : DEFAULT_PAYLOAD_ROWS.map(r => makeRow(r.key, r.value)))
+  const payloadBase = ppa.length > 0 ? wrap(ppa) : hasYaml ? [] : DEFAULT_PAYLOAD_ROWS.map(r => makeRow(r.key, r.value))
+  if (!payloadBase.find(r => r.key === 'randomizedPayloadPoolSize')) {
+    payloadBase.push(makeRow('randomizedPayloadPoolSize', '1000'))
+  }
+  const [payload,  setPayload]  = useState(payloadBase)
   const [extra,    setExtra]    = useState(wrap(pex))
 
   useEffect(() => {
