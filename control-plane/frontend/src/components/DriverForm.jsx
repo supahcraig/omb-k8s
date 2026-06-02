@@ -124,7 +124,10 @@ export default function DriverForm({ onChange, initialYaml }) {
   const [topicConfig,    setTopicConfig]    = useState(pt.length  > 0 ? wrap(pt)  : hasInitialYaml ? []   : DEFAULT_TOPIC_CONFIG)
   const [producerConfig, setProducerConfig] = useState(pp.length  > 0 ? wrap(pp)  : hasInitialYaml ? []   : DEFAULT_PRODUCER_CONFIG)
   const [consumerConfig, setConsumerConfig] = useState(pc.length  > 0 ? wrap(pc)  : hasInitialYaml ? []   : DEFAULT_CONSUMER_CONFIG)
-  const [commonConfig,   setCommonConfig]   = useState(pcc.length > 0 ? wrap(pcc) : hasInitialYaml ? []   : buildCommonConfigFromCluster(cluster))
+  // Always regenerate commonConfig from current cluster settings — never from stored YAML.
+  // Stored YAML commonConfig may be in yaml.dump() format which our parser handles partially,
+  // and it may also be stale if cluster settings changed since the run was created.
+  const [commonConfig,   setCommonConfig]   = useState(buildCommonConfigFromCluster(cluster))
 
   useEffect(() => {
     onChange?.(buildDriverYaml(values, { topicConfig, producerConfig, consumerConfig, commonConfig }))
