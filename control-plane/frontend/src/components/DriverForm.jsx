@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useSettings } from '../context/SettingsContext.jsx'
 import {
   DRIVER_OPTIONS,
+  KNOWN_PROP_OPTIONS,
   parseDriverYaml,
   buildDriverYaml,
   buildCommonConfigFromCluster,
@@ -35,6 +36,22 @@ const DEFAULT_CONSUMER_CONFIG = [
   makeRow('enable.auto.commit', 'false'   ),
 ]
 
+const DRIVER_COLOR = '#818cf8'
+
+function SectionDivider({ label }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '16px 0 8px' }}>
+      <span style={{
+        fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+        letterSpacing: '0.1em', color: DRIVER_COLOR, whiteSpace: 'nowrap',
+      }}>
+        {label}
+      </span>
+      <div style={{ flex: 1, height: 1, background: DRIVER_COLOR, opacity: 0.35 }} />
+    </div>
+  )
+}
+
 function PropertySection({ title, rows, onChange }) {
   function addRow() {
     onChange([...rows, makeRow()])
@@ -47,24 +64,39 @@ function PropertySection({ title, rows, onChange }) {
   }
   return (
     <div style={{ marginBottom: 16 }}>
-      <div className="section-label">{title}</div>
-      {rows.map((row, i) => (
-        <div key={row._id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 6 }}>
-          <input
-            className="form-input"
-            placeholder="key"
-            value={row.key}
-            onChange={e => updateRow(i, 'key', e.target.value)}
-          />
-          <input
-            className="form-input"
-            placeholder="value"
-            value={row.value}
-            onChange={e => updateRow(i, 'value', e.target.value)}
-          />
-          <button type="button" className="btn btn-danger btn-sm" onClick={() => removeRow(i)}>×</button>
-        </div>
-      ))}
+      <SectionDivider label={title} />
+      {rows.map((row, i) => {
+        const knownProp = KNOWN_PROP_OPTIONS[row.key]
+        return (
+          <div key={row._id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 6 }}>
+            <input
+              className="form-input"
+              placeholder="key"
+              value={row.key}
+              onChange={e => updateRow(i, 'key', e.target.value)}
+            />
+            {knownProp ? (
+              <select
+                className="form-select"
+                value={row.value}
+                onChange={e => updateRow(i, 'value', e.target.value)}
+              >
+                {knownProp.options.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                className="form-input"
+                placeholder="value"
+                value={row.value}
+                onChange={e => updateRow(i, 'value', e.target.value)}
+              />
+            )}
+            <button type="button" className="btn btn-danger btn-sm" onClick={() => removeRow(i)}>×</button>
+          </div>
+        )
+      })}
       <button type="button" className="btn btn-secondary btn-sm" onClick={addRow}>
         + Add property
       </button>
@@ -136,7 +168,7 @@ export default function DriverForm({ onChange, initialYaml }) {
       </div>
 
       {/* Scalar fields */}
-      <div className="section-label">Per-Run Settings</div>
+      <SectionDivider label="Per-Run Settings" />
 
       <div className="form-row">
         <div className="form-group">
