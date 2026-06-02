@@ -70,7 +70,7 @@ function PropValueInput({ rowKey, value, onChange }) {
   )
 }
 
-function WorkloadSection({ title, rows, onChange }) {
+function WorkloadSection({ title, rows, onChange, isRowDisabled }) {
   function addRow() {
     onChange([...rows, makeRow()])
   }
@@ -83,22 +83,29 @@ function WorkloadSection({ title, rows, onChange }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <SectionDivider label={title} />
-      {rows.map((row, i) => (
-        <div key={row._id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 6 }}>
-          <input
-            className="form-input"
-            placeholder="key"
-            value={row.key}
-            onChange={e => updateRow(i, 'key', e.target.value)}
-          />
-          <PropValueInput
-            rowKey={row.key}
-            value={row.value}
-            onChange={val => updateRow(i, 'value', val)}
-          />
-          <button type="button" className="btn btn-danger btn-sm" onClick={() => removeRow(i)}>×</button>
-        </div>
-      ))}
+      {rows.map((row, i) => {
+        const disabled = isRowDisabled?.(row) ?? false
+        return (
+          <div key={row._id} style={{
+            display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 6,
+            opacity: disabled ? 0.35 : 1,
+            pointerEvents: disabled ? 'none' : undefined,
+          }}>
+            <input
+              className="form-input"
+              placeholder="key"
+              value={row.key}
+              onChange={e => updateRow(i, 'key', e.target.value)}
+            />
+            <PropValueInput
+              rowKey={row.key}
+              value={row.value}
+              onChange={val => updateRow(i, 'value', val)}
+            />
+            <button type="button" className="btn btn-danger btn-sm" onClick={() => removeRow(i)}>×</button>
+          </div>
+        )
+      })}
       <button type="button" className="btn btn-secondary btn-sm" onClick={addRow}>
         + Add property
       </button>
@@ -121,8 +128,11 @@ export default function WorkloadForm({ initialYaml, onChange }) {
   const [payload,  setPayload]  = useState(payloadBase)
   const [extra,    setExtra]    = useState(wrap(pex))
 
+  const isRandomized = payload.find(r => r.key === 'useRandomizedPayloads')?.value === 'true'
+
   useEffect(() => {
-    const allRows = [...topology, ...load, ...timing, ...payload, ...extra]
+    const activePayload = payload.filter(r => r.key !== 'randomizedPayloadPoolSize' || isRandomized)
+    const allRows = [...topology, ...load, ...timing, ...activePayload, ...extra]
     onChange?.(buildWorkloadYaml(allRows))
   }, [topology, load, timing, payload, extra])
 
@@ -131,7 +141,12 @@ export default function WorkloadForm({ initialYaml, onChange }) {
       <WorkloadSection title="Topology"   rows={topology} onChange={setTopology} />
       <WorkloadSection title="Load"       rows={load}     onChange={setLoad} />
       <WorkloadSection title="Timing"     rows={timing}   onChange={setTiming} />
-      <WorkloadSection title="Payload"    rows={payload}  onChange={setPayload} />
+      <WorkloadSection
+        title="Payload"
+        rows={payload}
+        onChange={setPayload}
+        isRowDisabled={row => row.key === 'randomizedPayloadPoolSize' && !isRandomized}
+      />
       <WorkloadSection title="Additional" rows={extra}    onChange={setExtra} />
     </div>
   )
