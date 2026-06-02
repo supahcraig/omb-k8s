@@ -64,7 +64,7 @@ function PropertySection({ title, rows, onChange }) {
   }
   return (
     <div style={{ marginBottom: 16 }}>
-      <SectionDivider label={title} />
+      {title && <SectionDivider label={title} />}
       {rows.map((row, i) => {
         const def = KNOWN_PROP_OPTIONS[row.key]
         const knownProp = def && (row.value === '' || def.options.includes(row.value)) ? def : null
@@ -220,7 +220,20 @@ export default function DriverForm({ onChange, initialYaml }) {
       <PropertySection title="Topic Config"    rows={topicConfig}    onChange={setTopicConfig} />
       <PropertySection title="Producer Config" rows={producerConfig} onChange={setProducerConfig} />
       <PropertySection title="Consumer Config" rows={consumerConfig} onChange={setConsumerConfig} />
-      <PropertySection title="Common Config"   rows={commonConfig}   onChange={setCommonConfig} />
+
+      <details style={{ marginTop: 8 }}>
+        <summary style={{
+          cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+          letterSpacing: '0.1em', color: DRIVER_COLOR, userSelect: 'none', listStyle: 'none',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span>Common Config</span>
+          <div style={{ flex: 1, height: 1, background: DRIVER_COLOR, opacity: 0.35 }} />
+        </summary>
+        <div style={{ marginTop: 8 }}>
+          <PropertySection title="" rows={commonConfig} onChange={setCommonConfig} />
+        </div>
+      </details>
     </div>
   )
 }
