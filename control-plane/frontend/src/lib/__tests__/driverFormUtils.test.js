@@ -222,6 +222,11 @@ describe('KNOWN_PROP_OPTIONS', () => {
     expect(KNOWN_PROP_OPTIONS['auto.offset.reset'].options).toEqual(['earliest', 'latest'])
   })
 
+  it('defines write.caching with false and true', () => {
+    expect(KNOWN_PROP_OPTIONS['write.caching'].options).toContain('false')
+    expect(KNOWN_PROP_OPTIONS['write.caching'].options).toContain('true')
+  })
+
   it('defines enable.auto.commit with false and true', () => {
     expect(KNOWN_PROP_OPTIONS['enable.auto.commit'].options).toContain('false')
     expect(KNOWN_PROP_OPTIONS['enable.auto.commit'].options).toContain('true')

@@ -584,15 +584,18 @@ to stored backlog values. `RunCharts` applies the same clamp inline when buildin
 `chartPoints` from `livePoints`, since livePoints arrive raw from the WebSocket parser
 and bypass `normalizeTimeseries`.
 
-**RunDetailPage result tiles are hidden until the run completes.** The 4-column tile
-grid (`TileColumn` components) only renders when `run.metrics` (`m`) is non-null.
-Each `TileColumn` groups a header label + source badge + stacked `MetricCard` children.
-Layout: Avg Publish Rate col (msg/s + MB/s) | Avg Consume Rate col (msg/s + MB/s) |
-Pub Latency col (Avg/P50/P99/P999) | E2E Latency col (Avg/P50/P99/P999) — all with
-`omb` badge. Below that: a 4-col grid with Broker Publish Rate and Broker Consume Rate
-stub columns (amber, `redpanda` badge, `not connected`), with two empty placeholder
-divs so broker cols align under OMB cols. `MetricCard` accepts an `expected` prop;
-if actual < 95% of expected the value renders red, ≥ 95% renders green.
+**RunDetailPage post-completion view shows finalized HDR charts.** When a run
+completes, the page switches to a finalized view: (1) 2-column throughput tiles
+(publish rate + consume rate, actual vs target); (2) `FinalizedCharts` component
+with the nines table, per-second latency time series from the JSON result file,
+HDR percentile curves (nines-transformed log x-axis), and latency histograms;
+(3) `RunCharts` showing throughput/backlog/worker charts from stored metrics. The
+Run Log auto-collapses on completion. `FinalizedCharts` receives `results` from
+`GET /api/runs/{id}/results` (polled with retries after completion) and
+`warmupSamples` from the workload config. HDR results are also stored in the
+`run_results` SQLite table by `parse_and_store_hdr_results` (triggered async from
+`_finish_run`). `MetricCard` accepts an `expected` prop; if actual < 95% of
+expected the value renders red, ≥ 95% renders green.
 
 **Cluster page shows image digest per pod.** The `/api/cluster/pods` endpoint extracts
 `container_statuses[0].image_id` and parses the sha256 digest (first 12 chars) as
@@ -620,6 +623,46 @@ top-to-bottom: (1) header card with name, launch button, and projected load;
 (right) axis panels; (3) 2×2 CSS grid sitting directly on the page background —
 top row: Driver form panel (blue accent) + Workload form panel (green accent);
 bottom row: Driver YAML panel + Workload YAML panel (darker `#0d1018` to read as code).
+
+## Driver and Workload form architecture
+
+Both forms use a **key/value row model** — each config section is a list of
+`{_id, key, value}` rows rendered by a `PropertySection` / `WorkloadSection`
+component. Do not convert them back to fixed named inputs.
+
+**DriverForm** (`components/DriverForm.jsx`) sections:
+- Topic Config → `topicConfig` YAML block scalar
+- Producer Config → `producerConfig` YAML block scalar
+- Consumer Config → `consumerConfig` YAML block scalar
+- Common Config → `commonConfig` YAML block scalar — **always regenerated from
+  cluster Settings on form init, never from stored YAML**. Stored YAML uses
+  `yaml.dump()` format which the manual parser only partially handles. Collapsed
+  behind a `▶ COMMON CONFIG` twisty by default; expand to edit SASL overrides.
+
+**WorkloadForm** (`components/WorkloadForm.jsx`) sections: Topology, Load, Timing,
+Payload, Additional. All sections serialize to flat `key: value` YAML lines.
+`parseWorkloadYaml` (the backward-compat export used by `RunDetailPage`) is
+re-exported from `workloadFormUtils.js` — do not remove this re-export.
+
+**Utility modules:**
+- `lib/driverFormUtils.js` — `DRIVER_OPTIONS`, `KNOWN_PROP_OPTIONS`,
+  `parseDriverYaml`, `buildDriverYaml`, `deriveProtocol`, `buildCommonConfigFromCluster`
+- `lib/workloadFormUtils.js` — `DEFAULT_*_ROWS`, `WORKLOAD_KNOWN_PROP_OPTIONS`,
+  `WORKLOAD_KNOWN_PROP_TYPES`, `WORKLOAD_PROP_HINTS`, `parseWorkloadYamlToRows`,
+  `buildWorkloadYaml`, `parseWorkloadYaml`
+
+**Adding a new smart dropdown to the driver form:** add one entry to
+`KNOWN_PROP_OPTIONS` in `driverFormUtils.js` and a matching test in
+`driverFormUtils.test.js`. The `PropertySection` component picks it up
+automatically — no other changes needed.
+
+**`useRandomizedPayloads` is a toggle type** in `WORKLOAD_KNOWN_PROP_OPTIONS`.
+`randomizedPayloadPoolSize` is dimmed and suppressed from YAML output when
+`useRandomizedPayloads` is `'false'`. Both rows are always injected into the
+Payload section at init time regardless of what was in stored YAML.
+
+**Section divider colors:** driver form uses indigo `#818cf8`; workload form uses
+green `#4ade80`. Both use the same `LABEL ———` flex-row visual pattern.
 
 ## SQLite database
 
