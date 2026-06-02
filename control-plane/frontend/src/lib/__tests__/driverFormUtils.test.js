@@ -4,6 +4,7 @@ import {
   buildDriverYaml,
   buildCommonConfigFromCluster,
   deriveProtocol,
+  KNOWN_PROP_OPTIONS,
 } from '../driverFormUtils.js'
 
 const SAMPLE_YAML = `name: Redpanda
@@ -203,5 +204,44 @@ describe('deriveProtocol', () => {
   })
   it('returns empty string for null', () => {
     expect(deriveProtocol(null)).toBe('')
+  })
+})
+
+describe('KNOWN_PROP_OPTIONS', () => {
+  it('defines compression.type with 5 options including none', () => {
+    expect(KNOWN_PROP_OPTIONS['compression.type'].type).toBe('select')
+    expect(KNOWN_PROP_OPTIONS['compression.type'].options).toContain('none')
+    expect(KNOWN_PROP_OPTIONS['compression.type'].options).toHaveLength(5)
+  })
+
+  it('defines acks with exactly all/1/0', () => {
+    expect(KNOWN_PROP_OPTIONS['acks'].options).toEqual(['all', '1', '0'])
+  })
+
+  it('defines auto.offset.reset with earliest and latest', () => {
+    expect(KNOWN_PROP_OPTIONS['auto.offset.reset'].options).toEqual(['earliest', 'latest'])
+  })
+
+  it('defines enable.auto.commit with false and true', () => {
+    expect(KNOWN_PROP_OPTIONS['enable.auto.commit'].options).toContain('false')
+    expect(KNOWN_PROP_OPTIONS['enable.auto.commit'].options).toContain('true')
+  })
+
+  it('defines security.protocol with all four variants', () => {
+    expect(KNOWN_PROP_OPTIONS['security.protocol'].options).toEqual(
+      ['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL']
+    )
+  })
+
+  it('defines sasl.mechanism with SCRAM-SHA-256, SCRAM-SHA-512, PLAIN', () => {
+    expect(KNOWN_PROP_OPTIONS['sasl.mechanism'].options).toEqual(
+      ['SCRAM-SHA-256', 'SCRAM-SHA-512', 'PLAIN']
+    )
+  })
+
+  it('all entries have type select', () => {
+    for (const entry of Object.values(KNOWN_PROP_OPTIONS)) {
+      expect(entry.type).toBe('select')
+    }
   })
 })

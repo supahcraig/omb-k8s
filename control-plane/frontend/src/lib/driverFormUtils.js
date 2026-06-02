@@ -102,3 +102,12 @@ export function buildCommonConfigFromCluster(cluster) {
   }
   return rows
 }
+
+export const KNOWN_PROP_OPTIONS = {
+  'compression.type':   { type: 'select', options: ['none', 'snappy', 'lz4', 'zstd', 'gzip'] },
+  'acks':               { type: 'select', options: ['all', '1', '0'] },
+  'auto.offset.reset':  { type: 'select', options: ['earliest', 'latest'] },
+  'enable.auto.commit': { type: 'select', options: ['false', 'true'] },
+  'security.protocol':  { type: 'select', options: ['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'] },
+  'sasl.mechanism':     { type: 'select', options: ['SCRAM-SHA-256', 'SCRAM-SHA-512', 'PLAIN'] },
+}
