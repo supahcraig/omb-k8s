@@ -34,7 +34,7 @@ function SectionDivider({ label }) {
 
 function PropValueInput({ rowKey, value, onChange }) {
   const def = WORKLOAD_KNOWN_PROP_OPTIONS[rowKey]
-  const knownOption = def && (value === '' || def.options.includes(value)) ? def : null
+  const knownOption = def && (value === '' || def.options?.includes(value) ?? true) ? def : null
   const knownType   = WORKLOAD_KNOWN_PROP_TYPES[rowKey]
   const hint        = WORKLOAD_PROP_HINTS[rowKey]
 
