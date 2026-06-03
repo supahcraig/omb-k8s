@@ -5,6 +5,8 @@ import RunCharts from '../components/RunCharts.jsx'
 import FinalizedCharts from '../components/FinalizedCharts.jsx'
 import { parseLiveMetric, parseE2ELatency } from '../lib/ombLogParser.js'
 import { parseWorkloadYaml } from '../components/WorkloadForm.jsx'
+import useGrafanaUrl from '../hooks/useGrafanaUrl.js'
+import { buildRunGrafanaUrl } from '../lib/grafanaUtils.js'
 
 const STATUS_LABELS = {
   initializing: '⏳ initializing',
@@ -110,6 +112,7 @@ function LatencyColumn({ label, metrics, prefix, badge }) {
 export default function RunDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const grafanaUrl = useGrafanaUrl()
   const [run, setRun] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -494,6 +497,17 @@ export default function RunDetailPage() {
               <span className="text-muted text-small">
                 Completed {new Date(run.completed_at.endsWith('Z') ? run.completed_at : run.completed_at + 'Z').toLocaleString()}
               </span>
+            )}
+            {grafanaUrl && run.started_at && (
+              <a
+                href={buildRunGrafanaUrl(grafanaUrl, run.started_at, run.completed_at)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="badge"
+                style={{ textDecoration: 'none', background: 'rgba(249,115,22,0.15)', color: '#f97316', border: '1px solid rgba(249,115,22,0.3)' }}
+              >
+                📊 Grafana ↗
+              </a>
             )}
           </div>
         </div>
