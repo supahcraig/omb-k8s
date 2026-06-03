@@ -62,7 +62,7 @@ kube-prometheus-stack:
         limits:
           cpu: 500m
           memory: 1Gi
-      retention: 6h
+      retention: 7d
   grafana:
     nodeSelector:
       node-pool: control-plane
