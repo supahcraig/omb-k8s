@@ -60,3 +60,6 @@ export const getPodLogs  = (name, container, tail = 500)  => {
   if (container) params.set('container', container)
   return request('GET', `/cluster/pods/${encodeURIComponent(name)}/logs?${params}`)
 }
+
+// Grafana
+export const getGrafanaUrl = () => request('GET', '/grafana/url')
