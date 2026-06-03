@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getSweep, getSweepRuns, cancelSweep } from '../api.js'
+import useGrafanaUrl from '../hooks/useGrafanaUrl.js'
+import { buildSweepGrafanaUrl } from '../lib/grafanaUtils.js'
 
 function StatusBadge({ status }) {
   const cls = {
@@ -26,6 +28,7 @@ export default function SweepDetailPage() {
   const [runs, setRuns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const grafanaUrl = useGrafanaUrl()
 
   async function load() {
     try {
@@ -68,6 +71,8 @@ export default function SweepDetailPage() {
     runs.flatMap(r => Object.keys(parseParams(r.sweep_params)))
   ))
 
+  const sweepGrafanaUrl = grafanaUrl ? buildSweepGrafanaUrl(grafanaUrl, runs) : null
+
   return (
     <div>
       <div className="page-header">
@@ -89,8 +94,19 @@ export default function SweepDetailPage() {
       </div>
 
       <div className="card">
-        <div className="card-header">
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3>Run Comparison — {runs.length} run{runs.length !== 1 ? 's' : ''}</h3>
+          {sweepGrafanaUrl && (
+            <a
+              href={sweepGrafanaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="badge"
+              style={{ textDecoration: 'none', background: 'rgba(249,115,22,0.15)', color: '#f97316', border: '1px solid rgba(249,115,22,0.3)' }}
+            >
+              📊 Full sweep in Grafana ↗
+            </a>
+          )}
         </div>
         {runs.length === 0 ? (
           <div className="empty-state"><p>No runs yet.</p></div>
