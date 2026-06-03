@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from database import init_db
+from database import AsyncSessionLocal, init_db
 from services.seeder import seed_bundled_workloads
 
 logger = logging.getLogger(__name__)
@@ -22,6 +22,12 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialised.")
     await seed_bundled_workloads()
+    try:
+        from routers.settings import sync_scrape_secret_from_db
+        async with AsyncSessionLocal() as db:
+            await sync_scrape_secret_from_db(db)
+    except Exception:
+        logger.warning("Startup scrape config sync failed — skipping", exc_info=True)
     yield
     logger.info("Shutting down.")
 
