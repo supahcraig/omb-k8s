@@ -6,8 +6,6 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     app: omb-redpanda-dashboard
-    grafana_dashboard: "1"
-    grafana_folder: "Redpanda"
 data:
   redpanda.json: |-
 {{ .Files.Get "dashboards/redpanda.json" | indent 4 }}
