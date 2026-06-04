@@ -160,8 +160,9 @@ helm upgrade omb charts/omb -n omb \
 ```
 
 Each benchmark-worker node (m5.4xlarge / n2-standard-16 / Standard_D16s_v3)
-comfortably fits ~8 worker pods. The Cluster Autoscaler adds nodes automatically
-when needed.
+runs exactly 1 worker pod (due to `hostNetwork: true` — workers bind port 9080 on
+the host, so two workers on the same node would conflict). The Cluster Autoscaler
+adds a new node for each additional worker pod.
 
 Do not change worker instance types or JVM settings to increase throughput.
 The correct response to needing more throughput is more worker pods.

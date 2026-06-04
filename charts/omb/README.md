@@ -112,4 +112,6 @@ construct incorrect `--workers` arguments if out of sync.
 
 The correct response to needing more throughput is adding more worker pods via
 the UI scaling control, not changing instance types or JVM settings. Each node
-fits ~8 worker pods before the Cluster Autoscaler adds a new node.
+runs exactly 1 worker pod. Worker pods use `hostNetwork: true` and bind port 9080
+on the host — two workers on the same node would conflict. The Cluster Autoscaler
+adds a new node for each additional worker pod.

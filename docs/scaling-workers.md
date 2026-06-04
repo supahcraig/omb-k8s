@@ -34,13 +34,14 @@ Wait for all pods to show green before launching a benchmark. The control plane
 constructs the `--workers` argument from the current replica count at job
 creation time — unhealthy pods included in the list will cause the run to fail.
 
-### If a node fills up
+### Node provisioning
 
-Each benchmark-worker node fits roughly 8 worker pods before it is full. When
-you scale beyond node capacity:
+Worker pods use `hostNetwork: true` and bind port 9080 on the host — only
+**1 worker pod per node** is possible. Each time you add a worker, the Cluster
+Autoscaler provisions a new node:
 
-1. New pods enter **Pending** state — visible on the ClusterPage.
-2. The Cluster Autoscaler detects the pending pods and provisions a new node.
+1. New pod enters **Pending** state — visible on the Cluster page.
+2. The Cluster Autoscaler detects the pending pod and provisions a new node.
 3. Node startup takes **~2–3 minutes on AWS**, faster on GCP and Azure.
 4. Once the node is ready, pods transition to Running, then to ready.
 
