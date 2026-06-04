@@ -172,6 +172,20 @@ export default function RunCharts({
     return Math.max(max, podMax, p.workerCpuPct ?? 0);
   }, 0);
 
+  const hasNetworkMetrics = promPoints.some(p =>
+    Object.keys(p).some(k => k.startsWith('workerNetTx_'))
+  );
+
+  const workerDropPeaks = {};
+  for (const p of promPoints) {
+    for (const [k, v] of Object.entries(p)) {
+      if (!k.startsWith('workerNetDrop_')) continue;
+      const pod = k.slice('workerNetDrop_'.length);
+      if ((v ?? 0) > (workerDropPeaks[pod] ?? 0)) workerDropPeaks[pod] = v;
+    }
+  }
+  const anyDrops = Object.values(workerDropPeaks).some(v => v > 0);
+
   // Progress bar driven by log-line timestamps: bar starts when warmup traffic
   // begins, green benchmark portion starts when benchmark traffic begins.
   const currentSamples = (isLive && warmupStartedAt)
@@ -289,6 +303,32 @@ export default function RunCharts({
           lineHeight: 1.5,
         }}>
           ⚠ CPU throttling detected (peak {maxThrottle.toFixed(0)}%) — workers are being rate-limited by cgroup CPU limits. Throughput may be lower than broker capacity supports. Consider scaling up the number of worker pods.
+        </div>
+      )}
+
+      {/* Network drops alert */}
+      {anyDrops && (
+        <div style={{
+          background: 'rgba(245,158,11,0.12)',
+          border: '1px solid rgba(245,158,11,0.35)',
+          borderRadius: 6,
+          padding: '10px 14px',
+          marginBottom: 12,
+          color: '#fbbf24',
+          fontSize: 13,
+          lineHeight: 1.5,
+        }}>
+          ⚠ Network packet drops detected — worker NIC may be saturated. Throughput results may reflect worker network capacity rather than broker capacity.
+          <div style={{ marginTop: 4, fontSize: 12, color: '#fcd34d' }}>
+            {Object.entries(workerDropPeaks)
+              .filter(([, v]) => v > 0)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([pod, v]) => (
+                <span key={pod} style={{ marginRight: 16 }}>
+                  {pod.replace('omb-worker-', 'worker-')}: {v.toFixed(2)} drops/s
+                </span>
+              ))}
+          </div>
         </div>
       )}
 
@@ -435,7 +475,7 @@ export default function RunCharts({
 
       {/* Row 4: Worker resource charts */}
       {(hasWorkerMetrics || isLive) && (
-        <div className="charts-row charts-row-2">
+        <div className={hasNetworkMetrics ? 'charts-row charts-row-3' : 'charts-row charts-row-2'}>
           <ChartCard
             title="Worker CPU (%)"
             badge="worker"
@@ -519,6 +559,36 @@ export default function RunCharts({
               </LineChart>
             </ResponsiveContainer>
           </ChartCard>
+
+          {hasNetworkMetrics && (
+            <ChartCard title="Worker Network Tx (MB/s)" badge="worker">
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={promPoints} syncId="run">
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
+                  <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={promXFmt} />
+                  <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} domain={[0, 'auto']} tickFormatter={v => fmtMBTick(v / 1_048_576)} />
+                  <Tooltip
+                    contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }}
+                    labelFormatter={v => fmtTimeLabel(promTimeBase, v)}
+                    formatter={(v, name) => [v != null ? fmtMBTick(v / 1_048_576) : '—', name]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
+                  {workerPods.map((pod, i) => (
+                    <Line
+                      key={`nettx-${pod}`}
+                      type="monotone"
+                      dataKey={`workerNetTx_${pod}`}
+                      name={pod.replace('omb-worker-', 'worker-')}
+                      stroke={WORKER_COLORS[i % WORKER_COLORS.length]}
+                      dot={false}
+                      strokeWidth={2}
+                      connectNulls
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          )}
         </div>
       )}
     </div>

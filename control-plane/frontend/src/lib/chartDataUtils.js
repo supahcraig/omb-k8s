@@ -78,6 +78,20 @@ export function promToChartData(samples) {
       point[`workerCpu_${pod}`] = val;
     }
 
+    const netTxPerPod = s.worker_net_tx_per_pod
+      ? JSON.parse(s.worker_net_tx_per_pod)
+      : {};
+    const netDropPerPod = s.worker_net_drop_per_pod
+      ? JSON.parse(s.worker_net_drop_per_pod)
+      : {};
+
+    for (const [pod, val] of Object.entries(netTxPerPod)) {
+      point[`workerNetTx_${pod}`] = val;
+    }
+    for (const [pod, val] of Object.entries(netDropPerPod)) {
+      point[`workerNetDrop_${pod}`] = val;
+    }
+
     return point;
   });
 }

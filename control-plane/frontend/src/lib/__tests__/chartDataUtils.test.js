@@ -87,6 +87,8 @@ describe('promToChartData', () => {
       worker_throttle_pct: null,
       worker_memory_per_pod: '{"omb-worker-0":3600.0,"omb-worker-1":200.0}',
       worker_cpu_per_pod: '{"omb-worker-0":12.0,"omb-worker-1":1.0}',
+      worker_net_tx_per_pod: '{"omb-worker-0":52428800,"omb-worker-1":31457280}',
+      worker_net_drop_per_pod: '{"omb-worker-2":3.2}',
     },
     {
       t: 15,
@@ -98,6 +100,8 @@ describe('promToChartData', () => {
       worker_throttle_pct: null,
       worker_memory_per_pod: null,
       worker_cpu_per_pod: null,
+      worker_net_tx_per_pod: null,
+      worker_net_drop_per_pod: null,
     },
   ];
 
@@ -145,6 +149,27 @@ describe('promToChartData', () => {
 
   test('returns empty array for empty input', () => {
     expect(promToChartData([])).toEqual([]);
+  });
+
+  test('flattens worker_net_tx_per_pod JSON into workerNetTx_<pod> keys (bytes/sec)', () => {
+    const result = promToChartData(samples);
+    expect(result[0]['workerNetTx_omb-worker-0']).toBeCloseTo(52428800);
+    expect(result[0]['workerNetTx_omb-worker-1']).toBeCloseTo(31457280);
+  });
+
+  test('flattens worker_net_drop_per_pod JSON into workerNetDrop_<pod> keys', () => {
+    const result = promToChartData(samples);
+    expect(result[0]['workerNetDrop_omb-worker-2']).toBeCloseTo(3.2);
+  });
+
+  test('workerNetTx_ keys are absent when worker_net_tx_per_pod is null', () => {
+    const result = promToChartData(samples);
+    expect(result[1]['workerNetTx_omb-worker-0']).toBeUndefined();
+  });
+
+  test('workerNetDrop_ keys are absent when worker_net_drop_per_pod is null', () => {
+    const result = promToChartData(samples);
+    expect(result[1]['workerNetDrop_omb-worker-2']).toBeUndefined();
   });
 });
 
