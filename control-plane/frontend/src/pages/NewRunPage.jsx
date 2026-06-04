@@ -283,7 +283,7 @@ export default function NewRunPage() {
     : 'Launch Run'
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} style={{ maxWidth: '1400px', margin: '0 auto' }}>
       {/* Header card */}
       <div className="card mb-20">
         <div className="card-header">
