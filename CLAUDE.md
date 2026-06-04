@@ -291,10 +291,12 @@ do not duplicate the three-step sequence elsewhere.
 6. UI streams Job logs via websocket
 7. Concurrently, `services/prometheus_collector.py` polls the in-cluster
    kube-prometheus-stack Prometheus every 15 s for cAdvisor worker metrics and
-   writes them to `prometheus_samples`. Each sample row stores both aggregate
-   averages (`worker_cpu_pct`, `worker_memory_mib`, `worker_throttle_pct`) and
-   per-pod JSON objects (`worker_memory_per_pod`, `worker_cpu_per_pod`) keyed by
-   pod name. The Prometheus service is at:
+   writes them to `prometheus_samples`. Each sample row stores aggregate averages
+   (`worker_cpu_pct`, `worker_memory_mib`, `worker_throttle_pct`) and per-pod JSON
+   objects (`worker_memory_per_pod`, `worker_cpu_per_pod`, `worker_net_tx_per_pod`,
+   `worker_net_drop_per_pod`) keyed by pod name. Network queries use a `net_selector`
+   without `container="worker"` because `container_network_*` metrics are pod-level
+   in cAdvisor (no container label). The Prometheus service is at:
    `http://omb-kube-prometheus-stack-prometheus.{namespace}.svc.cluster.local:9090`
    The collector silently no-ops if Prometheus is unreachable.
 8. On completion, `_finish_run` reads `/data/results/run-{id}` from the PVC
@@ -546,15 +548,20 @@ from the server, so it is accurate after navigation. SQLite stores naive UTC
 datetimes without 'Z'; always append 'Z' before `new Date(ts)` in JavaScript to
 avoid local-timezone misinterpretation.
 
-**RunCharts renders per-worker CPU and memory series.** The Worker CPU and Worker
-Memory charts show one `<Line>` per pod (e.g. `worker-0`, `worker-1`) using the
-`worker_cpu_per_pod` / `worker_memory_per_pod` JSON columns from `prometheus_samples`.
-If those columns are absent (old runs), the charts fall back to the averaged
-`workerCpuPct` / `workerMemMiB` columns. Memory y-axis is in GiB (data stays in
-MiB; `tickFormatter` divides by 1024). Both axes auto-scale to data rather than
-using a fixed domain. All chart x-axes show local time derived from `run.started_at`
-(Prometheus data) or `warmupStartedAt` (OMB log data); SQLite datetimes always need
-`+Z` appended before `new Date()` to parse as UTC correctly.
+**RunCharts renders per-worker CPU, memory, and network series.** The Worker CPU,
+Worker Memory, and Worker Network Tx charts each show one `<Line>` per pod using
+the `worker_cpu_per_pod` / `worker_memory_per_pod` / `worker_net_tx_per_pod` JSON
+columns from `prometheus_samples`. If CPU/memory columns are absent (old runs), those
+charts fall back to the averaged `workerCpuPct` / `workerMemMiB` columns. The Worker
+Network Tx chart is only rendered when `worker_net_tx_per_pod` data is present
+(`hasNetworkMetrics`); the worker row is 3-column when network data exists, 2-column
+otherwise. Network Tx stores raw bytes/sec; `tickFormatter` and tooltip `formatter`
+divide by 1_048_576 to display MB/s. Memory y-axis is in GiB (data stays in MiB;
+`tickFormatter` divides by 1024). An amber alert banner fires when any pod has nonzero
+`worker_net_drop_per_pod` values, listing each affected pod and its peak drops/sec.
+Pod list for all worker charts is derived from `workerMem_*` keys (`workerPods`). All
+chart x-axes show local time; SQLite datetimes always need `+Z` appended before
+`new Date()` to parse as UTC correctly.
 
 **RunCharts latency charts suppress warmup data.** `latencyPoints` is a mapped copy
 of `chartPoints` where all latency fields (pubP50/pubP99/pubP999/e2eP50/e2eP99/e2eP999)
