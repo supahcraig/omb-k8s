@@ -528,7 +528,7 @@ export default function RunDetailPage() {
       {run.status === 'completed' && m && (
         <>
           {/* Throughput tiles — 2 columns only (actual vs target) */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'inline-grid', gridTemplateColumns: 'auto auto', gap: 12, marginBottom: 16 }}>
             <TileColumn label="Avg Publish Rate" badge="omb">
               <MetricCard value={fmt(m.publish_rate_avg)} unit="msg/s" expected={expectedMsgSec > 0 ? expectedMsgSec : undefined} />
               <MetricCard value={fmt(m.publish_rate_avg * messageSize / 1_048_576, 2)} unit="MB/s" expected={expectedMBSec > 0 ? expectedMBSec : undefined} />
