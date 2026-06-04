@@ -463,15 +463,20 @@ export default function RunDetailPage() {
             ← Sweep #{run.sweep_id}
           </Link>
           <div className="sweep-nav-runs">
-            {sweepRuns.map((sr, i) => (
-              <Link
-                key={sr.id}
-                to={`/runs/${sr.id}`}
-                className={`sweep-run-pill sweep-run-pill-${sr.status}${sr.id === run.id ? ' current' : ''}`}
-              >
-                {sweepParamLabel(sr) || `Run ${i + 1}`}
-              </Link>
-            ))}
+            {sweepRuns.map((sr, i) => {
+              const nextPending = sweepRuns[i + 1]?.status === 'pending'
+              const isCooling = sr.status === 'completed' && nextPending && cooldownRemaining > 0
+              const pillStatus = isCooling ? 'cooling' : sr.status
+              return (
+                <Link
+                  key={sr.id}
+                  to={`/runs/${sr.id}`}
+                  className={`sweep-run-pill sweep-run-pill-${pillStatus}${sr.id === run.id ? ' current' : ''}`}
+                >
+                  {sweepParamLabel(sr) || `Run ${i + 1}`}
+                </Link>
+              )
+            })}
           </div>
           {cooldownRemaining > 0 && (
             <div className="sweep-cooldown">
