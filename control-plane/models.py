@@ -104,6 +104,8 @@ class PrometheusSample(Base):
     worker_throttle_pct = Column(Float, nullable=True) # max throttled-periods % across workers
     worker_memory_per_pod = Column(Text, nullable=True)  # JSON: {"omb-worker-0": MiB, ...}
     worker_cpu_per_pod = Column(Text, nullable=True)     # JSON: {"omb-worker-0": pct, ...}
+    worker_net_tx_per_pod = Column(Text, nullable=True)  # JSON: {"omb-worker-0": bytes_per_sec, ...}
+    worker_net_drop_per_pod = Column(Text, nullable=True)  # JSON: {"omb-worker-0": drops_per_sec, ...}
 
     run = relationship("Run", back_populates="prometheus_samples")
 
