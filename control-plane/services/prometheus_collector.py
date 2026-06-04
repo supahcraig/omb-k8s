@@ -95,6 +95,22 @@ async def _collect_sample(
         f'100 * rate(container_cpu_usage_seconds_total{{{worker_selector}}}[2m])'
         f' / {cpu_request_cores}')
 
+    # container_network_* metrics are pod-level (no container label) — use a
+    # separate selector that omits container="worker" from worker_selector.
+    net_selector = f'namespace="{namespace}",pod=~"omb-worker-.*"'
+
+    net_tx_per_pod = await _query_per_pod(client, prom_url,
+        f'sum by (pod) ('
+        f'  rate(container_network_transmit_bytes_total{{{net_selector},interface!="lo"}}[2m])'
+        f')')
+
+    net_drop_per_pod = await _query_per_pod(client, prom_url,
+        f'sum by (pod) ('
+        f'  rate(container_network_transmit_packets_dropped_total{{{net_selector},interface!="lo"}}[2m])'
+        f'  +'
+        f'  rate(container_network_receive_packets_dropped_total{{{net_selector},interface!="lo"}}[2m])'
+        f')')
+
     async with AsyncSessionLocal() as db:
         sample = PrometheusSample(
             run_id=run_id,
@@ -107,6 +123,8 @@ async def _collect_sample(
             worker_throttle_pct=throttle_pct,
             worker_memory_per_pod=json.dumps(memory_per_pod) if memory_per_pod else None,
             worker_cpu_per_pod=json.dumps(cpu_per_pod) if cpu_per_pod else None,
+            worker_net_tx_per_pod=json.dumps(net_tx_per_pod) if net_tx_per_pod else None,
+            worker_net_drop_per_pod=json.dumps(net_drop_per_pod) if net_drop_per_pod else None,
         )
         db.add(sample)
         try:
