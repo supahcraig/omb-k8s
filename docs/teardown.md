@@ -67,6 +67,13 @@ the Cluster Autoscaler.
 > nodes, GCE nodes, and Azure VMs continue running and billing until
 > `terraform destroy` completes.
 
+> **Wait before running terraform destroy.** After `helm uninstall`, AWS needs
+> 1–2 minutes to fully deprovision the LoadBalancer services (control plane and
+> Grafana). If you run `terraform destroy` immediately, it will fail with
+> dependency errors on the VPC subnets while ELB network interfaces are still
+> attached. If destroy does fail with a subnet dependency error, wait a minute
+> and re-run — do not manually delete resources unless it fails a second time.
+
 **What Helm uninstall does NOT clean up automatically:**
 
 The PersistentVolumeClaim is retained by default to protect data:
@@ -96,7 +103,7 @@ cloud infrastructure provisioned during the engagement.
 
 ```bash
 cd terraform/aws
-terraform destroy -var-file=../../terraform/engagements/<customer>.tfvars
+terraform destroy
 ```
 
 Takes approximately 10–15 minutes. AWS destroys resources in dependency order:
@@ -107,7 +114,7 @@ subnets, then IAM roles.
 
 ```bash
 cd terraform/gcp
-terraform destroy -var-file=../../terraform/engagements/<customer>.tfvars
+terraform destroy
 ```
 
 Takes approximately 3–5 minutes.
@@ -116,7 +123,7 @@ Takes approximately 3–5 minutes.
 
 ```bash
 cd terraform/azure
-terraform destroy -var-file=../../terraform/engagements/<customer>.tfvars
+terraform destroy
 ```
 
 Takes approximately 5–10 minutes.
@@ -192,13 +199,15 @@ cloud console, it is safe to delete local state files.
 Files safe to delete after a confirmed destroy:
 
 ```
-terraform/engagements/<customer>.tfvars   # contains sensitive values (passwords, keys)
+terraform/aws/terraform.tfvars            # contains sensitive values — delete after destroy
 terraform/aws/.terraform/                 # downloaded provider binaries (large, re-downloadable)
 terraform/aws/terraform.tfstate           # local state — no longer needed after destroy
 terraform/aws/terraform.tfstate.backup    # backup of previous state
+terraform/gcp/terraform.tfvars
 terraform/gcp/.terraform/
 terraform/gcp/terraform.tfstate
 terraform/gcp/terraform.tfstate.backup
+terraform/azure/terraform.tfvars
 terraform/azure/.terraform/
 terraform/azure/terraform.tfstate
 terraform/azure/terraform.tfstate.backup
@@ -224,7 +233,7 @@ in the cloud console.
 
 1. EKS — delete node groups first, then the cluster
 2. EC2 — terminate any remaining instances
-3. EC2 → Load Balancers — delete the load balancer for the omb Service
+3. EC2 → Load Balancers — delete both load balancers (control plane and Grafana)
 4. EC2 → EBS Volumes — delete orphaned volumes
 5. VPC → Peering connections — delete peering connection
 6. VPC → Route tables — remove the peering routes

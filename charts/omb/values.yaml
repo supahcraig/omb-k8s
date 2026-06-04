@@ -75,9 +75,10 @@ kube-prometheus-stack:
         memory: 256Mi
     service:
       type: LoadBalancer
-    # IMPORTANT: always override this before deploying in customer engagements
-    # helm install/upgrade ... --set kube-prometheus-stack.grafana.adminPassword=<password>
-    adminPassword: changeme
+    # Default login: admin / admin
+    # Override at install time if desired:
+    #   --set kube-prometheus-stack.grafana.adminPassword=<password>
+    adminPassword: admin
     dashboardProviders:
       dashboardproviders.yaml:
         apiVersion: 1

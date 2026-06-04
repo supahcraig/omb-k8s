@@ -6,23 +6,23 @@ Deploys the OpenMessaging Benchmark platform on Kubernetes.
 
 ```bash
 # AWS
-helm install omb charts/omb \
+helm install omb charts/omb -n omb --create-namespace \
   -f charts/omb/values-aws.yaml \
   --set clusterAutoscaler.clusterName=<eks-cluster-name> \
   --set clusterAutoscaler.region=<aws-region> \
-  --set clusterAutoscaler.roleArn=<output from terraform: cluster_autoscaler_iam_role_arn> \
-  --set kube-prometheus-stack.grafana.adminPassword=<your-password>
+  --set clusterAutoscaler.roleArn=<output from terraform: cluster_autoscaler_iam_role_arn>
 
 # GCP
-helm install omb charts/omb -f charts/omb/values-gcp.yaml \
-  --set kube-prometheus-stack.grafana.adminPassword=<your-password>
+helm install omb charts/omb -n omb --create-namespace \
+  -f charts/omb/values-gcp.yaml
 
 # Azure
-helm install omb charts/omb -f charts/omb/values-aks.yaml \
-  --set kube-prometheus-stack.grafana.adminPassword=<your-password>
+helm install omb charts/omb -n omb --create-namespace \
+  -f charts/omb/values-aks.yaml
 ```
 
-> **Warning:** Always set `kube-prometheus-stack.grafana.adminPassword` before deploying in a customer engagement. The default password is `changeme` — do not leave it at the default.
+Grafana default login: **admin / admin**. Override at install time if desired:
+`--set kube-prometheus-stack.grafana.adminPassword=<password>`
 
 ## Validation
 
@@ -79,7 +79,7 @@ kubectl get svc omb-grafana -n <namespace> \
 
 On GCP and Azure, replace `.hostname` with `.ip` in the above commands.
 
-Both services may take 1–2 minutes to receive an external address after install. Login to Grafana with username `admin` and the password you set at install time. Default credentials are `admin` / `changeme` — **always override before a customer engagement**.
+Both services may take 1–2 minutes to receive an external address after install. Grafana default login: **admin / admin**. Override with `--set kube-prometheus-stack.grafana.adminPassword=<password>` if desired.
 
 The Redpanda dashboard is available under **Dashboards → Redpanda** folder immediately after deployment.
 
@@ -94,7 +94,7 @@ Expected: prometheus and grafana pods in `Running` state.
 ## Uninstall
 
 ```bash
-helm uninstall omb
+helm uninstall omb -n omb
 ```
 
 > **Note:** The PVC is not deleted automatically. Delete it manually if you want to discard benchmark data:

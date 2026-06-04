@@ -151,11 +151,11 @@ helm install omb charts/omb -n omb --create-namespace \
   --set clusterAutoscaler.clusterName=$(terraform -chdir=terraform/aws output -raw cluster_name) \
   --set clusterAutoscaler.region=$(terraform -chdir=terraform/aws output -raw region) \
   --set clusterAutoscaler.roleArn=$(terraform -chdir=terraform/aws output -raw cluster_autoscaler_iam_role_arn) \
-  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/aws output -raw terraform_operator_ip)/32" \
-  --set kube-prometheus-stack.grafana.adminPassword=<your-grafana-password>
-
-> **Important:** Always set a strong Grafana password at install time. The default is `changeme` — do not use it in customer engagements.
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/aws output -raw terraform_operator_ip)/32"
 ```
+
+Grafana default login: **admin / admin**. Override at install time if desired:
+`--set kube-prometheus-stack.grafana.adminPassword=<password>`
 
 > **Note:** `helm dependency build` downloads `kube-prometheus-stack` and other
 > chart dependencies into `charts/omb/charts/`. It is safe to re-run if the
@@ -196,7 +196,7 @@ kubectl get svc omb-grafana -n omb \
 DNS propagation can take 1–3 minutes after the service is created. Open the hostnames in your browser once they resolve:
 
 - Control plane UI: `http://<control-plane-hostname>/`
-- Grafana: `http://<grafana-hostname>/` — login with `admin` and the password set during install
+- Grafana: `http://<grafana-hostname>/` — login with `admin` / `admin` (default)
 
 The Redpanda dashboard is pre-loaded under **Dashboards → Redpanda** in Grafana.
 
@@ -228,17 +228,17 @@ Click **Save**.
 
 ## 9. Configure Prometheus
 
-The in-cluster Prometheus (kube-prometheus-stack) is pre-configured and ready.
-All you need to do is enable it in the UI.
-
 1. Click **Settings** in the left sidebar.
 2. Select the **Prometheus** tab.
-3. Toggle Prometheus scraping **on**.
-4. Click **Save**.
+3. Toggle Prometheus scraping **on** and click **Save**.
 
-The collector uses the in-cluster service URL automatically — no URL entry is
-required. Worker CPU, memory, and throttle metrics will appear in run detail
-charts once the first benchmark run starts.
+This enables worker CPU, memory, and throttle metrics in run detail charts.
+
+**For Redpanda Cloud (BYOC):** To populate the Grafana Redpanda dashboard with
+broker-side metrics (produce/fetch latency, throughput, partition health), also
+paste your BYOC Prometheus scrape YAML into the **Scrape YAML** field and save.
+Redpanda Cloud provides this YAML in the console under **Monitoring**. The control
+plane syncs it automatically to the in-cluster Prometheus — no kubectl required.
 
 ---
 
@@ -302,6 +302,13 @@ When the engagement is complete:
 
 ```bash
 helm uninstall omb -n omb
+```
+
+Wait 1–2 minutes for AWS to fully deprovision the LoadBalancers (control plane and
+Grafana). Skipping this wait causes `terraform destroy` to fail with subnet
+dependency errors while ELB network interfaces are still attached.
+
+```bash
 cd terraform/aws
 terraform destroy
 ```

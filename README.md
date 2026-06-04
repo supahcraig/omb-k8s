@@ -47,6 +47,8 @@ helm install omb charts/omb -n omb --create-namespace \
 
 # AWS returns a hostname (not an IP); DNS propagation takes ~1 min
 kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+kubectl get svc omb-grafana -n omb -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+# Grafana default login: admin / admin
 ```
 
 ### GCP (GKE)
@@ -69,6 +71,8 @@ helm install omb charts/omb -n omb --create-namespace \
 
 # GCP returns an IP address
 kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+kubectl get svc omb-grafana -n omb -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+# Grafana default login: admin / admin
 ```
 
 ### Azure (AKS)
@@ -91,6 +95,8 @@ helm install omb charts/omb -n omb --create-namespace \
 
 # Azure returns an IP address
 kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+kubectl get svc omb-grafana -n omb -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+# Grafana default login: admin / admin
 ```
 
 ### Upgrading
@@ -163,10 +169,13 @@ The correct response to needing more throughput is more worker pods.
 ## Tearing Down
 
 ```bash
-# Uninstall the Helm release
+# Uninstall the Helm release first and wait ~2 minutes for AWS/GCP/Azure
+# to fully deprovision the LoadBalancer(s) before running terraform destroy.
+# Skipping this causes terraform destroy to fail with dependency errors on
+# the VPC/subnets while ELB ENIs are still attached.
 helm uninstall omb -n omb
 
-# Destroy the Kubernetes cluster and VPC
+# Then destroy the Kubernetes cluster and VPC
 cd terraform/<cloud>
 terraform destroy
 ```

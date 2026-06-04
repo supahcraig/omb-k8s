@@ -149,11 +149,11 @@ helm repo update
 helm dependency build charts/omb
 helm install omb charts/omb -n omb --create-namespace \
   -f charts/omb/values-gcp.yaml \
-  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/gcp output -raw terraform_operator_ip)/32" \
-  --set kube-prometheus-stack.grafana.adminPassword=<your-grafana-password>
-
-> **Important:** Always set a strong Grafana password at install time. The default is `changeme` — do not use it in customer engagements.
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/gcp output -raw terraform_operator_ip)/32"
 ```
+
+Grafana default login: **admin / admin**. Override at install time if desired:
+`--set kube-prometheus-stack.grafana.adminPassword=<password>`
 
 This deploys:
 - The control-plane pod (FastAPI + React UI, SQLite on a PersistentVolume)
@@ -190,7 +190,7 @@ kubectl get svc omb-grafana -n omb \
 IPs may take 1–2 minutes to be assigned after Helm install. Re-run if output is empty.
 
 - Control plane UI: `http://<control-plane-ip>/`
-- Grafana: `http://<grafana-ip>/` — login with `admin` and the password set during install
+- Grafana: `http://<grafana-ip>/` — login with `admin` / `admin` (default)
 
 The Redpanda dashboard is pre-loaded under **Dashboards → Redpanda** in Grafana.
 
@@ -214,11 +214,15 @@ Click **Save**.
 
 ## 9. Configure Prometheus
 
-Open **Settings → Prometheus** tab.
+Open **Settings → Prometheus** tab. Toggle **Enable Prometheus** on and click **Save**.
 
-The in-cluster Prometheus URL is pre-configured and does not need to be changed. Toggle **Enable Prometheus** to on and click **Save**.
+This enables worker CPU, memory, and throttle metrics in run detail charts.
 
-Worker CPU, memory, and throttle metrics will begin appearing in run charts once the first benchmark starts.
+**For Redpanda Cloud (BYOC):** To populate the Grafana Redpanda dashboard with
+broker-side metrics, also paste your BYOC Prometheus scrape YAML into the
+**Scrape YAML** field and save. Redpanda Cloud provides this YAML in the console
+under **Monitoring**. The control plane syncs it automatically to the in-cluster
+Prometheus — no kubectl required.
 
 ---
 

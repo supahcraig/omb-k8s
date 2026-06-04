@@ -170,11 +170,11 @@ Install the chart into the `omb` namespace:
 ```bash
 helm install omb charts/omb -n omb --create-namespace \
   -f charts/omb/values-aks.yaml \
-  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/azure output -raw terraform_operator_ip)/32" \
-  --set kube-prometheus-stack.grafana.adminPassword=<your-grafana-password>
-
-> **Important:** Always set a strong Grafana password at install time. The default is `changeme` — do not use it in customer engagements.
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/azure output -raw terraform_operator_ip)/32"
 ```
+
+Grafana default login: **admin / admin**. Override at install time if desired:
+`--set kube-prometheus-stack.grafana.adminPassword=<password>`
 
 The AKS values file sets:
 
@@ -213,7 +213,7 @@ kubectl get svc omb-grafana -n omb \
 It may take 2–3 minutes for Azure to assign external IPs after the Services are created. If a command returns empty output, wait a moment and retry.
 
 - Control plane UI: `http://<control-plane-ip>/`
-- Grafana: `http://<grafana-ip>/` — login with `admin` and the password set during install
+- Grafana: `http://<grafana-ip>/` — login with `admin` / `admin` (default)
 
 The Redpanda dashboard is pre-loaded under **Dashboards → Redpanda** in Grafana.
 
@@ -239,13 +239,16 @@ Click **Save**.
 
 ## 9. Configure Prometheus
 
-In-cluster Prometheus is deployed as part of the Helm chart and is pre-configured. No external Prometheus URL is required.
-
 1. Open **Settings** → **Prometheus** tab.
-2. Toggle Prometheus collection **on**.
-3. Click **Save**.
+2. Toggle Prometheus collection **on** and click **Save**.
 
-The collector uses the in-cluster kube-prometheus-stack URL automatically. Worker CPU and memory metrics will appear in run detail charts once benchmarks start.
+This enables worker CPU, memory, and throttle metrics in run detail charts.
+
+**For Redpanda Cloud (BYOC):** To populate the Grafana Redpanda dashboard with
+broker-side metrics, also paste your BYOC Prometheus scrape YAML into the
+**Scrape YAML** field and save. Redpanda Cloud provides this YAML in the console
+under **Monitoring**. The control plane syncs it automatically to the in-cluster
+Prometheus — no kubectl required.
 
 ---
 
