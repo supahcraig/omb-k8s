@@ -149,7 +149,10 @@ helm repo update
 helm dependency build charts/omb
 helm install omb charts/omb -n omb --create-namespace \
   -f charts/omb/values-gcp.yaml \
-  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/gcp output -raw terraform_operator_ip)/32"
+  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/gcp output -raw terraform_operator_ip)/32" \
+  --set kube-prometheus-stack.grafana.adminPassword=<your-grafana-password>
+
+> **Important:** Always set a strong Grafana password at install time. The default is `changeme` — do not use it in customer engagements.
 ```
 
 This deploys:
@@ -168,17 +171,28 @@ Press `Ctrl+C` once everything is running.
 
 ---
 
-## 7. Get the UI address
+## 7. Get the UI and Grafana addresses
 
-GCP LoadBalancer services expose an IP address (not a hostname):
+GCP LoadBalancer services expose an IP address (not a hostname). There are two external services after install.
+
+Retrieve both:
 
 ```bash
-kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+# Control plane UI
+kubectl get svc omb-control-plane -n omb \
+  -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+
+# Grafana
+kubectl get svc omb-grafana -n omb \
+  -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 ```
 
-The IP may take 1–2 minutes to be assigned after Helm install. Re-run the command if it returns empty output.
+IPs may take 1–2 minutes to be assigned after Helm install. Re-run if output is empty.
 
-Open the UI at `http://<IP-address>` in your browser.
+- Control plane UI: `http://<control-plane-ip>/`
+- Grafana: `http://<grafana-ip>/` — login with `admin` and the password set during install
+
+The Redpanda dashboard is pre-loaded under **Dashboards → Redpanda** in Grafana.
 
 ---
 

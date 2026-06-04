@@ -2,10 +2,13 @@ import { useState } from 'react'
 import { NavLink, Link } from 'react-router-dom'
 import WorkerScalingBar from './WorkerScalingBar.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
+import useGrafanaUrl from '../hooks/useGrafanaUrl.js'
+import { buildGrafanaUrl } from '../lib/grafanaUtils.js'
 
 export default function Layout({ children }) {
   const { hasClusterConfig, settings } = useSettings()
   const [dismissed, setDismissed] = useState(false)
+  const grafanaUrl = useGrafanaUrl()
 
   const showBanner = settings !== undefined && !hasClusterConfig && !dismissed
 
@@ -42,6 +45,23 @@ export default function Layout({ children }) {
             Settings
           </NavLink>
         </div>
+
+        {grafanaUrl && (
+          <>
+            <div className="nav-section-divider" />
+            <div className="nav-section-label">Monitoring</div>
+            <div className="nav-links">
+              <a
+                href={buildGrafanaUrl(grafanaUrl, 'now-6h', 'now')}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="nav-link"
+              >
+                Grafana ↗
+              </a>
+            </div>
+          </>
+        )}
 
         <div className="nav-bottom">
           <WorkerScalingBar />

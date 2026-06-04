@@ -62,7 +62,7 @@ kube-prometheus-stack:
         limits:
           cpu: 500m
           memory: 1Gi
-      retention: 6h
+      retention: 7d
   grafana:
     nodeSelector:
       node-pool: control-plane
@@ -73,7 +73,28 @@ kube-prometheus-stack:
       limits:
         cpu: 200m
         memory: 256Mi
-    adminPassword: admin
+    service:
+      type: LoadBalancer
+    # IMPORTANT: always override this before deploying in customer engagements
+    # helm install/upgrade ... --set kube-prometheus-stack.grafana.adminPassword=<password>
+    adminPassword: changeme
+    dashboardProviders:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+          - name: redpanda
+            orgId: 1
+            folder: Redpanda
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/redpanda
+    extraConfigmapMounts:
+      - name: redpanda-dashboard
+        mountPath: /var/lib/grafana/dashboards/redpanda
+        configMap: omb-redpanda-dashboard
+        readOnly: true
   prometheusOperator:
     nodeSelector:
       node-pool: control-plane

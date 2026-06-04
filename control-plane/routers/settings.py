@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings as app_settings
 from database import get_db
 from models import Setting
 from schemas import ClusterConfig, PrometheusConfig, SettingsOut
@@ -142,6 +143,71 @@ def _prometheus_to_storage(config: PrometheusConfig, existing_stored: Optional[d
 
 
 # ---------------------------------------------------------------------------
+# Prometheus scrape config secret sync
+# ---------------------------------------------------------------------------
+
+_SCRAPE_SECRET_NAME = "omb-prometheus-additional-scrape-configs"
+_SCRAPE_SECRET_KEY = "additional-scrape-configs.yaml"
+
+
+def _build_scrape_yaml(stored: Optional[dict]) -> str:
+    """Return the full (unredacted) Prometheus scrape YAML for the secret.
+
+    BYOC: re-injects the stored password into the redacted YAML.
+    Self-hosted: generates a minimal static_configs job from stored targets.
+    Missing / disabled: returns empty string (clears the secret).
+    """
+    if not stored:
+        return ""
+    if stored.get("mode") == "byoc":
+        raw = stored.get("scrape_yaml") or ""
+        password = stored.get("scrape_yaml_password")
+        if password and "__REDACTED__" in raw:
+            return _inject_scrape_password(raw, password)
+        return raw
+    else:
+        targets_str = stored.get("scrape_targets_str", "")
+        targets = [t.strip() for t in targets_str.split(",") if t.strip()]
+        if not targets:
+            return ""
+        lines = ["- job_name: redpanda", "  static_configs:", "    - targets:"]
+        lines += [f"        - {t}" for t in targets]
+        return "\n".join(lines) + "\n"
+
+
+async def _sync_scrape_secret(stored: Optional[dict]) -> None:
+    """Patch the additional-scrape-configs secret with the current scrape YAML.
+
+    Silently no-ops on any error so a k8s hiccup never breaks settings save.
+    """
+    from kubernetes import client as k8s
+    from services.k8s_client import get_k8s_clients, run_sync
+
+    scrape_yaml = _build_scrape_yaml(stored)
+    try:
+        core_api, _, _ = get_k8s_clients()
+        body = k8s.V1Secret(string_data={_SCRAPE_SECRET_KEY: scrape_yaml})
+        await run_sync(
+            core_api.patch_namespaced_secret,
+            _SCRAPE_SECRET_NAME,
+            app_settings.omb_namespace,
+            body,
+        )
+        logger.info("Synced Prometheus scrape config secret")
+    except Exception:
+        logger.warning("Could not sync Prometheus scrape config secret — skipping", exc_info=True)
+
+
+async def sync_scrape_secret_from_db(db: AsyncSession) -> None:
+    """Load Prometheus settings from DB and sync the scrape config secret.
+
+    Called at startup so a pod restart picks up whatever the SE saved.
+    """
+    stored = await _load_setting(db, PROMETHEUS_KEY)
+    await _sync_scrape_secret(stored)
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -184,6 +250,9 @@ async def update_settings(
     except Exception:
         await db.rollback()
         raise
+
+    if body.prometheus is not None:
+        await _sync_scrape_secret(prometheus_to_save)
 
     # Re-read from DB to build the canonical response.
     cluster_stored = await _load_setting(db, CLUSTER_KEY)

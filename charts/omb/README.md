@@ -10,14 +10,19 @@ helm install omb charts/omb \
   -f charts/omb/values-aws.yaml \
   --set clusterAutoscaler.clusterName=<eks-cluster-name> \
   --set clusterAutoscaler.region=<aws-region> \
-  --set clusterAutoscaler.roleArn=<output from terraform: cluster_autoscaler_iam_role_arn>
+  --set clusterAutoscaler.roleArn=<output from terraform: cluster_autoscaler_iam_role_arn> \
+  --set kube-prometheus-stack.grafana.adminPassword=<your-password>
 
 # GCP
-helm install omb charts/omb -f charts/omb/values-gcp.yaml
+helm install omb charts/omb -f charts/omb/values-gcp.yaml \
+  --set kube-prometheus-stack.grafana.adminPassword=<your-password>
 
 # Azure
-helm install omb charts/omb -f charts/omb/values-aks.yaml
+helm install omb charts/omb -f charts/omb/values-aks.yaml \
+  --set kube-prometheus-stack.grafana.adminPassword=<your-password>
 ```
+
+> **Warning:** Always set `kube-prometheus-stack.grafana.adminPassword` before deploying in a customer engagement. The default password is `changeme` — do not leave it at the default.
 
 ## Validation
 
@@ -58,13 +63,25 @@ kubectl get serviceaccount,role,rolebinding -n <namespace>
 
 Expected: `omb-control-plane` ServiceAccount, Role, and RoleBinding all present.
 
-### 5. Control plane service has an external IP
+### 5. Both LoadBalancer services have external addresses
+
+After `helm install` there are two external services:
 
 ```bash
-kubectl get svc -n <namespace>
+# Control plane UI (AWS returns hostname; GCP/Azure return IP)
+kubectl get svc omb-control-plane -n <namespace> \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+# Grafana (AWS returns hostname; GCP/Azure return IP)
+kubectl get svc omb-grafana -n <namespace> \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 ```
 
-Expected: `omb-control-plane` service shows a populated `EXTERNAL-IP` (may take 1-2 minutes for the load balancer to provision).
+On GCP and Azure, replace `.hostname` with `.ip` in the above commands.
+
+Both services may take 1–2 minutes to receive an external address after install. Login to Grafana with username `admin` and the password you set at install time. Default credentials are `admin` / `changeme` — **always override before a customer engagement**.
+
+The Redpanda dashboard is available under **Dashboards → Redpanda** folder immediately after deployment.
 
 ### 6. Prometheus and Grafana pods are running
 
