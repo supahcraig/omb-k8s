@@ -40,17 +40,19 @@ sum by (pod) (
 ```
 Returns `{pod_name: bytes_per_sec}`. Stored as JSON in `worker_net_tx_per_pod`.
 
-**Aggregate drop rate** (via `_query`):
+**Per-pod drop rate** (via `_query_per_pod`):
 ```promql
-sum(rate(container_network_transmit_packets_dropped_total{
-  namespace="{ns}", pod=~"omb-worker-.*", interface!="lo"
-}[2m]))
-+
-sum(rate(container_network_receive_packets_dropped_total{
-  namespace="{ns}", pod=~"omb-worker-.*", interface!="lo"
-}[2m]))
+sum by (pod) (
+  rate(container_network_transmit_packets_dropped_total{
+    namespace="{ns}", pod=~"omb-worker-.*", interface!="lo"
+  }[2m])
+  +
+  rate(container_network_receive_packets_dropped_total{
+    namespace="{ns}", pod=~"omb-worker-.*", interface!="lo"
+  }[2m])
+)
 ```
-Returns single float (drops/sec across all workers). Stored in `worker_net_drop_rate`.
+Returns `{pod_name: drops_per_sec}`. Stored as JSON in `worker_net_drop_per_pod`.
 
 Both queries follow the same silent-no-op pattern as existing queries: `None` on any error or empty result.
 
@@ -60,30 +62,30 @@ Both queries follow the same silent-no-op pattern as existing queries: `None` on
 
 ### `models.py`
 Add two columns to `PrometheusSample`:
-- `worker_net_tx_per_pod` — `Column(Text, nullable=True)` — JSON string `{"omb-worker-0": bytes_per_sec, ...}`
-- `worker_net_drop_rate` — `Column(Float, nullable=True)` — aggregate drops/sec
+- `worker_net_tx_per_pod` — `Column(Text, nullable=True)` — JSON `{"omb-worker-0": bytes_per_sec, ...}`
+- `worker_net_drop_per_pod` — `Column(Text, nullable=True)` — JSON `{"omb-worker-0": drops_per_sec, ...}`
 
 ### `database.py`
 Add two entries to the idempotent `ALTER TABLE` loop in `init_db()`:
 ```python
 "ALTER TABLE prometheus_samples ADD COLUMN worker_net_tx_per_pod TEXT",
-"ALTER TABLE prometheus_samples ADD COLUMN worker_net_drop_rate REAL",
+"ALTER TABLE prometheus_samples ADD COLUMN worker_net_drop_per_pod TEXT",
 ```
 
 ### `prometheus_collector.py`
 In `_collect_sample`, add after the existing per-pod CPU query:
 1. `net_tx_per_pod = await _query_per_pod(client, prom_url, <tx query>)`
-2. `net_drop_rate = await _query(client, prom_url, <drops query>)`
+2. `net_drop_per_pod = await _query_per_pod(client, prom_url, <drops query>)`
 
 Pass to `PrometheusSample(...)`:
 - `worker_net_tx_per_pod=json.dumps(net_tx_per_pod) if net_tx_per_pod else None`
-- `worker_net_drop_rate=net_drop_rate`
+- `worker_net_drop_per_pod=json.dumps(net_drop_per_pod) if net_drop_per_pod else None`
 
 ### `routers/prometheus.py`
 Add to the serialization dict in `get_prometheus_samples`:
 ```python
-"worker_net_tx_per_pod": s.worker_net_tx_per_pod,
-"worker_net_drop_rate":  s.worker_net_drop_rate,
+"worker_net_tx_per_pod":  s.worker_net_tx_per_pod,
+"worker_net_drop_per_pod": s.worker_net_drop_per_pod,
 ```
 
 ---
@@ -91,7 +93,9 @@ Add to the serialization dict in `get_prometheus_samples`:
 ## Frontend Changes
 
 ### `chartDataUtils.js` — `promToChartData`
-Parse `worker_net_tx_per_pod` JSON and emit `workerNetTx_<pod>` keys (bytes/sec), identical pattern to `workerMem_` and `workerCpu_`. Also pass `worker_net_drop_rate` through as `workerNetDropRate`.
+Parse both new JSON columns using the same loop pattern as `workerMem_` / `workerCpu_`:
+- `worker_net_tx_per_pod` → `workerNetTx_<pod>` keys (bytes/sec)
+- `worker_net_drop_per_pod` → `workerNetDrop_<pod>` keys (drops/sec)
 
 ### `RunCharts.jsx`
 
@@ -105,14 +109,24 @@ workerNetTx: '#22d3ee',  // cyan
 const hasNetworkMetrics = promPoints.some(p =>
   Object.keys(p).some(k => k.startsWith('workerNetTx_'))
 );
-const maxDropRate = promPoints.reduce(
-  (max, p) => Math.max(max, p.workerNetDropRate ?? 0), 0
-);
+// Per-pod max drop rate across all samples: {pod: maxDropsPerSec}
+const workerDropPeaks = {};
+for (const p of promPoints) {
+  for (const [k, v] of Object.entries(p)) {
+    if (!k.startsWith('workerNetDrop_')) continue;
+    const pod = k.slice('workerNetDrop_'.length);
+    if ((v ?? 0) > (workerDropPeaks[pod] ?? 0)) workerDropPeaks[pod] = v;
+  }
+}
+const anyDrops = Object.values(workerDropPeaks).some(v => v > 0);
 ```
 
 **New alert banner** (placed after the throttle banner, before the chart rows):
-Fires when `maxDropRate > 0`. Same amber styling as existing banners. Message:
-> ⚠ Network packet drops detected (peak {maxDropRate.toFixed(2)} drops/sec) — worker NIC may be saturated. Throughput results may be limited by worker network capacity rather than broker capacity.
+Fires when `anyDrops`. Same amber styling as existing banners. Lists each pod with nonzero peak drops:
+> ⚠ Network packet drops detected — worker NIC may be saturated. Throughput results may be limited by worker network capacity rather than broker capacity.
+> &nbsp;&nbsp;omb-worker-2: 3.2 drops/s &nbsp; omb-worker-0: 0.5 drops/s
+
+Render the pod list inline, filtering to pods where `workerDropPeaks[pod] > 0`, sorted by pod name.
 
 **Row 4 layout change:**
 Use `charts-row-3` when `hasNetworkMetrics`, `charts-row-2` otherwise. This keeps the existing 2-chart layout for old runs with no network data rather than leaving an empty third grid cell.
@@ -128,6 +142,12 @@ No changes required. `promSamples` already flows through as a prop.
 
 ---
 
+## Drop Lines in Chart
+
+Per-pod drop series are **not** rendered in the Network Tx chart. Drop rates are flat-zero during healthy runs; overlaying them on the MB/s axis would require a secondary y-axis and clutter the chart for no benefit. The per-pod alert banner is the right surface for drop visibility.
+
+---
+
 ## Alert Threshold
 
 Drop rate > 0 triggers the banner. Drops are never normal — a single dropped packet on a benchmark NIC indicates queue overflow. There is no threshold to tune.
@@ -136,7 +156,7 @@ Drop rate > 0 triggers the banner. Drops are never normal — a single dropped p
 
 ## Backward Compatibility
 
-Old runs in SQLite have no `worker_net_tx_per_pod` or `worker_net_drop_rate` values. The API serializes `None`, `chartDataUtils` produces no `workerNetTx_*` keys, `hasNetworkMetrics` is false, and the third chart slot is not rendered. The existing 2-chart worker row is visually unchanged for old runs.
+Old runs in SQLite have no `worker_net_tx_per_pod` or `worker_net_drop_per_pod` values. The API serializes `None`, `chartDataUtils` produces no `workerNetTx_*` or `workerNetDrop_*` keys, `hasNetworkMetrics` is false, `anyDrops` is false, and the third chart slot is not rendered. The existing 2-chart worker row is visually unchanged for old runs.
 
 ---
 
