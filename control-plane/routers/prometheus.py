@@ -73,6 +73,8 @@ async def get_prometheus_samples(
             "worker_throttle_pct": s.worker_throttle_pct,
             "worker_memory_per_pod": s.worker_memory_per_pod,
             "worker_cpu_per_pod": s.worker_cpu_per_pod,
+            "worker_net_tx_per_pod": s.worker_net_tx_per_pod,
+            "worker_net_drop_per_pod": s.worker_net_drop_per_pod,
         }
         for s in samples
     ]
