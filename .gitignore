@@ -84,3 +84,4 @@ my-values.yaml
 # ─── Engagement-specific tfvars ──────────────────────────────────────────────
 terraform/engagements/
 tmp/
+.superpowers/
