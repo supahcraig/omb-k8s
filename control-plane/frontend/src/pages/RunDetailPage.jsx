@@ -150,10 +150,16 @@ export default function RunDetailPage() {
       if (data.status === 'completed') {
         getPrometheusSamples(id).then(setPromSamples).catch(() => {})
       }
-      // NOTE: do NOT seed warmupStartedAt from data.started_at here.
-      // started_at is the run start time (JVM init), not when warmup traffic begins.
-      // Seeding it early causes the status badge to show "warming up" during
-      // the initializing phase. Let the log line set it correctly.
+      // Seed phase timestamps from the server so the timer is correct after navigation.
+      // These are null until the backend detects the phase log lines.
+      if (data.warmup_started_at) {
+        const ts = new Date(data.warmup_started_at.endsWith('Z') ? data.warmup_started_at : data.warmup_started_at + 'Z').getTime()
+        setWarmupStartedAt(ts)
+      }
+      if (data.benchmark_started_at) {
+        const ts = new Date(data.benchmark_started_at.endsWith('Z') ? data.benchmark_started_at : data.benchmark_started_at + 'Z').getTime()
+        setBenchmarkStartedAt(ts)
+      }
     } catch (e) {
       if (activeRunIdRef.current !== expectedId) return
       setError(e.message)
@@ -246,8 +252,8 @@ export default function RunDetailPage() {
       } catch { /* not JSON — it's a log line */ }
       const line = evt.data
       setLogs(prev => [...prev, line])
-      if (line.includes('Starting warm-up traffic'))  setWarmupStartedAt(Date.now())
-      if (line.includes('Starting benchmark traffic')) setBenchmarkStartedAt(Date.now())
+      if (line.includes('Starting warm-up traffic'))  setWarmupStartedAt(prev => prev ?? Date.now())
+      if (line.includes('Starting benchmark traffic')) setBenchmarkStartedAt(prev => prev ?? Date.now())
       setLivePoints(prev => {
         const p = parseLiveMetric(line, prev.length)
         if (!p) return prev
