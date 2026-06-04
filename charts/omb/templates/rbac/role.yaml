@@ -13,7 +13,7 @@ rules:
     verbs: ["create", "delete", "get", "list"]
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["create", "get", "update"]
+    verbs: ["create", "get", "update", "patch"]
   - apiGroups: ["apps"]
     resources: ["statefulsets"]
     verbs: ["get", "patch", "update"]
