@@ -31,8 +31,10 @@ const C = {
 // Round up to the next integer at the same order of magnitude (e.g. 6.2M → 7M)
 function niceMax(value) {
   if (!value || value <= 0) return null
-  const mag = Math.pow(10, Math.floor(Math.log10(value)))
-  return (Math.floor(value / mag) + 1) * mag
+  const padded = value * 1.15
+  const mag = Math.pow(10, Math.floor(Math.log10(padded)))
+  // Round up to nearest half-magnitude step (e.g. 1.5M, 2M, 2.5M) for snug axes
+  return Math.ceil((padded / mag) * 2) / 2 * mag
 }
 
 function fmtMsgTick(v) {
@@ -105,6 +107,9 @@ function LatencyStatsTable({ stats, keys, labels, colors, warmupNote }) {
           warmup in progress — stats include warmup data
         </div>
       )}
+      <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 4, marginBottom: 4, fontStyle: 'italic' }}>
+        per-second samples — see Results summary for cumulative HDR percentiles
+      </div>
       <table className="latency-stats-table">
         <thead>
           <tr><th>Percentile</th><th>Min</th><th>Mean</th><th>Max</th></tr>
@@ -339,7 +344,7 @@ export default function RunCharts({
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
               <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
-              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMsgTick} domain={['auto', dataMax => niceMax(dataMax) || 'auto']} />
+              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMsgTick} domain={[0, dataMax => niceMax(Math.max(dataMax, expectedMsgSec)) || 'auto']} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               {expectedMsgSec > 0 && (
@@ -359,7 +364,7 @@ export default function RunCharts({
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
               <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
-              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMBTick} domain={['auto', dataMax => niceMax(dataMax) || 'auto']} />
+              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMBTick} domain={[0, dataMax => niceMax(Math.max(dataMax, expectedMBSec)) || 'auto']} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               {expectedMBSec > 0 && (

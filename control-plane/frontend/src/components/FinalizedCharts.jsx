@@ -282,34 +282,38 @@ export default function FinalizedCharts({ results, warmupSamples = 60 }) {
         <NinesTable aggregates={aggregates} />
       </div>
 
-      {/* ── Latency time series from JSON ── */}
-      <SectionHeading>Latency over time</SectionHeading>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div className="chart-card">
-          <ChartHeader title="Publish latency (ms)" />
-          <LatencyTimeSeries
-            timeSeries={timeSeries}
-            sampleRateMs={sampleRateMs}
-            warmupSamples={warmupSamples}
-            title="publish"
-            p50Color={C.pubP50}
-            p99Color={C.pubP99}
-            p999Color={C.pubP999}
-          />
-        </div>
-        <div className="chart-card">
-          <ChartHeader title="End-to-end latency (ms)" />
-          <LatencyTimeSeries
-            timeSeries={timeSeries}
-            sampleRateMs={sampleRateMs}
-            warmupSamples={warmupSamples}
-            title="end-to-end"
-            p50Color={C.e2eP50}
-            p99Color={C.e2eP99}
-            p999Color={C.e2eP999}
-          />
-        </div>
-      </div>
+      {/* ── Latency time series from JSON — only shown when data exists ── */}
+      {timeSeries?.publishLatencyP99?.length > 0 && (
+        <>
+          <SectionHeading>Latency over time</SectionHeading>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="chart-card">
+              <ChartHeader title="Publish latency (ms)" />
+              <LatencyTimeSeries
+                timeSeries={timeSeries}
+                sampleRateMs={sampleRateMs}
+                warmupSamples={warmupSamples}
+                title="publish"
+                p50Color={C.pubP50}
+                p99Color={C.pubP99}
+                p999Color={C.pubP999}
+              />
+            </div>
+            <div className="chart-card">
+              <ChartHeader title="End-to-end latency (ms)" />
+              <LatencyTimeSeries
+                timeSeries={timeSeries}
+                sampleRateMs={sampleRateMs}
+                warmupSamples={warmupSamples}
+                title="end-to-end"
+                p50Color={C.e2eP50}
+                p99Color={C.e2eP99}
+                p999Color={C.e2eP999}
+              />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Latency distribution — percentile curves ── */}
       <SectionHeading>Latency distribution — percentile curves</SectionHeading>
