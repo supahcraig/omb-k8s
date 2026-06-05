@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getSweep, getSweepRuns, cancelSweep } from '../api.js'
 import useGrafanaUrl from '../hooks/useGrafanaUrl.js'
@@ -38,12 +38,15 @@ export default function SweepDetailPage() {
   const [runs, setRuns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [, setTick] = useState(0)
+  const sweepRef = useRef(null)
   const grafanaUrl = useGrafanaUrl()
 
   async function load() {
     try {
       const [sw, rs] = await Promise.all([getSweep(id), getSweepRuns(id)])
       setSweep(sw)
+      sweepRef.current = sw
       setRuns(rs)
       setError(null)
     } catch (e) {
@@ -55,11 +58,13 @@ export default function SweepDetailPage() {
 
   useEffect(() => {
     load()
-    // Poll while running
+    // Poll until sweep is in a terminal state — use ref to avoid stale closure
     const iv = setInterval(() => {
-      if (sweep?.status === 'running') load()
-    }, 5000)
-    return () => clearInterval(iv)
+      if (!['completed', 'cancelled', 'failed'].includes(sweepRef.current?.status)) load()
+    }, 3000)
+    // Per-second tick keeps isCooling timestamps fresh without a full poll
+    const tick = setInterval(() => setTick(t => t + 1), 1000)
+    return () => { clearInterval(iv); clearInterval(tick) }
   }, [id])
 
   async function handleCancel() {

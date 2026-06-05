@@ -132,6 +132,7 @@ export default function RunDetailPage() {
   const wsRef = useRef(null)
   const logEndRef = useRef(null)
   const liveMatchedRef = useRef(false)
+  const wsHasDataRef = useRef(false)
   const sweepRunsRef = useRef([])
   const prevRunStatusRef = useRef(null)
   const wsSignaledDoneRef = useRef(false)
@@ -202,6 +203,7 @@ export default function RunDetailPage() {
     setWarmupStartedAt(null)
     setBenchmarkStartedAt(null)
     liveMatchedRef.current = false
+    wsHasDataRef.current = false
     wsSignaledDoneRef.current = false
     prevRunStatusRef.current = null
     setLogs([])
@@ -244,13 +246,20 @@ export default function RunDetailPage() {
       try {
         const msg = JSON.parse(evt.data)
         if (msg.type === 'done') {
-          wsSignaledDoneRef.current = true
+          // Only trust this signal if the WS actually streamed real log lines.
+          // A WS that fires 'done' immediately (runner race: is_done returns
+          // true for unregistered run IDs) would otherwise trigger auto-advance
+          // incorrectly when viewing a pending run that just transitioned to running.
+          if (wsHasDataRef.current) {
+            wsSignaledDoneRef.current = true
+          }
           setLogDone(true)
           pollUntilFinished()
           return
         }
       } catch { /* not JSON — it's a log line */ }
       const line = evt.data
+      wsHasDataRef.current = true
       setLogs(prev => [...prev, line])
       if (line.includes('Starting warm-up traffic'))  setWarmupStartedAt(prev => prev ?? Date.now())
       if (line.includes('Starting benchmark traffic')) setBenchmarkStartedAt(prev => prev ?? Date.now())
