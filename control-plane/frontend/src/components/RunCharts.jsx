@@ -387,8 +387,8 @@ export default function RunCharts({
         </ChartCard>
       </div>
 
-      {/* Row 2: 2-column latency (only if we have latency data) */}
-      {hasLatency && (
+      {/* Row 2: 2-column latency — live only; FinalizedCharts owns latency post-completion */}
+      {isLive && hasLatency && (
         <div className="charts-row charts-row-2">
           <ChartCard title="Publish Latency (ms)" badge="omb">
             <ResponsiveContainer width="100%" height={180}>
