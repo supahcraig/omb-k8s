@@ -4,6 +4,14 @@ import { getSweep, getSweepRuns, cancelSweep } from '../api.js'
 import useGrafanaUrl from '../hooks/useGrafanaUrl.js'
 import { buildSweepGrafanaUrl } from '../lib/grafanaUtils.js'
 
+function StatusBadge({ status }) {
+  const cls = {
+    running: 'badge-running', completed: 'badge-completed',
+    failed: 'badge-failed', pending: 'badge-pending', cancelled: 'badge-cancelled',
+  }[status] || 'badge-pending'
+  return <span className={`badge ${cls}`}>{status}</span>
+}
+
 function RunStatusPill({ run, prevRun, cooldownSeconds }) {
   const isCooling = (() => {
     if (run.status !== 'pending' || !prevRun || prevRun.status !== 'completed' || !prevRun.completed_at) return false
