@@ -6,11 +6,11 @@ at run start and run end, then computes average rates over the run duration.
 """
 import json
 import logging
-import re
 from datetime import datetime
 from typing import Optional
 
 import httpx
+import yaml as _yaml
 from sqlalchemy import select
 
 from database import AsyncSessionLocal
@@ -30,31 +30,49 @@ _baseline: dict[int, dict] = {}
 
 
 async def _load_broker_config() -> dict:
-    """Return {"targets": [...], "auth": (user, pass) | None} from settings."""
+    """
+    Return {"urls": [...], "auth": (user, pass) | None} from settings.
+
+    Self-hosted: plain http to scrape_targets on port 9644, path /metrics.
+    BYOC: parses scrape_yaml for scheme, metrics_path, targets, and basic_auth.
+    """
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Setting).where(Setting.key == "prometheus"))
         row = result.scalars().first()
         if not row:
-            return {"targets": [], "auth": None}
+            return {"urls": [], "auth": None}
         stored = json.loads(row.value or "{}")
 
+        # Self-hosted: comma-separated host:port strings
         scrape_str = stored.get("scrape_targets_str") or ""
         if scrape_str:
-            return {
-                "targets": [t.strip() for t in scrape_str.split(",") if t.strip()],
-                "auth": None,
-            }
+            urls = [f"http://{t.strip()}/metrics" for t in scrape_str.split(",") if t.strip()]
+            return {"urls": urls, "auth": None}
 
-        scrape_yaml = stored.get("scrape_yaml") or ""
-        if scrape_yaml:
-            targets = re.findall(r"['\"]([^'\"]+:\d+)['\"]", scrape_yaml)
-            u_match = re.search(r"username:\s*['\"]?([^\s'\"]+)['\"]?", scrape_yaml)
-            username = u_match.group(1) if u_match else None
-            password = stored.get("scrape_yaml_password")
-            auth = (username, password) if username and password else None
-            return {"targets": targets, "auth": auth}
+        # BYOC: parse the full scrape job YAML
+        scrape_yaml_str = stored.get("scrape_yaml") or ""
+        if scrape_yaml_str:
+            try:
+                jobs = _yaml.safe_load(scrape_yaml_str)
+                if not isinstance(jobs, list) or not jobs:
+                    return {"urls": [], "auth": None}
+                job = jobs[0]
+                scheme       = job.get("scheme", "http")
+                metrics_path = job.get("metrics_path", "/metrics")
+                targets = []
+                for sc in job.get("static_configs", []):
+                    targets.extend(sc.get("targets", []))
+                urls = [f"{scheme}://{t}{metrics_path}" for t in targets]
+                ba = job.get("basic_auth", {})
+                username = ba.get("username")
+                password = stored.get("scrape_yaml_password") or ba.get("password")
+                auth = (username, password) if username and password else None
+                return {"urls": urls, "auth": auth}
+            except Exception as exc:
+                logger.warning("Failed to parse scrape_yaml: %s", exc)
+                return {"urls": [], "auth": None}
 
-        return {"targets": [], "auth": None}
+        return {"urls": [], "auth": None}
 
 
 def _parse_metrics(text: str) -> dict[str, float]:
@@ -76,19 +94,21 @@ def _parse_metrics(text: str) -> dict[str, float]:
     return totals
 
 
-async def _scrape(targets: list, auth: Optional[tuple]) -> Optional[dict[str, float]]:
-    """Scrape all broker targets and return summed counter values, or None on failure."""
+async def _scrape(urls: list, auth: Optional[tuple]) -> Optional[dict[str, float]]:
+    """Scrape all broker URLs and return summed counter values, or None on failure."""
     combined: dict[str, float] = {}
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            for target in targets:
-                url = f"http://{target}/metrics"
-                resp = await client.get(url, auth=auth)
-                if resp.status_code == 200:
-                    for k, v in _parse_metrics(resp.text).items():
-                        combined[k] = combined.get(k, 0.0) + v
-                else:
-                    logger.debug("Broker %s returned HTTP %d", target, resp.status_code)
+        async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+            for url in urls:
+                try:
+                    resp = await client.get(url, auth=auth)
+                    if resp.status_code == 200:
+                        for k, v in _parse_metrics(resp.text).items():
+                            combined[k] = combined.get(k, 0.0) + v
+                    else:
+                        logger.debug("Broker %s returned HTTP %d", url, resp.status_code)
+                except Exception as exc:
+                    logger.debug("Broker scrape %s failed: %s", url, exc)
     except Exception as exc:
         logger.debug("Broker metrics scrape failed: %s", exc)
         return None
@@ -98,9 +118,9 @@ async def _scrape(targets: list, auth: Optional[tuple]) -> Optional[dict[str, fl
 async def snapshot_baseline(run_id: int) -> None:
     """Scrape broker metrics at run start and cache as baseline."""
     cfg = await _load_broker_config()
-    if not cfg["targets"]:
+    if not cfg["urls"]:
         return
-    values = await _scrape(cfg["targets"], cfg["auth"])
+    values = await _scrape(cfg["urls"], cfg["auth"])
     if values is not None:
         _baseline[run_id] = {"ts": datetime.utcnow(), "values": values}
         logger.info("Broker baseline for run %d: %s", run_id, values)
@@ -113,10 +133,10 @@ async def collect_broker_rates(run_id: int, started_at: datetime) -> Optional[di
     """
     baseline = _baseline.pop(run_id, None)
     cfg = await _load_broker_config()
-    if not cfg["targets"]:
+    if not cfg["urls"]:
         return None
 
-    end_values = await _scrape(cfg["targets"], cfg["auth"])
+    end_values = await _scrape(cfg["urls"], cfg["auth"])
     if not end_values:
         return None
 
