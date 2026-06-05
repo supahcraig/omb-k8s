@@ -31,8 +31,10 @@ const C = {
 // Round up to the next integer at the same order of magnitude (e.g. 6.2M → 7M)
 function niceMax(value) {
   if (!value || value <= 0) return null
-  const mag = Math.pow(10, Math.floor(Math.log10(value)))
-  return (Math.floor(value / mag) + 1) * mag
+  const padded = value * 1.15
+  const mag = Math.pow(10, Math.floor(Math.log10(padded)))
+  // Round up to nearest half-magnitude step (e.g. 1.5M, 2M, 2.5M) for snug axes
+  return Math.ceil((padded / mag) * 2) / 2 * mag
 }
 
 function fmtMsgTick(v) {
@@ -105,6 +107,9 @@ function LatencyStatsTable({ stats, keys, labels, colors, warmupNote }) {
           warmup in progress — stats include warmup data
         </div>
       )}
+      <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 4, marginBottom: 4, fontStyle: 'italic' }}>
+        per-second samples — see Results summary for cumulative HDR percentiles
+      </div>
       <table className="latency-stats-table">
         <thead>
           <tr><th>Percentile</th><th>Min</th><th>Mean</th><th>Max</th></tr>
@@ -339,7 +344,7 @@ export default function RunCharts({
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
               <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
-              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMsgTick} domain={['auto', expectedMsgSec > 0 ? dataMax => niceMax(Math.max(dataMax, expectedMsgSec)) : 'auto']} />
+              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMsgTick} domain={[0, dataMax => niceMax(Math.max(dataMax, expectedMsgSec)) || 'auto']} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               {expectedMsgSec > 0 && (
@@ -359,7 +364,7 @@ export default function RunCharts({
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
               <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
-              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMBTick} domain={['auto', expectedMBSec > 0 ? dataMax => niceMax(Math.max(dataMax, expectedMBSec)) : 'auto']} />
+              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMBTick} domain={[0, dataMax => niceMax(Math.max(dataMax, expectedMBSec)) || 'auto']} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               {expectedMBSec > 0 && (
@@ -387,60 +392,6 @@ export default function RunCharts({
         </ChartCard>
       </div>
 
-      {/* Row 2: 2-column latency (only if we have latency data) */}
-      {hasLatency && (
-        <div className="charts-row charts-row-2">
-          <ChartCard title="Publish Latency (ms)" badge="omb">
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={latencyPoints} syncId="run">
-                <CartesianGrid strokeDasharray="3 3" stroke={C.pubLatencyGrid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
-                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
-                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
-                <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
-                {warmupSamples > 0 && chartPoints.length > 0 && (
-                  <ReferenceArea x1={0} x2={Math.min(warmupSamples, chartPoints[chartPoints.length - 1].t)} fill="rgba(255,255,255,0.04)" />
-                )}
-                <Line type="monotone" dataKey="pubP50"  name="p50"   stroke={C.pubP50}  dot={false} strokeWidth={1.5} strokeDasharray="4 2" connectNulls />
-                <Line type="monotone" dataKey="pubP99"  name="p99"   stroke={C.pubP99}  dot={false} strokeWidth={2} connectNulls />
-                <Line type="monotone" dataKey="pubP999" name="p99.9" stroke={C.pubP999} dot={false} strokeWidth={1.5} strokeDasharray="2 2" connectNulls />
-              </LineChart>
-            </ResponsiveContainer>
-            <LatencyStatsTable
-              stats={latencyStats}
-              keys={['pubP50', 'pubP99', 'pubP999']}
-              labels={['P50', 'P99', 'P99.9']}
-              colors={[C.pubP50, C.pubP99, C.pubP999]}
-              warmupNote={isLive && currentSamples <= warmupSamples}
-            />
-          </ChartCard>
-
-          <ChartCard title="E2E Latency (ms)" badge="omb">
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={latencyPoints} syncId="run">
-                <CartesianGrid strokeDasharray="3 3" stroke={C.e2eLatencyGrid} />
-                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
-                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={50} />
-                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
-                <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
-                {warmupSamples > 0 && chartPoints.length > 0 && (
-                  <ReferenceArea x1={0} x2={Math.min(warmupSamples, chartPoints[chartPoints.length - 1].t)} fill="rgba(255,255,255,0.04)" />
-                )}
-                <Line type="monotone" dataKey="e2eP50"  name="p50"   stroke={C.e2eP50}  dot={false} strokeWidth={1.5} strokeDasharray="4 2" connectNulls />
-                <Line type="monotone" dataKey="e2eP99"  name="p99"   stroke={C.e2eP99}  dot={false} strokeWidth={2} connectNulls />
-                <Line type="monotone" dataKey="e2eP999" name="p99.9" stroke={C.e2eP999} dot={false} strokeWidth={1.5} strokeDasharray="2 2" connectNulls />
-              </LineChart>
-            </ResponsiveContainer>
-            <LatencyStatsTable
-              stats={latencyStats}
-              keys={['e2eP50', 'e2eP99', 'e2eP999']}
-              labels={['P50', 'P99', 'P99.9']}
-              colors={[C.e2eP50, C.e2eP99, C.e2eP999]}
-              warmupNote={isLive && currentSamples <= warmupSamples}
-            />
-          </ChartCard>
-        </div>
-      )}
 
       {/* Row 3: Broker Prometheus (only if broker metrics available) */}
       {hasBrokerMetrics && (
