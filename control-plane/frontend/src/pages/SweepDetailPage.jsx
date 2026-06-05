@@ -4,12 +4,14 @@ import { getSweep, getSweepRuns, cancelSweep } from '../api.js'
 import useGrafanaUrl from '../hooks/useGrafanaUrl.js'
 import { buildSweepGrafanaUrl } from '../lib/grafanaUtils.js'
 
-function StatusBadge({ status }) {
-  const cls = {
-    running: 'badge-running', completed: 'badge-completed',
-    failed: 'badge-failed', pending: 'badge-pending', cancelled: 'badge-cancelled',
-  }[status] || 'badge-pending'
-  return <span className={`badge ${cls}`}>{status}</span>
+function RunStatusPill({ run, prevRun, cooldownSeconds }) {
+  const isCooling = (() => {
+    if (run.status !== 'pending' || !prevRun || prevRun.status !== 'completed' || !prevRun.completed_at) return false
+    const ts = prevRun.completed_at.endsWith('Z') ? prevRun.completed_at : prevRun.completed_at + 'Z'
+    return Date.now() < new Date(ts).getTime() + cooldownSeconds * 1000
+  })()
+  const pillStatus = isCooling ? 'cooling' : run.status
+  return <span className={`sweep-run-pill sweep-run-pill-${pillStatus}`}>{pillStatus}</span>
 }
 
 function fmt(n, digits = 1) {
@@ -134,7 +136,7 @@ export default function SweepDetailPage() {
                     {paramKeys.map(k => (
                       <td key={k}>{params[k] ?? '—'}</td>
                     ))}
-                    <td><StatusBadge status={run.status} /></td>
+                    <td><RunStatusPill run={run} prevRun={runs[runs.indexOf(run) - 1]} cooldownSeconds={sweep.cooldown_seconds ?? 0} /></td>
                     <td className="num">{fmt(m?.publish_rate_avg)}</td>
                     <td className="num">{fmt(m?.publish_latency_p99)}</td>
                     <td className="num">{fmt(m?.end_to_end_latency_p99)}</td>
