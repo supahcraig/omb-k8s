@@ -12,16 +12,42 @@ The runner is a singleton (module-level ``runner`` instance).  Callers import:
 """
 import asyncio
 import logging
+from datetime import datetime
 from typing import Optional
 
 import httpx
 from kubernetes import client as k8s_client
 from kubernetes import watch as k8s_watch
+from sqlalchemy import update
 
 from config import settings
+from database import AsyncSessionLocal
+from models import Run
 from services.k8s_client import load_incluster_once, run_sync
 
 logger = logging.getLogger(__name__)
+
+
+async def _record_phase_ts(
+    run_id: int,
+    *,
+    warmup_started_at: Optional[datetime] = None,
+    benchmark_started_at: Optional[datetime] = None,
+) -> None:
+    """Write warmup/benchmark phase timestamps to the DB when first detected."""
+    values: dict = {}
+    if warmup_started_at is not None:
+        values["warmup_started_at"] = warmup_started_at
+    if benchmark_started_at is not None:
+        values["benchmark_started_at"] = benchmark_started_at
+    if not values:
+        return
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(update(Run).where(Run.id == run_id).values(**values))
+            await session.commit()
+    except Exception as exc:
+        logger.warning("Failed to record phase timestamp for run %d: %s", run_id, exc)
 
 
 class OmbRunner:
@@ -209,7 +235,10 @@ class OmbRunner:
         logger.info("Created Job %s in namespace %s", job_name, namespace)
 
         # 5. Initialise state and kick off background log streaming
-        self._active[run_id] = {"lines": [], "done": False, "success": False}
+        self._active[run_id] = {
+            "lines": [], "done": False, "success": False,
+            "warmup_started_at": None, "benchmark_started_at": None,
+        }
         asyncio.create_task(self._stream_logs(run_id, job_name))
 
     async def _probe_workers(self, replica_count: int, namespace: str) -> None:
@@ -351,6 +380,10 @@ class OmbRunner:
         # _do_stream runs in an executor thread. It appends each line directly
         # to state["lines"] as it arrives — thread-safe via CPython's GIL for
         # list.append. This lets get_lines() return partial output in real time.
+        # Capture the running loop before entering the thread so we can safely
+        # schedule async DB writes from the thread via call_soon_threadsafe.
+        loop = asyncio.get_event_loop()
+
         def _do_stream() -> None:
             w = k8s_watch.Watch()
             try:
@@ -363,6 +396,20 @@ class OmbRunner:
                     _request_timeout=3600,
                 ):
                     state["lines"].append(event)
+                    if state["warmup_started_at"] is None and "Starting warm-up traffic" in event:
+                        ts = datetime.utcnow()
+                        state["warmup_started_at"] = ts
+                        loop.call_soon_threadsafe(
+                            asyncio.ensure_future,
+                            _record_phase_ts(run_id, warmup_started_at=ts),
+                        )
+                    elif state["benchmark_started_at"] is None and "Starting benchmark traffic" in event:
+                        ts = datetime.utcnow()
+                        state["benchmark_started_at"] = ts
+                        loop.call_soon_threadsafe(
+                            asyncio.ensure_future,
+                            _record_phase_ts(run_id, benchmark_started_at=ts),
+                        )
             except Exception as exc:
                 state["lines"].append(f"[omb-runner] Log streaming error: {exc}")
 

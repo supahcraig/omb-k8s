@@ -150,10 +150,16 @@ export default function RunDetailPage() {
       if (data.status === 'completed') {
         getPrometheusSamples(id).then(setPromSamples).catch(() => {})
       }
-      // NOTE: do NOT seed warmupStartedAt from data.started_at here.
-      // started_at is the run start time (JVM init), not when warmup traffic begins.
-      // Seeding it early causes the status badge to show "warming up" during
-      // the initializing phase. Let the log line set it correctly.
+      // Seed phase timestamps from the server so the timer is correct after navigation.
+      // These are null until the backend detects the phase log lines.
+      if (data.warmup_started_at) {
+        const ts = new Date(data.warmup_started_at.endsWith('Z') ? data.warmup_started_at : data.warmup_started_at + 'Z').getTime()
+        setWarmupStartedAt(ts)
+      }
+      if (data.benchmark_started_at) {
+        const ts = new Date(data.benchmark_started_at.endsWith('Z') ? data.benchmark_started_at : data.benchmark_started_at + 'Z').getTime()
+        setBenchmarkStartedAt(ts)
+      }
     } catch (e) {
       if (activeRunIdRef.current !== expectedId) return
       setError(e.message)
@@ -246,8 +252,8 @@ export default function RunDetailPage() {
       } catch { /* not JSON — it's a log line */ }
       const line = evt.data
       setLogs(prev => [...prev, line])
-      if (line.includes('Starting warm-up traffic'))  setWarmupStartedAt(Date.now())
-      if (line.includes('Starting benchmark traffic')) setBenchmarkStartedAt(Date.now())
+      if (line.includes('Starting warm-up traffic'))  setWarmupStartedAt(prev => prev ?? Date.now())
+      if (line.includes('Starting benchmark traffic')) setBenchmarkStartedAt(prev => prev ?? Date.now())
       setLivePoints(prev => {
         const p = parseLiveMetric(line, prev.length)
         if (!p) return prev
@@ -533,7 +539,7 @@ export default function RunDetailPage() {
       {run.status === 'completed' && m && (
         <>
           {/* Throughput tiles — 2 columns only (actual vs target) */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'inline-grid', gridTemplateColumns: 'auto auto', gap: 12, marginBottom: 16 }}>
             <TileColumn label="Avg Publish Rate" badge="omb">
               <MetricCard value={fmt(m.publish_rate_avg)} unit="msg/s" expected={expectedMsgSec > 0 ? expectedMsgSec : undefined} />
               <MetricCard value={fmt(m.publish_rate_avg * messageSize / 1_048_576, 2)} unit="MB/s" expected={expectedMBSec > 0 ? expectedMBSec : undefined} />
@@ -605,6 +611,7 @@ export default function RunDetailPage() {
         onToggle={e => setLogOpen(e.target.open)}
       >
         <summary style={{ padding: '12px 20px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, marginRight: 2 }}>{logOpen ? '▼' : '▶'}</span>
           Run Log
           {!logDone && run.status === 'running' && (
             <span className="text-small text-muted flex items-center gap-8">
