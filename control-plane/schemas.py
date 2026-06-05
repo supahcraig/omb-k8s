@@ -52,11 +52,6 @@ class MetricsOut(BaseModel):
     backlog_timeseries: Optional[str] = None    # JSON text
     throughput_timeseries: Optional[str] = None  # JSON text
 
-    broker_publish_rate_msg: Optional[float] = None
-    broker_consume_rate_msg: Optional[float] = None
-    broker_publish_rate_mb:  Optional[float] = None
-    broker_consume_rate_mb:  Optional[float] = None
-
     model_config = {"from_attributes": True}
 
 

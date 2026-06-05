@@ -527,7 +527,7 @@ export default function RunDetailPage() {
       {/* Post-completion finalized view */}
       {run.status === 'completed' && m && (
         <>
-          {/* Throughput tiles */}
+          {/* Throughput tiles — 2 columns only (actual vs target) */}
           <div style={{ display: 'inline-grid', gridTemplateColumns: 'auto auto', gap: 12, marginBottom: 16 }}>
             <TileColumn label="Avg Publish Rate" badge="omb">
               <MetricCard value={fmt(m.publish_rate_avg)} unit="msg/s" expected={expectedMsgSec > 0 ? expectedMsgSec : undefined} />
@@ -538,20 +538,6 @@ export default function RunDetailPage() {
               <MetricCard value={fmt(m.consume_rate_avg * messageSize / 1_048_576, 2)} unit="MB/s" expected={expectedMBSec > 0 ? expectedMBSec : undefined} />
             </TileColumn>
           </div>
-
-          {/* Redpanda broker-side throughput tiles — only shown when broker metrics were collected */}
-          {(m.broker_publish_rate_msg != null || m.broker_consume_rate_msg != null) && (
-            <div style={{ display: 'inline-grid', gridTemplateColumns: 'auto auto', gap: 12, marginBottom: 16 }}>
-              <TileColumn label="Broker Publish Rate" badge="redpanda">
-                <MetricCard value={fmt(m.broker_publish_rate_msg)} unit="msg/s" />
-                <MetricCard value={fmt(m.broker_publish_rate_mb, 2)} unit="MB/s" />
-              </TileColumn>
-              <TileColumn label="Broker Consume Rate" badge="redpanda">
-                <MetricCard value={fmt(m.broker_consume_rate_msg)} unit="msg/s" />
-                <MetricCard value={fmt(m.broker_consume_rate_mb, 2)} unit="MB/s" />
-              </TileColumn>
-            </div>
-          )}
 
           {/* HDR finalized charts */}
           {hdrLoading && (

@@ -18,7 +18,6 @@ from models import Metrics, Run
 from schemas import RunListItem, RunOut, RunStatus
 from services.k8s_resources import read_worker_resources
 from services.omb_runner import runner
-from services.broker_metrics import collect_broker_rates, snapshot_baseline
 from services.prometheus_collector import collect_prometheus, probe_broker_prometheus
 from services.result_parser import parse_result_from_file, parse_result_from_logs
 
@@ -221,7 +220,6 @@ async def launch_run(
     broker_targets = await _load_broker_targets()
     if broker_targets:
         asyncio.create_task(probe_broker_prometheus(broker_targets))
-    asyncio.create_task(snapshot_baseline(run_id))
     if await_finish:
         await _finish_run(run_id)
     else:
@@ -289,10 +287,7 @@ async def _finish_run(run_id: int) -> None:
         # Mark completed if we parsed metrics, regardless of Job exit code.
         # The aggregate summary line only appears on clean OMB completion, so
         # its presence is a reliable signal that results are valid.
-        broker_rates = await collect_broker_rates(run_id, run.started_at or datetime.utcnow())
         if metrics_data:
-            if broker_rates:
-                metrics_data.update(broker_rates)
             run.status = RunStatus.completed.value
             metrics = Metrics(run_id=run_id, **metrics_data)
             db.add(metrics)

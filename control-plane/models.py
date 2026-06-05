@@ -82,11 +82,6 @@ class Metrics(Base):
     backlog_timeseries = Column(Text, nullable=True)       # JSON text
     throughput_timeseries = Column(Text, nullable=True)    # JSON text
 
-    broker_publish_rate_msg = Column(Float, nullable=True)
-    broker_consume_rate_msg = Column(Float, nullable=True)
-    broker_publish_rate_mb  = Column(Float, nullable=True)
-    broker_consume_rate_mb  = Column(Float, nullable=True)
-
     run = relationship("Run", back_populates="metrics")
 
 
