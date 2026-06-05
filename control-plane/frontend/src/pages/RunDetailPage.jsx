@@ -470,8 +470,8 @@ export default function RunDetailPage() {
           </Link>
           <div className="sweep-nav-runs">
             {sweepRuns.map((sr, i) => {
-              const nextPending = sweepRuns[i + 1]?.status === 'pending'
-              const isCooling = sr.status === 'completed' && nextPending && cooldownRemaining > 0
+              const prevCompleted = i > 0 && sweepRuns[i - 1]?.status === 'completed'
+              const isCooling = sr.status === 'pending' && prevCompleted && cooldownRemaining > 0
               const pillStatus = isCooling ? 'cooling' : sr.status
               return (
                 <Link
