@@ -88,13 +88,26 @@ function NinesTable({ aggregates }) {
 
 // ── Percentile Curve — Recharts ──────────────────────────────────────────────
 
+function OmbBadge() {
+  return <span className="source-badge source-badge-omb" style={{ marginLeft: 8 }}>omb</span>
+}
+
+function ChartHeader({ title }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+      <span style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{title}</span>
+      <OmbBadge />
+    </div>
+  )
+}
+
 function PercentileCurveRecharts({ data, title, color }) {
   if (!data || data.length === 0) return <div style={{ color: C.axis, fontSize: 12, padding: 8 }}>No data</div>
   const ninesX = p => 100 / (100 - Math.min(p, 99.9999))
   const transformed = data.map(pt => ({ ...pt, ninesX: ninesX(pt.percentile) }))
   return (
     <div>
-      <div style={{ fontSize: 12, color: C.text, marginBottom: 6, fontWeight: 500 }}>{title}</div>
+      <ChartHeader title={title} />
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={transformed} margin={{ top: 4, right: 16, bottom: 20, left: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
@@ -150,7 +163,7 @@ function HistogramRecharts({ data, title, color }) {
   const ticks = data.filter((_, i) => i % 5 === 0).map(b => b.bucketLabel)
   return (
     <div>
-      <div style={{ fontSize: 12, color: C.text, marginBottom: 6, fontWeight: 500 }}>{title}</div>
+      <ChartHeader title={title} />
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} margin={{ top: 4, right: 16, bottom: 20, left: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
@@ -264,7 +277,7 @@ export default function FinalizedCharts({ results, warmupSamples = 60 }) {
   return (
     <div>
       {/* ── Results summary — nines table (narrow) ── */}
-      <SectionHeading>Results summary</SectionHeading>
+      <SectionHeading>Results summary <OmbBadge /></SectionHeading>
       <div className="card" style={{ padding: '0 0 4px', maxWidth: 360 }}>
         <NinesTable aggregates={aggregates} />
       </div>
@@ -273,7 +286,7 @@ export default function FinalizedCharts({ results, warmupSamples = 60 }) {
       <SectionHeading>Latency over time</SectionHeading>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div className="chart-card">
-          <div style={{ fontSize: 12, color: C.text, marginBottom: 6, fontWeight: 500 }}>Publish latency (ms)</div>
+          <ChartHeader title="Publish latency (ms)" />
           <LatencyTimeSeries
             timeSeries={timeSeries}
             sampleRateMs={sampleRateMs}
@@ -285,7 +298,7 @@ export default function FinalizedCharts({ results, warmupSamples = 60 }) {
           />
         </div>
         <div className="chart-card">
-          <div style={{ fontSize: 12, color: C.text, marginBottom: 6, fontWeight: 500 }}>End-to-end latency (ms)</div>
+          <ChartHeader title="End-to-end latency (ms)" />
           <LatencyTimeSeries
             timeSeries={timeSeries}
             sampleRateMs={sampleRateMs}
