@@ -339,7 +339,7 @@ export default function RunCharts({
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
               <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
-              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMsgTick} domain={['auto', expectedMsgSec > 0 ? dataMax => niceMax(Math.max(dataMax, expectedMsgSec)) : 'auto']} />
+              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMsgTick} domain={['auto', dataMax => niceMax(dataMax) || 'auto']} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               {expectedMsgSec > 0 && (
@@ -359,7 +359,7 @@ export default function RunCharts({
             <LineChart data={chartPoints} syncId="run">
               <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
               <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
-              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMBTick} domain={['auto', expectedMBSec > 0 ? dataMax => niceMax(Math.max(dataMax, expectedMBSec)) : 'auto']} />
+              <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} tickFormatter={fmtMBTick} domain={['auto', dataMax => niceMax(dataMax) || 'auto']} />
               <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
               {expectedMBSec > 0 && (
@@ -387,8 +387,8 @@ export default function RunCharts({
         </ChartCard>
       </div>
 
-      {/* Row 2: 2-column latency — live only; FinalizedCharts owns latency post-completion */}
-      {isLive && hasLatency && (
+      {/* Row 2: 2-column latency (only if we have latency data) */}
+      {hasLatency && (
         <div className="charts-row charts-row-2">
           <ChartCard title="Publish Latency (ms)" badge="omb">
             <ResponsiveContainer width="100%" height={180}>
