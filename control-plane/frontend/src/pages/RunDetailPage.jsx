@@ -614,6 +614,7 @@ export default function RunDetailPage() {
         onToggle={e => setLogOpen(e.target.open)}
       >
         <summary style={{ padding: '12px 20px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, marginRight: 2 }}>{logOpen ? '▼' : '▶'}</span>
           Run Log
           {!logDone && run.status === 'running' && (
             <span className="text-small text-muted flex items-center gap-8">
