@@ -48,6 +48,10 @@ async def init_db() -> None:
             "ALTER TABLE prometheus_samples ADD COLUMN worker_cpu_per_pod TEXT",
             "ALTER TABLE prometheus_samples ADD COLUMN worker_net_tx_per_pod TEXT",
             "ALTER TABLE prometheus_samples ADD COLUMN worker_net_drop_per_pod TEXT",
+            "ALTER TABLE metrics ADD COLUMN broker_publish_rate_msg REAL",
+            "ALTER TABLE metrics ADD COLUMN broker_consume_rate_msg REAL",
+            "ALTER TABLE metrics ADD COLUMN broker_publish_rate_mb REAL",
+            "ALTER TABLE metrics ADD COLUMN broker_consume_rate_mb REAL",
         ):
             try:
                 await conn.execute(text(col_ddl))
