@@ -83,6 +83,8 @@ class RunOut(BaseModel):
     status: RunStatus
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    warmup_started_at: Optional[datetime] = None
+    benchmark_started_at: Optional[datetime] = None
     driver_config: Optional[str] = None
     workload_config: Optional[str] = None
     sweep_id: Optional[int] = None

@@ -25,6 +25,8 @@ class Run(Base):
     # "pending" | "running" | "completed" | "failed" | "cancelled"
     started_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
+    warmup_started_at = Column(DateTime, nullable=True)
+    benchmark_started_at = Column(DateTime, nullable=True)
     # Full YAML snapshots stored as raw text (not JSON) for immutability
     driver_config = Column(Text, nullable=True)
     workload_config = Column(Text, nullable=True)
