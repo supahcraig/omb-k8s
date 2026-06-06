@@ -470,7 +470,7 @@ handles all navigation. Routes and pages:
 | `/runs/:id` | RunDetailPage | Live log streaming, real-time charts, final metrics; sweep nav bar when run belongs to a sweep |
 | `/sweeps` | SweepsPage | Parameter sweep list |
 | `/sweeps/new` | NewSweepPage | Redirects to `/runs/new` with `state={{ enableSweep: true }}` |
-| `/sweeps/:id` | SweepDetailPage | Sweep overview — run comparison table with links to individual runs |
+| `/sweeps/:id` | SweepDetailPage | Sweep overview — run comparison table; rows are clickable; columns: run, status (glow pill), sweep params (superheading), pub/consume rate msg/s + MB/s, pub/e2e P99 + P99.9, Details button |
 | `/workloads` | WorkloadLibraryPage | Saved workload configs; "Use" navigates to `/runs/new` |
 | `/settings` | SettingsPage | Cluster connectivity (seed brokers, TLS, SASL) + Prometheus scrape targets |
 | `/cluster` | ClusterPage | k8s cluster status, worker health, pod restart |
@@ -518,12 +518,20 @@ from `/sweeps/new`. Individual axes can be deleted down to zero per panel.
 **`RunDetailPage` shows a sweep nav bar when the run belongs to a sweep.**
 If `run.sweep_id` is set, the page fetches sibling runs via `getSweepRuns` and
 renders a horizontal pill strip above the page header. Each pill shows the sweep
-parameter values for that run (e.g. `acks=0`) and is colored by status. Pills
-poll every 3 s while any sibling is still running or pending. When the current
-run transitions out of `running` AND the WebSocket signaled completion
-(`wsSignaledDoneRef`), the page auto-advances to the next sibling run. Do not
-add per-run detail logic to `SweepDetailPage` — it is a comparison table only;
-`RunDetailPage` is the shared execution view for both single runs and sweep runs.
+parameter values for that run (e.g. `acks=0`) and uses CSS glow animations to
+reflect live state: running pills glow green, the pending run in cooldown glows
+ice blue, failed pills are red with no glow. Each pill computes its cooling state
+independently from `prevRun.completed_at + sweep.cooldown_seconds` vs `Date.now()`
+— do NOT use the shared `cooldownRemaining` state for this, it is only valid for
+the currently viewed run. Pills poll every 3 s while any sibling is still running
+or pending. When the current run transitions out of `running` AND the WebSocket
+signaled completion (`wsSignaledDoneRef`), the page auto-advances to the next
+sibling run. `wsSignaledDoneRef` is only set when `wsHasDataRef` is true — this
+guards against a race where `is_done()` returns true for unregistered run IDs,
+which would otherwise trigger false auto-advance when viewing a pending run that
+just transitioned to running. Do not add per-run detail logic to `SweepDetailPage`
+— it is a comparison table only; `RunDetailPage` is the shared execution view for
+both single runs and sweep runs.
 
 **Sweep nav chips stay visible during same-sweep navigation.** The reset effect
 (`useEffect([id])`) deliberately does NOT clear `run`, `sweepRuns`, or `sweep`
@@ -563,13 +571,11 @@ Pod list for all worker charts is derived from `workerMem_*` keys (`workerPods`)
 chart x-axes show local time; SQLite datetimes always need `+Z` appended before
 `new Date()` to parse as UTC correctly.
 
-**RunCharts latency charts suppress warmup data.** `latencyPoints` is a mapped copy
-of `chartPoints` where all latency fields (pubP50/pubP99/pubP999/e2eP50/e2eP99/e2eP999)
-are set to `null` for array indices `< warmupSamples`. This prevents warmup spikes
-from swamping the y-axis scale. The arrays stay the same length so `syncId` hover
-sync works. The warmup ReferenceArea still marks the blank region visually.
-`computeLatencyStats` always uses `warmupSamples` as the slice offset so the stats
-table below each chart never includes warmup data.
+**RunCharts does not show latency charts.** Per-second log-emitted latency stats
+(rolling window P99) cannot be reconciled with the cumulative HDR P99 in
+FinalizedCharts, so they were removed to avoid confusion. Latency is owned
+entirely by FinalizedCharts post-completion. Live HDR latency during a run is
+planned — see `claude/hdr-live-latency.md`.
 
 **RunCharts expected-rate reference lines.** `RunDetailPage` computes `expectedMsgSec`
 and `expectedMBSec` from `workload_config.producerRate` and `messageSize`, and
@@ -577,8 +583,9 @@ and `expectedMBSec` from `workload_config.producerRate` and `messageSize`, and
 These are passed as props to `RunCharts` which renders amber dashed `ReferenceLine`
 components on the Throughput (msg/s) and Throughput (MB/s) charts. A green dashed
 consume reference line is added only when consume rate differs from publish rate
-(i.e. `subscriptionsPerTopic > 1`). The y-axis max is computed by `niceMax()` —
-rounds up to the next integer at the same order of magnitude (6M → 7M).
+(i.e. `subscriptionsPerTopic > 1`). The y-axis domain is `[0, niceMax(max(dataMax,
+expectedRate))]` — `niceMax` adds 15% headroom and rounds to half-magnitude steps
+so the axis stays snug while still showing reference lines when target > actual.
 
 **RunCharts CPU saturation alert.** An amber alert banner fires when any worker's CPU
 exceeds 85% of its CPU request (uses per-pod `workerCpu_*` keys, falls back to the
@@ -593,16 +600,19 @@ and bypass `normalizeTimeseries`.
 
 **RunDetailPage post-completion view shows finalized HDR charts.** When a run
 completes, the page switches to a finalized view: (1) 2-column throughput tiles
-(publish rate + consume rate, actual vs target); (2) `FinalizedCharts` component
-with the nines table, per-second latency time series from the JSON result file,
-HDR percentile curves (nines-transformed log x-axis), and latency histograms;
-(3) `RunCharts` showing throughput/backlog/worker charts from stored metrics. The
-Run Log auto-collapses on completion. `FinalizedCharts` receives `results` from
-`GET /api/runs/{id}/results` (polled with retries after completion) and
-`warmupSamples` from the workload config. HDR results are also stored in the
-`run_results` SQLite table by `parse_and_store_hdr_results` (triggered async from
-`_finish_run`). `MetricCard` accepts an `expected` prop; if actual < 95% of
-expected the value renders red, ≥ 95% renders green.
+(publish rate + consume rate, actual vs target) sized to content (`inline-grid`);
+(2) `FinalizedCharts` component with the nines table, HDR percentile curves
+(nines-transformed log x-axis), and latency histograms — all badged `omb`;
+(3) `RunCharts` showing throughput/backlog/worker charts from stored metrics.
+The Run Log auto-collapses on completion and has a `▶`/`▼` twisty indicator.
+`FinalizedCharts` no longer shows a per-second latency time series — those stats
+are not reconcilable with the cumulative HDR P99. `FinalizedCharts` receives
+`results` from `GET /api/runs/{id}/results` (polled with retries after completion).
+HDR results are also stored in the `run_results` SQLite table by
+`parse_and_store_hdr_results` (triggered async from `_finish_run`). `MetricCard`
+accepts an `expected` prop; if actual < 95% of expected the value renders red,
+≥ 95% renders green. All charts and tiles carry a source badge (`omb`, `redpanda`,
+or `worker`) identifying the data origin.
 
 **Cluster page shows image digest per pod.** The `/api/cluster/pods` endpoint extracts
 `container_statuses[0].image_id` and parses the sha256 digest (first 12 chars) as
@@ -619,6 +629,15 @@ benchmark traffic"). During cooldown: `cooldown` (cyan). Pending sweep runs:
 warmup traffic begins, which would incorrectly show "warming up" during
 initializing.
 
+**`warmup_started_at` and `benchmark_started_at` are stored in the `runs` table.**
+When the backend detects "Starting warm-up traffic" / "Starting benchmark traffic"
+in the log stream, it writes UTC timestamps to these columns via `_record_phase_ts`
+in `omb_runner.py`. `loadRun` seeds `warmupStartedAt`/`benchmarkStartedAt` state
+from these server values so the progress bar is accurate after navigation. The WS
+handler guards with `prev => prev ?? Date.now()` so replayed log lines never
+overwrite the server-anchored timestamps. Both columns are added by ALTER TABLE
+migrations in `init_db`.
+
 **NewRunPage prefills from the most recent run.** On mount it calls `listRuns`
 then `getRun(runs[0].id)` to seed `initialDriverContent` and
 `initialWorkload`. If navigating from WorkloadLibrary (`location.state?.workloadContent`),
@@ -630,6 +649,15 @@ top-to-bottom: (1) header card with name, launch button, and projected load;
 (right) axis panels; (3) 2×2 CSS grid sitting directly on the page background —
 top row: Driver form panel (blue accent) + Workload form panel (green accent);
 bottom row: Driver YAML panel + Workload YAML panel (darker `#0d1018` to read as code).
+The form is constrained to `maxWidth: 1400px, margin: 0 auto` to prevent inputs
+becoming comically wide on large monitors.
+
+## Future work specs
+
+- `claude/hdr-live-latency.md` — live HDR P99 charts during a run by polling
+  `/cumulative-latencies` on worker pods (same data as final output)
+- `claude/ws-phase-events.md` — server-push phase events via WebSocket to
+  eliminate client-side state inference and race conditions in sweep navigation
 
 ## Driver and Workload form architecture
 
