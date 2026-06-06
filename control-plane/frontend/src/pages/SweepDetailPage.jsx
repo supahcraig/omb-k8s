@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { getSweep, getSweepRuns, cancelSweep } from '../api.js'
 import useGrafanaUrl from '../hooks/useGrafanaUrl.js'
 import { buildSweepGrafanaUrl } from '../lib/grafanaUtils.js'
+import { parseWorkloadYaml } from '../components/WorkloadForm.jsx'
 
 function StatusBadge({ status }) {
   const cls = {
@@ -87,6 +88,12 @@ export default function SweepDetailPage() {
 
   const sweepGrafanaUrl = grafanaUrl ? buildSweepGrafanaUrl(grafanaUrl, runs) : null
 
+  const messageSize = (() => {
+    const cfg = runs[0]?.workload_config
+    if (!cfg) return 1024
+    return parseWorkloadYaml(cfg)?.values?.messageSize ?? 1024
+  })()
+
   return (
     <div>
       <div className="page-header">
@@ -151,7 +158,7 @@ export default function SweepDetailPage() {
                   >
                     Sweep Parameters
                   </th>
-                  <th colSpan={5} />
+                  <th colSpan={9} />
                 </tr>
               )}
               <tr>
@@ -161,9 +168,13 @@ export default function SweepDetailPage() {
                   <th key={k} style={{ maxWidth: 90, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k}</th>
                 ))}
                 <th className="num">Pub Rate (msg/s)</th>
+                <th className="num">Pub Rate (MB/s)</th>
+                <th className="num">Consume Rate (msg/s)</th>
+                <th className="num">Consume Rate (MB/s)</th>
                 <th className="num">Pub P99 (ms)</th>
+                <th className="num">Pub P99.9 (ms)</th>
                 <th className="num">E2E P99 (ms)</th>
-                <th className="num">Consume Rate</th>
+                <th className="num">E2E P99.9 (ms)</th>
                 <th></th>
               </tr>
             </thead>
@@ -171,6 +182,8 @@ export default function SweepDetailPage() {
               {runs.map((run, i) => {
                 const params = parseParams(run.sweep_params)
                 const m = run.metrics
+                const pubMBSec     = m?.publish_rate_avg != null ? m.publish_rate_avg * messageSize / 1_048_576 : null
+                const consMBSec    = m?.consume_rate_avg != null ? m.consume_rate_avg * messageSize / 1_048_576 : null
                 return (
                   <tr
                     key={run.id}
@@ -183,9 +196,13 @@ export default function SweepDetailPage() {
                       <td key={k} style={{ maxWidth: 90, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{params[k] ?? '—'}</td>
                     ))}
                     <td className="num">{fmt(m?.publish_rate_avg)}</td>
-                    <td className="num">{fmt(m?.publish_latency_p99)}</td>
-                    <td className="num">{fmt(m?.end_to_end_latency_p99)}</td>
+                    <td className="num">{fmt(pubMBSec, 2)}</td>
                     <td className="num">{fmt(m?.consume_rate_avg)}</td>
+                    <td className="num">{fmt(consMBSec, 2)}</td>
+                    <td className="num">{fmt(m?.publish_latency_p99)}</td>
+                    <td className="num">{fmt(m?.publish_latency_p999)}</td>
+                    <td className="num">{fmt(m?.end_to_end_latency_p99)}</td>
+                    <td className="num">{fmt(m?.end_to_end_latency_p999)}</td>
                     <td onClick={e => e.stopPropagation()}>
                       <Link to={`/runs/${run.id}`} className="btn btn-secondary btn-sm">Details</Link>
                     </td>
