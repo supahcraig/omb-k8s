@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { getSweep, getSweepRuns, cancelSweep } from '../api.js'
 import useGrafanaUrl from '../hooks/useGrafanaUrl.js'
 import { buildSweepGrafanaUrl } from '../lib/grafanaUtils.js'
@@ -35,6 +35,7 @@ function parseParams(jsonStr) {
 
 export default function SweepDetailPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const [sweep, setSweep] = useState(null)
   const [runs, setRuns] = useState([])
   const [loading, setLoading] = useState(true)
@@ -59,11 +60,9 @@ export default function SweepDetailPage() {
 
   useEffect(() => {
     load()
-    // Poll until sweep is in a terminal state — use ref to avoid stale closure
     const iv = setInterval(() => {
       if (!['completed', 'cancelled', 'failed'].includes(sweepRef.current?.status)) load()
     }, 3000)
-    // Per-second tick keeps isCooling timestamps fresh without a full poll
     const tick = setInterval(() => setTick(t => t + 1), 1000)
     return () => { clearInterval(iv); clearInterval(tick) }
   }, [id])
@@ -82,7 +81,6 @@ export default function SweepDetailPage() {
   if (error) return <div className="alert alert-error">{error}</div>
   if (!sweep) return null
 
-  // Detect all parameter keys used across runs for the comparison table
   const paramKeys = Array.from(new Set(
     runs.flatMap(r => Object.keys(parseParams(r.sweep_params)))
   ))
@@ -94,7 +92,16 @@ export default function SweepDetailPage() {
       <div className="page-header">
         <div>
           <Link to="/sweeps" className="btn btn-secondary btn-sm">← Back to Sweeps</Link>
-          <h1 className="page-title mt-8">{sweep.name}</h1>
+          <div className="flex items-center gap-8 mt-8">
+            <h1 className="page-title">{sweep.name}</h1>
+            <span style={{
+              fontSize: 13, fontWeight: 600, color: 'var(--color-text-muted)',
+              background: 'rgba(255,255,255,0.06)', border: '1px solid var(--color-border)',
+              borderRadius: 4, padding: '2px 10px',
+            }}>
+              Sweep #{id}
+            </span>
+          </div>
           <div className="flex items-center gap-8 mt-4">
             <StatusBadge status={sweep.status} />
             {sweep.started_at && (
@@ -129,10 +136,30 @@ export default function SweepDetailPage() {
         ) : (
           <table className="data-table">
             <thead>
+              {paramKeys.length > 0 && (
+                <tr>
+                  <th colSpan={2} />
+                  <th
+                    colSpan={paramKeys.length}
+                    style={{
+                      textAlign: 'center', fontSize: 10, fontWeight: 700,
+                      textTransform: 'uppercase', letterSpacing: '0.08em',
+                      color: 'var(--color-text-muted)',
+                      borderBottom: '1px solid var(--color-border)',
+                      paddingBottom: 4,
+                    }}
+                  >
+                    Sweep Parameters
+                  </th>
+                  <th colSpan={5} />
+                </tr>
+              )}
               <tr>
                 <th>Run</th>
-                {paramKeys.map(k => <th key={k}>{k}</th>)}
                 <th>Status</th>
+                {paramKeys.map(k => (
+                  <th key={k} style={{ maxWidth: 90, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k}</th>
+                ))}
                 <th className="num">Pub Rate (msg/s)</th>
                 <th className="num">Pub P99 (ms)</th>
                 <th className="num">E2E P99 (ms)</th>
@@ -141,22 +168,26 @@ export default function SweepDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {runs.map(run => {
+              {runs.map((run, i) => {
                 const params = parseParams(run.sweep_params)
                 const m = run.metrics
                 return (
-                  <tr key={run.id}>
+                  <tr
+                    key={run.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`/runs/${run.id}`)}
+                  >
                     <td>#{run.id}</td>
+                    <td><RunStatusPill run={run} prevRun={runs[i - 1]} cooldownSeconds={sweep.cooldown_seconds ?? 0} /></td>
                     {paramKeys.map(k => (
-                      <td key={k}>{params[k] ?? '—'}</td>
+                      <td key={k} style={{ maxWidth: 90, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{params[k] ?? '—'}</td>
                     ))}
-                    <td><RunStatusPill run={run} prevRun={runs[runs.indexOf(run) - 1]} cooldownSeconds={sweep.cooldown_seconds ?? 0} /></td>
                     <td className="num">{fmt(m?.publish_rate_avg)}</td>
                     <td className="num">{fmt(m?.publish_latency_p99)}</td>
                     <td className="num">{fmt(m?.end_to_end_latency_p99)}</td>
                     <td className="num">{fmt(m?.consume_rate_avg)}</td>
-                    <td>
-                      <Link to={`/runs/${run.id}`} className="btn btn-secondary btn-sm">View</Link>
+                    <td onClick={e => e.stopPropagation()}>
+                      <Link to={`/runs/${run.id}`} className="btn btn-secondary btn-sm">Details</Link>
                     </td>
                   </tr>
                 )
