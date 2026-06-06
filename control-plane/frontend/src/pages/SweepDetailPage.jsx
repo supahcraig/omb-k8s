@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { getSweep, getSweepRuns, cancelSweep } from '../api.js'
+import { getSweep, getSweepRuns, cancelSweep, getSweepVisualizationData } from '../api.js'
 import useGrafanaUrl from '../hooks/useGrafanaUrl.js'
 import { buildSweepGrafanaUrl } from '../lib/grafanaUtils.js'
 import { parseWorkloadYaml } from '../components/WorkloadForm.jsx'
+import SweepPercentileCurves from '../components/SweepPercentileCurves.jsx'
+import SweepHeatmap from '../components/SweepHeatmap.jsx'
 
 function StatusBadge({ status }) {
   const cls = {
@@ -42,6 +44,7 @@ export default function SweepDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [, setTick] = useState(0)
+  const [visData, setVisData] = useState(null)
   const sweepRef = useRef(null)
   const grafanaUrl = useGrafanaUrl()
 
@@ -59,10 +62,22 @@ export default function SweepDetailPage() {
     }
   }
 
+  async function loadVisData() {
+    try {
+      const data = await getSweepVisualizationData(id)
+      setVisData(data)
+    } catch {
+      // non-critical — page still works without vis data
+    }
+  }
+
   useEffect(() => {
     load()
+    loadVisData()
     const iv = setInterval(() => {
-      if (!['completed', 'cancelled', 'failed'].includes(sweepRef.current?.status)) load()
+      const isDone = ['completed', 'cancelled', 'failed'].includes(sweepRef.current?.status)
+      if (!isDone) load()
+      loadVisData()
     }, 3000)
     const tick = setInterval(() => setTick(t => t + 1), 1000)
     return () => { clearInterval(iv); clearInterval(tick) }
@@ -213,6 +228,28 @@ export default function SweepDetailPage() {
           </table>
         )}
       </div>
+
+      {visData && visData.runs.length > 0 && (
+        <>
+          <div className="card" style={{ marginTop: 24 }}>
+            <div className="card-header">
+              <h3>Latency percentile curves</h3>
+            </div>
+            <div style={{ padding: '12px 0' }}>
+              <SweepPercentileCurves visData={visData} />
+            </div>
+          </div>
+
+          <div className="card" style={{ marginTop: 24 }}>
+            <div className="card-header">
+              <h3>Latency heatmaps</h3>
+            </div>
+            <div style={{ padding: '12px 0' }}>
+              <SweepHeatmap visData={visData} />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

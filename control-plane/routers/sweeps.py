@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database import AsyncSessionLocal, get_db
-from models import Run, Sweep
+from models import Run, RunResult, Sweep
 from routers.runs import launch_run
 from schemas import RunOut, RunStatus, SweepCreate, SweepOut
 from services.omb_runner import runner
@@ -130,6 +130,62 @@ async def get_sweep_runs(sweep_id: int, db: AsyncSession = Depends(get_db)):
     )
     runs = result.scalars().all()
     return [RunOut.model_validate(r) for r in runs]
+
+
+@router.get("/{sweep_id}/visualization-data")
+async def get_sweep_visualization_data(sweep_id: int, db: AsyncSession = Depends(get_db)):
+    sweep = await db.get(Sweep, sweep_id)
+    if sweep is None:
+        raise HTTPException(status_code=404, detail="Sweep not found")
+
+    result = await db.execute(
+        select(Run)
+        .where(Run.sweep_id == sweep_id)
+        .order_by(Run.id.asc())
+    )
+    runs = result.scalars().all()
+
+    run_ids = [r.id for r in runs]
+    results_map: dict[int, RunResult] = {}
+    if run_ids:
+        rr_result = await db.execute(
+            select(RunResult).where(RunResult.run_id.in_(run_ids))
+        )
+        for rr in rr_result.scalars().all():
+            results_map[rr.run_id] = rr
+
+    # Build labels; check for truncation collisions
+    full_labels = [
+        ", ".join(f"{k}={v}" for k, v in json.loads(r.sweep_params or "{}").items())
+        for r in runs
+    ]
+    truncated = [lbl[:37] + "..." if len(lbl) > 40 else lbl for lbl in full_labels]
+    labels = full_labels if len(set(truncated)) < len(truncated) else truncated
+
+    run_data = []
+    for run, label in zip(runs, labels):
+        params = json.loads(run.sweep_params or "{}")
+        rr = results_map.get(run.id)
+        run_data.append({
+            "run_id": run.id,
+            "sweep_params": params,
+            "label": label,
+            "publish_p99":  rr.publish_p99  if rr else None,
+            "publish_p999": rr.publish_p999 if rr else None,
+            "e2e_p99":      rr.e2e_p99      if rr else None,
+            "e2e_p999":     rr.e2e_p999     if rr else None,
+            "publish_quantiles": json.loads(rr.publish_quantiles_json) if rr and rr.publish_quantiles_json else None,
+            "e2e_quantiles":     json.loads(rr.e2e_quantiles_json)     if rr and rr.e2e_quantiles_json     else None,
+        })
+
+    return {
+        "sweep": {
+            "id": sweep.id,
+            "name": sweep.name,
+            "parameter_axes": json.loads(sweep.parameter_axes or "{}"),
+        },
+        "runs": run_data,
+    }
 
 
 @router.delete("/{sweep_id}", status_code=204)
