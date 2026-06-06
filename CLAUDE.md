@@ -88,6 +88,14 @@ creation time the control plane renders driver and workload YAML from DB records
 into a k8s ConfigMap. The Job mounts the ConfigMap. Nothing benchmark-related
 lives on disk permanently except the SQLite file itself on the PV.
 
+**Sweep storage is three-level.** The `sweeps` table stores `parameter_axes` —
+a JSON object of every axis and its full value list (both workload and driver axes
+merged). Each `runs` row stores `sweep_params` (the specific parameter values
+for that iteration) and the full resolved `driver_config` + `workload_config`
+YAMLs with those values applied. Do not store only workload axes in
+`parameter_axes` — driver axes must be included or the sweep definition is
+incomplete.
+
 **SQLite on a PersistentVolume, not Postgres.** Results are engagement-scoped.
 SQLite is sufficient, requires zero migration from the existing codebase, and
 survives pod restarts via the PV. Do not introduce Postgres.
