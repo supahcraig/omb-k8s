@@ -48,7 +48,10 @@ async def create_sweep(
     sweep = Sweep(
         name=body.name or '',
         status="running",
-        parameter_axes=json.dumps(body.effective_workload_axes),
+        parameter_axes=json.dumps({
+            **body.effective_workload_axes,
+            **body.driver_parameter_axes,
+        }),
         cooldown_seconds=body.cooldown_seconds,
     )
     db.add(sweep)
