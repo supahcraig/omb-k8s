@@ -19,7 +19,8 @@ function RunStatusPill({ run, prevRun, cooldownSeconds }) {
     return Date.now() < new Date(ts).getTime() + cooldownSeconds * 1000
   })()
   const pillStatus = isCooling ? 'cooling' : run.status
-  return <span className={`sweep-run-pill sweep-run-pill-${pillStatus}`}>{pillStatus}</span>
+  const label = run.status.charAt(0).toUpperCase() + run.status.slice(1)
+  return <span className={`sweep-run-pill sweep-run-pill-${pillStatus}`}>{label}</span>
 }
 
 function fmt(n, digits = 1) {
