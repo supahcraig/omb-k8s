@@ -479,8 +479,13 @@ export default function RunDetailPage() {
           </Link>
           <div className="sweep-nav-runs">
             {sweepRuns.map((sr, i) => {
-              const prevCompleted = i > 0 && sweepRuns[i - 1]?.status === 'completed'
-              const isCooling = sr.status === 'pending' && prevCompleted && cooldownRemaining > 0
+              const prevRun = sweepRuns[i - 1]
+              const isCooling = (() => {
+                if (sr.status !== 'pending' || !prevRun || prevRun.status !== 'completed' || !prevRun.completed_at) return false
+                if (!sweep?.cooldown_seconds) return false
+                const ts = prevRun.completed_at.endsWith('Z') ? prevRun.completed_at : prevRun.completed_at + 'Z'
+                return Date.now() < new Date(ts).getTime() + sweep.cooldown_seconds * 1000
+              })()
               const pillStatus = isCooling ? 'cooling' : sr.status
               return (
                 <Link
