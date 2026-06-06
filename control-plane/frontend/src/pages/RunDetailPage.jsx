@@ -132,6 +132,7 @@ export default function RunDetailPage() {
   const wsRef = useRef(null)
   const logEndRef = useRef(null)
   const liveMatchedRef = useRef(false)
+  const wsHasDataRef = useRef(false)
   const sweepRunsRef = useRef([])
   const prevRunStatusRef = useRef(null)
   const wsSignaledDoneRef = useRef(false)
@@ -202,6 +203,7 @@ export default function RunDetailPage() {
     setWarmupStartedAt(null)
     setBenchmarkStartedAt(null)
     liveMatchedRef.current = false
+    wsHasDataRef.current = false
     wsSignaledDoneRef.current = false
     prevRunStatusRef.current = null
     setLogs([])
@@ -244,13 +246,20 @@ export default function RunDetailPage() {
       try {
         const msg = JSON.parse(evt.data)
         if (msg.type === 'done') {
-          wsSignaledDoneRef.current = true
+          // Only trust this signal if the WS actually streamed real log lines.
+          // A WS that fires 'done' immediately (runner race: is_done returns
+          // true for unregistered run IDs) would otherwise trigger auto-advance
+          // incorrectly when viewing a pending run that just transitioned to running.
+          if (wsHasDataRef.current) {
+            wsSignaledDoneRef.current = true
+          }
           setLogDone(true)
           pollUntilFinished()
           return
         }
       } catch { /* not JSON — it's a log line */ }
       const line = evt.data
+      wsHasDataRef.current = true
       setLogs(prev => [...prev, line])
       if (line.includes('Starting warm-up traffic'))  setWarmupStartedAt(prev => prev ?? Date.now())
       if (line.includes('Starting benchmark traffic')) setBenchmarkStartedAt(prev => prev ?? Date.now())
@@ -469,15 +478,25 @@ export default function RunDetailPage() {
             ← Sweep #{run.sweep_id}
           </Link>
           <div className="sweep-nav-runs">
-            {sweepRuns.map((sr, i) => (
-              <Link
-                key={sr.id}
-                to={`/runs/${sr.id}`}
-                className={`sweep-run-pill sweep-run-pill-${sr.status}${sr.id === run.id ? ' current' : ''}`}
-              >
-                {sweepParamLabel(sr) || `Run ${i + 1}`}
-              </Link>
-            ))}
+            {sweepRuns.map((sr, i) => {
+              const prevRun = sweepRuns[i - 1]
+              const isCooling = (() => {
+                if (sr.status !== 'pending' || !prevRun || prevRun.status !== 'completed' || !prevRun.completed_at) return false
+                if (!sweep?.cooldown_seconds) return false
+                const ts = prevRun.completed_at.endsWith('Z') ? prevRun.completed_at : prevRun.completed_at + 'Z'
+                return Date.now() < new Date(ts).getTime() + sweep.cooldown_seconds * 1000
+              })()
+              const pillStatus = isCooling ? 'cooling' : sr.status
+              return (
+                <Link
+                  key={sr.id}
+                  to={`/runs/${sr.id}`}
+                  className={`sweep-run-pill sweep-run-pill-${pillStatus}${sr.id === run.id ? ' current' : ''}`}
+                >
+                  {sweepParamLabel(sr) || `Run ${i + 1}`}
+                </Link>
+              )
+            })}
           </div>
           {cooldownRemaining > 0 && (
             <div className="sweep-cooldown">

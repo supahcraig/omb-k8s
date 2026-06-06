@@ -284,8 +284,18 @@ body {
   outline-offset: 1px;
 }
 
+@keyframes pill-glow-green {
+  0%, 100% { box-shadow: 0 0 4px rgba(74,222,128,0.3); }
+  50%       { box-shadow: 0 0 10px rgba(74,222,128,0.7), 0 0 18px rgba(74,222,128,0.35); }
+}
+@keyframes pill-glow-ice {
+  0%, 100% { box-shadow: 0 0 4px rgba(147,210,255,0.3); }
+  50%       { box-shadow: 0 0 10px rgba(147,210,255,0.7), 0 0 18px rgba(147,210,255,0.35); }
+}
+
 .sweep-run-pill-completed  { background: rgba(34,197,94,0.15);  border-color: rgba(34,197,94,0.4);   color: #4ade80; }
-.sweep-run-pill-running    { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4);  color: #60a5fa; }
+.sweep-run-pill-running    { background: rgba(74,222,128,0.15); border-color: rgba(74,222,128,0.5);  color: #4ade80; animation: pill-glow-green 1.5s ease-in-out infinite; }
+.sweep-run-pill-cooling    { background: rgba(147,210,255,0.12);border-color: rgba(147,210,255,0.45);color: #93d2ff; animation: pill-glow-ice 1.5s ease-in-out infinite; }
 .sweep-run-pill-pending    { background: rgba(107,114,128,0.12);border-color: rgba(107,114,128,0.3); color: #9ca3af; }
 .sweep-run-pill-failed     { background: rgba(239,68,68,0.15);  border-color: rgba(239,68,68,0.4);   color: #f87171; }
 .sweep-run-pill-cancelled  { background: rgba(107,114,128,0.08);border-color: rgba(107,114,128,0.2); color: #6b7280; }

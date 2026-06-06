@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { getSweep, getSweepRuns, cancelSweep } from '../api.js'
 import useGrafanaUrl from '../hooks/useGrafanaUrl.js'
 import { buildSweepGrafanaUrl } from '../lib/grafanaUtils.js'
+import { parseWorkloadYaml } from '../components/WorkloadForm.jsx'
 
 function StatusBadge({ status }) {
   const cls = {
@@ -10,6 +11,17 @@ function StatusBadge({ status }) {
     failed: 'badge-failed', pending: 'badge-pending', cancelled: 'badge-cancelled',
   }[status] || 'badge-pending'
   return <span className={`badge ${cls}`}>{status}</span>
+}
+
+function RunStatusPill({ run, prevRun, cooldownSeconds }) {
+  const isCooling = (() => {
+    if (run.status !== 'pending' || !prevRun || prevRun.status !== 'completed' || !prevRun.completed_at) return false
+    const ts = prevRun.completed_at.endsWith('Z') ? prevRun.completed_at : prevRun.completed_at + 'Z'
+    return Date.now() < new Date(ts).getTime() + cooldownSeconds * 1000
+  })()
+  const pillStatus = isCooling ? 'cooling' : run.status
+  const label = run.status.charAt(0).toUpperCase() + run.status.slice(1)
+  return <span className={`sweep-run-pill sweep-run-pill-${pillStatus}`}>{label}</span>
 }
 
 function fmt(n, digits = 1) {
@@ -24,16 +36,20 @@ function parseParams(jsonStr) {
 
 export default function SweepDetailPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const [sweep, setSweep] = useState(null)
   const [runs, setRuns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [, setTick] = useState(0)
+  const sweepRef = useRef(null)
   const grafanaUrl = useGrafanaUrl()
 
   async function load() {
     try {
       const [sw, rs] = await Promise.all([getSweep(id), getSweepRuns(id)])
       setSweep(sw)
+      sweepRef.current = sw
       setRuns(rs)
       setError(null)
     } catch (e) {
@@ -45,11 +61,11 @@ export default function SweepDetailPage() {
 
   useEffect(() => {
     load()
-    // Poll while running
     const iv = setInterval(() => {
-      if (sweep?.status === 'running') load()
-    }, 5000)
-    return () => clearInterval(iv)
+      if (!['completed', 'cancelled', 'failed'].includes(sweepRef.current?.status)) load()
+    }, 3000)
+    const tick = setInterval(() => setTick(t => t + 1), 1000)
+    return () => { clearInterval(iv); clearInterval(tick) }
   }, [id])
 
   async function handleCancel() {
@@ -66,19 +82,33 @@ export default function SweepDetailPage() {
   if (error) return <div className="alert alert-error">{error}</div>
   if (!sweep) return null
 
-  // Detect all parameter keys used across runs for the comparison table
   const paramKeys = Array.from(new Set(
     runs.flatMap(r => Object.keys(parseParams(r.sweep_params)))
   ))
 
   const sweepGrafanaUrl = grafanaUrl ? buildSweepGrafanaUrl(grafanaUrl, runs) : null
 
+  const messageSize = (() => {
+    const cfg = runs[0]?.workload_config
+    if (!cfg) return 1024
+    return parseWorkloadYaml(cfg)?.values?.messageSize ?? 1024
+  })()
+
   return (
     <div>
       <div className="page-header">
         <div>
           <Link to="/sweeps" className="btn btn-secondary btn-sm">← Back to Sweeps</Link>
-          <h1 className="page-title mt-8">{sweep.name}</h1>
+          <div className="flex items-center gap-8 mt-8">
+            <h1 className="page-title">{sweep.name}</h1>
+            <span style={{
+              fontSize: 13, fontWeight: 600, color: 'var(--color-text-muted)',
+              background: 'rgba(255,255,255,0.06)', border: '1px solid var(--color-border)',
+              borderRadius: 4, padding: '2px 10px',
+            }}>
+              Sweep #{id}
+            </span>
+          </div>
           <div className="flex items-center gap-8 mt-4">
             <StatusBadge status={sweep.status} />
             {sweep.started_at && (
@@ -113,34 +143,68 @@ export default function SweepDetailPage() {
         ) : (
           <table className="data-table">
             <thead>
+              {paramKeys.length > 0 && (
+                <tr>
+                  <th colSpan={2} />
+                  <th
+                    colSpan={paramKeys.length}
+                    style={{
+                      textAlign: 'center', fontSize: 10, fontWeight: 700,
+                      textTransform: 'uppercase', letterSpacing: '0.08em',
+                      color: 'var(--color-text-muted)',
+                      borderBottom: '1px solid var(--color-border)',
+                      paddingBottom: 4,
+                    }}
+                  >
+                    Sweep Parameters
+                  </th>
+                  <th colSpan={9} />
+                </tr>
+              )}
               <tr>
                 <th>Run</th>
-                {paramKeys.map(k => <th key={k}>{k}</th>)}
                 <th>Status</th>
+                {paramKeys.map(k => (
+                  <th key={k} style={{ maxWidth: 90, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k}</th>
+                ))}
                 <th className="num">Pub Rate (msg/s)</th>
+                <th className="num">Pub Rate (MB/s)</th>
+                <th className="num">Consume Rate (msg/s)</th>
+                <th className="num">Consume Rate (MB/s)</th>
                 <th className="num">Pub P99 (ms)</th>
+                <th className="num">Pub P99.9 (ms)</th>
                 <th className="num">E2E P99 (ms)</th>
-                <th className="num">Consume Rate</th>
+                <th className="num">E2E P99.9 (ms)</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {runs.map(run => {
+              {runs.map((run, i) => {
                 const params = parseParams(run.sweep_params)
                 const m = run.metrics
+                const pubMBSec     = m?.publish_rate_avg != null ? m.publish_rate_avg * messageSize / 1_048_576 : null
+                const consMBSec    = m?.consume_rate_avg != null ? m.consume_rate_avg * messageSize / 1_048_576 : null
                 return (
-                  <tr key={run.id}>
+                  <tr
+                    key={run.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`/runs/${run.id}`)}
+                  >
                     <td>#{run.id}</td>
+                    <td><RunStatusPill run={run} prevRun={runs[i - 1]} cooldownSeconds={sweep.cooldown_seconds ?? 0} /></td>
                     {paramKeys.map(k => (
-                      <td key={k}>{params[k] ?? '—'}</td>
+                      <td key={k} style={{ maxWidth: 90, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{params[k] ?? '—'}</td>
                     ))}
-                    <td><StatusBadge status={run.status} /></td>
                     <td className="num">{fmt(m?.publish_rate_avg)}</td>
-                    <td className="num">{fmt(m?.publish_latency_p99)}</td>
-                    <td className="num">{fmt(m?.end_to_end_latency_p99)}</td>
+                    <td className="num">{fmt(pubMBSec, 2)}</td>
                     <td className="num">{fmt(m?.consume_rate_avg)}</td>
-                    <td>
-                      <Link to={`/runs/${run.id}`} className="btn btn-secondary btn-sm">View</Link>
+                    <td className="num">{fmt(consMBSec, 2)}</td>
+                    <td className="num">{fmt(m?.publish_latency_p99)}</td>
+                    <td className="num">{fmt(m?.publish_latency_p999)}</td>
+                    <td className="num">{fmt(m?.end_to_end_latency_p99)}</td>
+                    <td className="num">{fmt(m?.end_to_end_latency_p999)}</td>
+                    <td onClick={e => e.stopPropagation()}>
+                      <Link to={`/runs/${run.id}`} className="btn btn-secondary btn-sm">Details</Link>
                     </td>
                   </tr>
                 )
