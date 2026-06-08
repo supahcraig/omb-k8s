@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import {
   LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -50,18 +50,17 @@ function ninesLabel(v) {
   return 'P50'
 }
 
-function OverlaidChart({ title, mergedData, runs, visibleRuns, colorMap }) {
+function OverlaidChart({ title, mergedData, runs, colorMap }) {
   const yMax = useMemo(() => {
     let max = 0
     mergedData.forEach(pt => {
       runs.forEach(r => {
-        if (!visibleRuns.has(r.run_id)) return
         const v = pt[`run_${r.run_id}`]
         if (v != null && v > max) max = v
       })
     })
     return max > 0 ? max * 1.1 : 10
-  }, [mergedData, runs, visibleRuns])
+  }, [mergedData, runs])
 
   return (
     <div>
@@ -104,114 +103,72 @@ function OverlaidChart({ title, mergedData, runs, visibleRuns, colorMap }) {
             }}
             labelFormatter={ninesLabel}
           />
-          {runs.map(r =>
-            visibleRuns.has(r.run_id) ? (
-              <Line
-                key={r.run_id}
-                type="monotone"
-                dataKey={`run_${r.run_id}`}
-                stroke={colorMap[r.run_id]}
-                dot={false}
-                strokeWidth={2}
-                connectNulls
-              />
-            ) : null
-          )}
+          {runs.map(r => (
+            <Line
+              key={r.run_id}
+              type="monotone"
+              dataKey={`run_${r.run_id}`}
+              stroke={colorMap[r.run_id]}
+              dot={false}
+              strokeWidth={2}
+              connectNulls
+            />
+          ))}
         </LineChart>
       </ResponsiveContainer>
     </div>
   )
 }
 
-export default function SweepPercentileCurves({ visData }) {
-  const { runs } = visData
-  const [visibleRuns, setVisibleRuns] = useState(() => new Set(runs.map(r => r.run_id)))
+export default function SweepPercentileCurves({ visData, selectedRunIds }) {
+  const selectedRuns = useMemo(
+    () => visData.runs.filter(r => selectedRunIds.has(r.run_id)),
+    [visData.runs, selectedRunIds],
+  )
 
   const colorMap = useMemo(() => {
     const map = {}
-    runs.forEach((r, i) => { map[r.run_id] = RUN_COLORS[i % RUN_COLORS.length] })
+    visData.runs.forEach((r, i) => { map[r.run_id] = RUN_COLORS[i % RUN_COLORS.length] })
     return map
-  }, [runs])
+  }, [visData.runs])
 
-  const pubMerged = useMemo(() => buildMergedData(runs, 'publish_quantiles'), [runs])
-  const e2eMerged = useMemo(() => buildMergedData(runs, 'e2e_quantiles'), [runs])
+  const pubMerged = useMemo(() => buildMergedData(selectedRuns, 'publish_quantiles'), [selectedRuns])
+  const e2eMerged = useMemo(() => buildMergedData(selectedRuns, 'e2e_quantiles'), [selectedRuns])
 
-  const hasData = runs.some(r => r.publish_quantiles?.length)
-
-  if (!hasData) {
+  if (selectedRunIds.size === 0) {
     return (
-      <div style={{ color: C.axis, fontSize: 13, padding: 16 }}>
-        No HDR quantile data available yet — runs may still be in progress or HDR parsing incomplete.
+      <div style={{ color: C.axis, fontSize: 13, padding: '24px 16px', textAlign: 'center' }}>
+        Check runs in the comparison table above to overlay their percentile curves.
       </div>
     )
   }
 
-  function toggleRun(runId) {
-    setVisibleRuns(prev => {
-      const next = new Set(prev)
-      if (next.has(runId)) next.delete(runId)
-      else next.add(runId)
-      return next
-    })
+  const hasData = selectedRuns.some(r => r.publish_quantiles?.length)
+  if (!hasData) {
+    return (
+      <div style={{ color: C.axis, fontSize: 13, padding: 16 }}>
+        No HDR quantile data available for the selected runs — HDR parsing may still be in progress.
+      </div>
+    )
   }
 
   return (
-    <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div className="chart-card">
-          <OverlaidChart
-            title="Publish latency — percentile curves"
-            mergedData={pubMerged}
-            runs={runs}
-            visibleRuns={visibleRuns}
-            colorMap={colorMap}
-          />
-        </div>
-        <div className="chart-card">
-          <OverlaidChart
-            title="E2E latency — percentile curves"
-            mergedData={e2eMerged}
-            runs={runs}
-            visibleRuns={visibleRuns}
-            colorMap={colorMap}
-          />
-        </div>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="chart-card">
+        <OverlaidChart
+          title="Publish latency — percentile curves"
+          mergedData={pubMerged}
+          runs={selectedRuns}
+          colorMap={colorMap}
+        />
       </div>
-
-      <div style={{
-        minWidth: 160, maxWidth: 220,
-        background: '#1e2538', border: '1px solid #2a3045',
-        borderRadius: 8, padding: '12px 14px', flexShrink: 0,
-      }}>
-        <div style={{
-          fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-          letterSpacing: '0.06em', color: C.axis, marginBottom: 10,
-        }}>
-          Runs
-        </div>
-        {runs.map(r => (
-          <label
-            key={r.run_id}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer' }}
-          >
-            <input
-              type="checkbox"
-              checked={visibleRuns.has(r.run_id)}
-              onChange={() => toggleRun(r.run_id)}
-              style={{ accentColor: colorMap[r.run_id], flexShrink: 0 }}
-            />
-            <span style={{
-              width: 12, height: 12, borderRadius: 2,
-              background: colorMap[r.run_id], flexShrink: 0,
-            }} />
-            <span style={{
-              fontSize: 12, color: C.text,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              #{r.run_id}: {r.label}
-            </span>
-          </label>
-        ))}
+      <div className="chart-card">
+        <OverlaidChart
+          title="E2E latency — percentile curves"
+          mergedData={e2eMerged}
+          runs={selectedRuns}
+          colorMap={colorMap}
+        />
       </div>
     </div>
   )
