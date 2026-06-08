@@ -104,8 +104,10 @@ export default function SweepDetailPage() {
     loadVisData()
     const iv = setInterval(() => {
       const isDone = ['completed', 'cancelled', 'failed'].includes(sweepRef.current?.status)
-      if (!isDone) load()
-      loadVisData()
+      if (!isDone) {
+        load()
+        loadVisData()
+      }
     }, 3000)
     const tick = setInterval(() => setTick(t => t + 1), 1000)
     return () => { clearInterval(iv); clearInterval(tick) }
