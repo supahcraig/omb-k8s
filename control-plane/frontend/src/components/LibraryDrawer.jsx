@@ -101,6 +101,7 @@ function EntryCard({ entry, type, onApply }) {
           }}>{entry.content}</pre>
           <div style={{ padding: '8px 12px', background: C.header, borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'flex-end' }}>
             <button
+              type="button"
               className="btn btn-primary btn-sm"
               onClick={e => { e.stopPropagation(); onApply(entry.content, entry.name) }}
             >
@@ -166,6 +167,7 @@ export default function LibraryDrawer({ type, open, onClose, onApply }) {
         }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{title}</span>
           <button
+            type="button"
             onClick={onClose}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
