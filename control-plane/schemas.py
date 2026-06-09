@@ -125,6 +125,8 @@ class SweepOut(BaseModel):
     cooldown_seconds: int
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    best_publish_p99: Optional[float] = None
+    best_e2e_p99: Optional[float] = None
 
     model_config = {"from_attributes": True}
 
@@ -157,6 +159,37 @@ class WorkloadCreate(BaseModel):
 
 
 class WorkloadUpdate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    content: str
+
+
+# ---------------------------------------------------------------------------
+# Drivers
+# ---------------------------------------------------------------------------
+
+
+class DriverOut(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    content: str
+    is_bundled: bool
+    cloned_from_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class DriverCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    content: str
+    cloned_from_id: Optional[str] = None
+
+
+class DriverUpdate(BaseModel):
     name: str
     description: Optional[str] = None
     content: str

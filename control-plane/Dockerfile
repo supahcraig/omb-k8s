@@ -22,8 +22,9 @@ COPY services/ ./services/
 # React SPA served by FastAPI at /app/static/
 COPY --from=frontend-builder /frontend/build ./static
 
-# Bundled workload YAMLs — seeded into SQLite on first startup
+# Bundled workload and driver YAMLs — seeded into SQLite on first startup
 COPY workloads/ /app/workloads/
+COPY drivers/   /app/drivers/
 
 ENV OMB_DB_PATH=/data/omb_ui.db \
     OMB_NAMESPACE=default \

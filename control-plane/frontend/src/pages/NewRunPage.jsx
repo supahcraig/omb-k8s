@@ -5,6 +5,7 @@ import { useWorker } from '../context/WorkerContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import DriverForm from '../components/DriverForm.jsx'
 import WorkloadForm, { parseWorkloadYaml } from '../components/WorkloadForm.jsx'
+import LibraryDrawer from '../components/LibraryDrawer.jsx'
 
 const SWEEP_STORAGE_KEY = 'omb_last_sweep'
 
@@ -47,14 +48,28 @@ function loadSavedSweep() {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function PanelBadge({ color, children }) {
+function PanelBadge({ color, children, style }) {
   return (
     <div style={{
       display: 'inline-block', marginBottom: 12, padding: '3px 10px',
       borderRadius: 12, background: color + '22', border: `1px solid ${color}55`,
       color, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+      ...style,
     }}>
       {children}
+    </div>
+  )
+}
+
+function PanelHeader({ color, label, onBrowse }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <PanelBadge color={color} style={{ marginBottom: 0 }}>{label}</PanelBadge>
+      <button type="button" className="btn btn-secondary btn-sm"
+        style={{ fontSize: 11, padding: '2px 9px' }}
+        onClick={onBrowse}>
+        Browse library
+      </button>
     </div>
   )
 }
@@ -141,9 +156,11 @@ export default function NewRunPage() {
   const { workersReady, status } = useWorker()
   const { hasClusterConfig } = useSettings()
 
-  const fromLibrary            = !!location.state?.workloadContent
+  const fromWorkloadLibrary    = !!location.state?.workloadContent
+  const fromDriverLibrary      = !!location.state?.driverContent
+  const fromLibrary            = fromWorkloadLibrary  // only skip last-run fetch for workload library
   const initialWorkloadContent = location.state?.workloadContent || ''
-  const initialWorkloadName    = location.state?.workloadName    || ''
+  const initialWorkloadName    = location.state?.workloadName || location.state?.driverName || ''
 
   const [name, setName]               = useState(initialWorkloadName ? `Run — ${initialWorkloadName}` : '')
   const [driverYaml, setDriverYaml]   = useState('')
@@ -151,6 +168,13 @@ export default function NewRunPage() {
   const [submitting, setSubmitting]   = useState(false)
   const [error, setError]             = useState(null)
   const [lastRun, setLastRun]         = useState(fromLibrary ? false : null)
+
+  // Library drawer
+  const [drawerType, setDrawerType]           = useState(null)
+  const [driverFormKey, setDriverFormKey]     = useState(0)
+  const [workloadFormKey, setWorkloadFormKey] = useState(0)
+  const [driverInitOverride, setDriverInitOverride]     = useState(null)
+  const [workloadInitOverride, setWorkloadInitOverride] = useState(null)
 
   // Sweep state
   const saved = useMemo(() => loadSavedSweep(), [])
@@ -179,8 +203,11 @@ export default function NewRunPage() {
       .catch(() => setLastRun(false))
   }, [])
 
-  const initialDriverContent = fromLibrary ? '' : (lastRun?.driver_config  || '')
-  const initialWorkload      = fromLibrary ? initialWorkloadContent : (lastRun?.workload_config || '')
+  const initialDriverContent = fromDriverLibrary
+    ? location.state.driverContent
+    : fromWorkloadLibrary ? ''
+    : (lastRun?.driver_config || '')
+  const initialWorkload = fromWorkloadLibrary ? initialWorkloadContent : (lastRun?.workload_config || '')
 
   const projectedLoad = useMemo(() => {
     const { values } = parseWorkloadYaml(workloadYaml)
@@ -206,6 +233,9 @@ export default function NewRunPage() {
       ? (perPartitionMsgSec * (lingerMs / 1000) * msgSize) / 1_048_576
       : null
 
+    const warmupMin = Number(values.warmupDurationMinutes) || 0
+    const testMin   = Number(values.testDurationMinutes)   || 0
+
     return {
       totalMsgSec, totalMBSec,
       consumeMsgSec, consumeMBSec,
@@ -213,8 +243,19 @@ export default function NewRunPage() {
       perProducerMBSec:  perProducerCount > 0 ? totalMBSec  / perProducerCount : 0,
       perPartitionMsgSec, perPartitionMBSec,
       msgsPerBatch, msFillBatch, lingerMs, mbPerBatchActual,
+      warmupMin, testMin,
     }
   }, [workloadYaml, driverYaml])
+
+  function fmtDur(totalMinutes) {
+    const m = Math.round(totalMinutes)
+    if (m <= 0) return '0m'
+    const h = Math.floor(m / 60)
+    const rem = m % 60
+    if (h === 0) return `${rem}m`
+    if (rem === 0) return `${h}h`
+    return `${h}h ${rem}m`
+  }
 
   const totalRuns = sweepEnabled
     ? [...workloadAxes, ...driverAxes].reduce((acc, { values }) => acc * (values.length || 1), 1)
@@ -225,6 +266,21 @@ export default function NewRunPage() {
   const blockMessage = status
     ? `Waiting for workers: ${status.ready}/${status.desired} ready. Please wait before starting a run.`
     : 'Worker status unknown. Please wait…'
+
+  function applyFromLibrary(content, entryName) {
+    const hasContent = drawerType === 'driver' ? driverYaml.trim() : workloadYaml.trim()
+    if (hasContent && !window.confirm(`Replace current ${drawerType} config with "${entryName}"?`)) return
+    if (drawerType === 'driver') {
+      setDriverInitOverride(content)
+      setDriverYaml(content)
+      setDriverFormKey(k => k + 1)
+    } else {
+      setWorkloadInitOverride(content)
+      setWorkloadYaml(content)
+      setWorkloadFormKey(k => k + 1)
+    }
+    setDrawerType(null)
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -309,7 +365,23 @@ export default function NewRunPage() {
           <div className="projected-load" style={{ marginBottom: 0 }}>
             <div className="projected-load-title">Projected Load</div>
             <div className="projected-load-grid" style={{ gridTemplateColumns: '110px 1fr 1fr' }}>
-              <span>Publish</span>
+              {/* Runtime estimate */}
+              <span>Runtime</span>
+              <span>{fmtDur(projectedLoad.warmupMin)} warmup + {fmtDur(projectedLoad.testMin)} bench</span>
+              <span style={{ fontWeight: 600 }}>= {fmtDur(projectedLoad.warmupMin + projectedLoad.testMin)} / run</span>
+              {sweepEnabled && totalRuns > 1 && (() => {
+                const cooldownMin = Number(cooldown) / 60
+                const totalMin = totalRuns * (projectedLoad.warmupMin + projectedLoad.testMin)
+                               + (totalRuns - 1) * cooldownMin
+                return (
+                  <>
+                    <span>Sweep total</span>
+                    <span>{totalRuns} runs + {fmtDur((totalRuns - 1) * cooldownMin)} cooldown</span>
+                    <span style={{ fontWeight: 600 }}>≈ {fmtDur(totalMin)}</span>
+                  </>
+                )
+              })()}
+              <span style={{ borderTop: '1px solid rgba(74,222,128,0.15)', paddingTop: 4, marginTop: 2 }}>Publish</span>
               <span>{projectedLoad.totalMsgSec.toLocaleString()} msg/s</span>
               <span>{projectedLoad.totalMBSec.toFixed(1)} MB/s</span>
               <span>Consume</span>
@@ -398,12 +470,12 @@ export default function NewRunPage() {
       {/* Driver + Workload 2×2 grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 20, rowGap: 6, marginBottom: 20 }}>
         <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderTop: '3px solid #3b82f6', borderRadius: 'var(--radius)', padding: 16 }}>
-          <PanelBadge color="#3b82f6">Driver</PanelBadge>
-          <DriverForm onChange={setDriverYaml} initialYaml={initialDriverContent} />
+          <PanelHeader color="#3b82f6" label="Driver" onBrowse={() => setDrawerType('driver')} />
+          <DriverForm key={driverFormKey} onChange={setDriverYaml} initialYaml={driverInitOverride ?? initialDriverContent} />
         </div>
         <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderTop: '3px solid #10b981', borderRadius: 'var(--radius)', padding: 16 }}>
-          <PanelBadge color="#10b981">Workload</PanelBadge>
-          <WorkloadForm initialYaml={initialWorkload} onChange={setWorkloadYaml} />
+          <PanelHeader color="#10b981" label="Workload" onBrowse={() => setDrawerType('workload')} />
+          <WorkloadForm key={workloadFormKey} onChange={setWorkloadYaml} initialYaml={workloadInitOverride ?? initialWorkload} />
         </div>
         <div style={{ background: '#0d1018', border: '1px solid var(--color-border)', borderTop: '3px solid #3b82f6', borderRadius: 'var(--radius)', padding: 16, display: 'flex', flexDirection: 'column' }}>
           <PanelBadge color="#3b82f6">Driver YAML</PanelBadge>
@@ -418,6 +490,13 @@ export default function NewRunPage() {
             value={workloadYaml} onChange={e => setWorkloadYaml(e.target.value)} />
         </div>
       </div>
+
+      <LibraryDrawer
+        type={drawerType ?? 'driver'}
+        open={drawerType !== null}
+        onClose={() => setDrawerType(null)}
+        onApply={applyFromLibrary}
+      />
     </form>
   )
 }

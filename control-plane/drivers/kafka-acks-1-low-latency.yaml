@@ -1,0 +1,19 @@
+name: Kafka
+driverClass: io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver
+
+replicationFactor: 3
+reset: false
+
+commonConfig: ""
+
+topicConfig: ""
+
+producerConfig: |
+  acks=1
+  batch.size=16384
+  linger.ms=0
+  compression.type=none
+
+consumerConfig: |
+  fetch.min.bytes=1
+  fetch.max.wait.ms=10

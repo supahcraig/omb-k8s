@@ -35,6 +35,12 @@ export const createWorkload = (body) => request('POST', '/workloads', body)
 export const updateWorkload = (id, body) => request('PUT', `/workloads/${id}`, body)
 export const deleteWorkload = (id) => request('DELETE', `/workloads/${id}`)
 
+// Drivers
+export const listDrivers = () => request('GET', '/drivers')
+export const createDriver = (body) => request('POST', '/drivers', body)
+export const updateDriver = (id, body) => request('PUT', `/drivers/${id}`, body)
+export const deleteDriver = (id) => request('DELETE', `/drivers/${id}`)
+
 // Runs
 export const listRuns = () => request('GET', '/runs')
 export const getRun = (id) => request('GET', `/runs/${id}`)
@@ -48,6 +54,7 @@ export const getSweep = (id) => request('GET', `/sweeps/${id}`)
 export const getSweepRuns = (id) => request('GET', `/sweeps/${id}/runs`)
 export const createSweep = (body) => request('POST', '/sweeps', body)
 export const cancelSweep = (id) => request('DELETE', `/sweeps/${id}`)
+export const getSweepVisualizationData = (id) => request('GET', `/sweeps/${id}/visualization-data`)
 
 // Prometheus samples
 export const getPrometheusSamples = (runId) => request('GET', `/prometheus/runs/${runId}`)

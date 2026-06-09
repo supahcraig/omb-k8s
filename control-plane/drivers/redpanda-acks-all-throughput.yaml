@@ -1,0 +1,20 @@
+name: Redpanda
+driverClass: io.openmessaging.benchmark.driver.redpanda.RedpandaBenchmarkDriver
+
+replicationFactor: 3
+reset: false
+
+commonConfig: ""
+
+topicConfig: ""
+
+producerConfig: |
+  acks=all
+  batch.size=524288
+  linger.ms=5
+  compression.type=lz4
+  buffer.memory=67108864
+
+consumerConfig: |
+  fetch.min.bytes=1
+  fetch.max.wait.ms=500

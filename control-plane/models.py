@@ -142,6 +142,19 @@ class Workload(Base):
     last_used_run_id = Column(String, nullable=True)
 
 
+class Driver(Base):
+    __tablename__ = "drivers"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    content = Column(Text, nullable=False)
+    is_bundled = Column(Boolean, default=False)
+    cloned_from_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Setting(Base):
     __tablename__ = "settings"
 
