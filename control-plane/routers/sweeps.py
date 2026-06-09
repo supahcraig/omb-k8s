@@ -10,7 +10,7 @@ from typing import Optional
 
 import yaml
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -36,7 +36,26 @@ async def list_sweeps(db: AsyncSession = Depends(get_db)):
         select(Sweep).order_by(Sweep.started_at.desc())
     )
     sweeps = result.scalars().all()
-    return [SweepOut.model_validate(s) for s in sweeps]
+
+    best_result = await db.execute(
+        select(
+            Run.sweep_id,
+            func.min(func.json_extract(Run.metrics, '$.publish_latency_p99')).label('best_pub_p99'),
+            func.min(func.json_extract(Run.metrics, '$.end_to_end_latency_p99')).label('best_e2e_p99'),
+        )
+        .where(Run.sweep_id.isnot(None))
+        .group_by(Run.sweep_id)
+    )
+    best_map = {row.sweep_id: (row.best_pub_p99, row.best_e2e_p99) for row in best_result}
+
+    out = []
+    for s in sweeps:
+        sweep_out = SweepOut.model_validate(s)
+        best_pub, best_e2e = best_map.get(s.id, (None, None))
+        sweep_out.best_publish_p99 = float(best_pub) if best_pub is not None else None
+        sweep_out.best_e2e_p99 = float(best_e2e) if best_e2e is not None else None
+        out.append(sweep_out)
+    return out
 
 
 @router.post("", response_model=SweepOut, status_code=201)

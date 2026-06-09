@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { listSweeps } from '../api.js'
 
 function SweepStatusBadge({ status }) {
@@ -10,7 +10,13 @@ function SweepStatusBadge({ status }) {
   return <span className={`badge ${cls}`}>{status}</span>
 }
 
+function fmt(n, digits = 1) {
+  if (n == null) return '—'
+  return `${n.toLocaleString(undefined, { maximumFractionDigits: digits })} ms`
+}
+
 export default function SweepsPage() {
+  const navigate = useNavigate()
   const [sweeps, setSweeps] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -54,12 +60,17 @@ export default function SweepsPage() {
                 <th>Status</th>
                 <th>Started</th>
                 <th>Completed</th>
-                <th></th>
+                <th className="num">Best Pub P99</th>
+                <th className="num">Best E2E P99</th>
               </tr>
             </thead>
             <tbody>
               {sweeps.map(s => (
-                <tr key={s.id}>
+                <tr
+                  key={s.id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => navigate(`/sweeps/${s.id}`)}
+                >
                   <td>#{s.id}</td>
                   <td>{s.name}</td>
                   <td><SweepStatusBadge status={s.status} /></td>
@@ -69,9 +80,8 @@ export default function SweepsPage() {
                   <td className="text-small text-muted">
                     {s.completed_at ? new Date(s.completed_at).toLocaleString() : '—'}
                   </td>
-                  <td>
-                    <Link to={`/sweeps/${s.id}`} className="btn btn-secondary btn-sm">View</Link>
-                  </td>
+                  <td className="num">{fmt(s.best_publish_p99)}</td>
+                  <td className="num">{fmt(s.best_e2e_p99)}</td>
                 </tr>
               ))}
             </tbody>

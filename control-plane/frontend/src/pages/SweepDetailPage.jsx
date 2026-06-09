@@ -12,11 +12,25 @@ const RUN_COLORS = [
   '#f97316', '#34d399', '#fb7185', '#38bdf8', '#a78bfa',
 ]
 
+// Row-1 cells: super-header + row-spanning fixed columns
+const TH_R1 = {
+  position: 'sticky', top: 0, zIndex: 2,
+  background: '#1e2538',
+}
+// Row-2 cells: param column headers (sit below the super-header row)
+const TH_R2 = {
+  position: 'sticky', top: 37, zIndex: 1,
+  background: '#1e2538',
+  boxShadow: '0 1px 0 #2a3045',
+}
+// Single-row sticky (when paramKeys is empty, fall back to one header row)
 const TH_STICKY = {
   position: 'sticky', top: 0, zIndex: 1,
   background: '#1e2538',
   boxShadow: '0 1px 0 #2a3045',
 }
+
+const MAX_CHART_RUNS = 10
 
 function StatusBadge({ status }) {
   const cls = {
@@ -37,12 +51,13 @@ function RunStatusPill({ run, prevRun, cooldownSeconds }) {
   return <span className={`sweep-run-pill sweep-run-pill-${pillStatus}`}>{label}</span>
 }
 
-function SortTh({ col, label, sortCol, sortDir, onSort, className, style }) {
+function SortTh({ col, label, sortCol, sortDir, onSort, className, style, rowSpan }) {
   const active = sortCol === col
   return (
     <th
       className={className}
       onClick={() => onSort(col)}
+      rowSpan={rowSpan}
       style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', ...style }}
     >
       {label}{active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
@@ -72,6 +87,7 @@ export default function SweepDetailPage() {
   const [sortCol, setSortCol] = useState(null)
   const [sortDir, setSortDir] = useState('asc')
   const [selectedRunIds, setSelectedRunIds] = useState(new Set())
+  const [selectCapWarning, setSelectCapWarning] = useState(false)
   const sweepRef = useRef(null)
   const autoSelectedRef = useRef(false)
   const grafanaUrl = useGrafanaUrl()
@@ -177,13 +193,38 @@ export default function SweepDetailPage() {
   }
 
   function toggleRun(runId) {
-    autoSelectedRef.current = true  // user is in manual control now
+    autoSelectedRef.current = true
+    setSelectCapWarning(false)
     setSelectedRunIds(prev => {
       const next = new Set(prev)
       if (next.has(runId)) next.delete(runId)
       else next.add(runId)
       return next
     })
+  }
+
+  function handleSelectAll(e) {
+    autoSelectedRef.current = true
+    if (e.target.checked) {
+      if (runs.length <= MAX_CHART_RUNS) {
+        setSelectCapWarning(false)
+        setSelectedRunIds(new Set(runs.map(r => r.id)))
+      } else {
+        // Cap at MAX_CHART_RUNS: pick top N by publish P99 if data is available
+        const candidates = visData
+          ? [...visData.runs]
+              .filter(r => r.publish_p99 != null)
+              .sort((a, b) => a.publish_p99 - b.publish_p99)
+              .slice(0, MAX_CHART_RUNS)
+              .map(r => r.run_id)
+          : runs.slice(0, MAX_CHART_RUNS).map(r => r.id)
+        setSelectedRunIds(new Set(candidates))
+        setSelectCapWarning(true)
+      }
+    } else {
+      setSelectCapWarning(false)
+      setSelectedRunIds(new Set())
+    }
   }
 
   async function handleCancel() {
@@ -242,9 +283,11 @@ export default function SweepDetailPage() {
       </div>
 
       <div className="card">
-        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="card-header">
           <h3>Run Comparison — {runs.length} run{runs.length !== 1 ? 's' : ''}</h3>
-          {sweepGrafanaUrl && (
+        </div>
+        {sweepGrafanaUrl && (
+          <div style={{ padding: '8px 16px', borderBottom: '1px solid #2a3045' }}>
             <a
               href={sweepGrafanaUrl}
               target="_blank"
@@ -254,31 +297,81 @@ export default function SweepDetailPage() {
             >
               📊 Full sweep in Grafana ↗
             </a>
-          )}
-        </div>
+          </div>
+        )}
+        {selectCapWarning && (
+          <div style={{ padding: '6px 16px', background: 'rgba(99,102,241,0.1)', borderBottom: '1px solid #2a3045', fontSize: 12, color: '#818cf8' }}>
+            Showing top {MAX_CHART_RUNS} runs by publish P99 — selecting all {runs.length} would overload the chart.
+          </div>
+        )}
         {runs.length === 0 ? (
           <div className="empty-state"><p>No runs yet.</p></div>
-        ) : (
+        ) : (() => {
+          const hasParams = paramKeys.length > 0
+          const allChecked = runs.length > 0 && runs.every(r => selectedRunIds.has(r.id))
+          const someChecked = !allChecked && runs.some(r => selectedRunIds.has(r.id))
+          return (
           <div style={{ overflowY: 'auto', maxHeight: 520 }}>
             <table className="data-table">
               <thead>
-                <tr>
-                  <th style={{ ...TH_STICKY, width: 44, padding: '0 8px' }} />
-                  <SortTh col="id"       label="Run"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
-                  <SortTh col="status"   label="Status"         sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
-                  {paramKeys.map(k => (
-                    <SortTh key={k} col={k} label={k}           sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ ...TH_STICKY, maxWidth: 100 }} />
-                  ))}
-                  <SortTh col="pub_rate"  label="Pub (msg/s)"    className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
-                  <SortTh col="pub_mb"    label="Pub (MB/s)"     className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
-                  <SortTh col="con_rate"  label="Con (msg/s)"    className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
-                  <SortTh col="con_mb"    label="Con (MB/s)"     className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
-                  <SortTh col="pub_p99"   label="Pub P99 (ms)"   className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
-                  <SortTh col="pub_p999"  label="Pub P99.9 (ms)" className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
-                  <SortTh col="e2e_p99"   label="E2E P99 (ms)"   className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
-                  <SortTh col="e2e_p999"  label="E2E P99.9 (ms)" className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
-                  <th style={TH_STICKY} />
-                </tr>
+                {hasParams ? (
+                  <>
+                    <tr>
+                      <th rowSpan={2} style={{ ...TH_R1, width: 44, padding: '0 8px', verticalAlign: 'middle' }}>
+                        <input
+                          type="checkbox"
+                          ref={el => { if (el) el.indeterminate = someChecked }}
+                          checked={allChecked}
+                          onChange={handleSelectAll}
+                          title={runs.length > MAX_CHART_RUNS ? `Select top ${MAX_CHART_RUNS} by pub P99` : 'Select all'}
+                        />
+                      </th>
+                      <SortTh col="id"     label="Run"    rowSpan={2} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ ...TH_R1, verticalAlign: 'middle' }} />
+                      <SortTh col="status" label="Status" rowSpan={2} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ ...TH_R1, verticalAlign: 'middle' }} />
+                      <th
+                        colSpan={paramKeys.length}
+                        style={{ ...TH_R1, textAlign: 'center', color: '#818cf8', fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', padding: '4px 8px' }}
+                      >
+                        Sweep Parameters
+                      </th>
+                      <SortTh col="pub_rate"  label="Pub (msg/s)"    rowSpan={2} className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ ...TH_R1, verticalAlign: 'middle' }} />
+                      <SortTh col="pub_mb"    label="Pub (MB/s)"     rowSpan={2} className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ ...TH_R1, verticalAlign: 'middle' }} />
+                      <SortTh col="con_rate"  label="Con (msg/s)"    rowSpan={2} className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ ...TH_R1, verticalAlign: 'middle' }} />
+                      <SortTh col="con_mb"    label="Con (MB/s)"     rowSpan={2} className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ ...TH_R1, verticalAlign: 'middle' }} />
+                      <SortTh col="pub_p99"   label="Pub P99 (ms)"   rowSpan={2} className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ ...TH_R1, verticalAlign: 'middle' }} />
+                      <SortTh col="pub_p999"  label="Pub P99.9 (ms)" rowSpan={2} className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ ...TH_R1, verticalAlign: 'middle' }} />
+                      <SortTh col="e2e_p99"   label="E2E P99 (ms)"   rowSpan={2} className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ ...TH_R1, verticalAlign: 'middle' }} />
+                      <SortTh col="e2e_p999"  label="E2E P99.9 (ms)" rowSpan={2} className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ ...TH_R1, verticalAlign: 'middle' }} />
+                    </tr>
+                    <tr>
+                      {paramKeys.map(k => (
+                        <SortTh key={k} col={k} label={k} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ ...TH_R2, maxWidth: 100 }} />
+                      ))}
+                    </tr>
+                  </>
+                ) : (
+                  <tr>
+                    <th style={{ ...TH_STICKY, width: 44, padding: '0 8px' }}>
+                      <input
+                        type="checkbox"
+                        ref={el => { if (el) el.indeterminate = someChecked }}
+                        checked={allChecked}
+                        onChange={handleSelectAll}
+                        title={runs.length > MAX_CHART_RUNS ? `Select top ${MAX_CHART_RUNS} by pub P99` : 'Select all'}
+                      />
+                    </th>
+                    <SortTh col="id"       label="Run"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
+                    <SortTh col="status"   label="Status"         sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
+                    <SortTh col="pub_rate"  label="Pub (msg/s)"    className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
+                    <SortTh col="pub_mb"    label="Pub (MB/s)"     className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
+                    <SortTh col="con_rate"  label="Con (msg/s)"    className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
+                    <SortTh col="con_mb"    label="Con (MB/s)"     className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
+                    <SortTh col="pub_p99"   label="Pub P99 (ms)"   className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
+                    <SortTh col="pub_p999"  label="Pub P99.9 (ms)" className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
+                    <SortTh col="e2e_p99"   label="E2E P99 (ms)"   className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
+                    <SortTh col="e2e_p999"  label="E2E P99.9 (ms)" className="num" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={TH_STICKY} />
+                  </tr>
+                )}
               </thead>
               <tbody>
                 {sortedRuns.map(run => {
@@ -332,16 +425,14 @@ export default function SweepDetailPage() {
                       <td className="num">{fmt(m?.publish_latency_p999, 2)}</td>
                       <td className="num">{fmt(m?.end_to_end_latency_p99,  2)}</td>
                       <td className="num">{fmt(m?.end_to_end_latency_p999, 2)}</td>
-                      <td onClick={e => e.stopPropagation()}>
-                        <Link to={`/runs/${run.id}`} className="btn btn-secondary btn-sm">Details</Link>
-                      </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
           </div>
-        )}
+          )
+        })()}
       </div>
 
       {visData && visData.runs.length > 0 && (

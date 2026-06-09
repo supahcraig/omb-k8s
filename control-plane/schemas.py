@@ -125,6 +125,8 @@ class SweepOut(BaseModel):
     cooldown_seconds: int
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    best_publish_p99: Optional[float] = None
+    best_e2e_p99: Optional[float] = None
 
     model_config = {"from_attributes": True}
 
