@@ -476,10 +476,10 @@ handles all navigation. Routes and pages:
 | `/` | RunsPage | Results-only list of completed and active runs |
 | `/runs/new` | NewRunPage | Configure and launch a run or sweep; prefills from last run on mount |
 | `/runs/:id` | RunDetailPage | Live log streaming, real-time charts, final metrics; sweep nav bar when run belongs to a sweep |
-| `/sweeps` | SweepsPage | Parameter sweep list |
+| `/sweeps` | SweepsPage | Parameter sweep list; rows clickable; columns: name, status, run count, Best Pub P99, Best E2E P99 |
 | `/sweeps/new` | NewSweepPage | Redirects to `/runs/new` with `state={{ enableSweep: true }}` |
-| `/sweeps/:id` | SweepDetailPage | Sweep overview — run comparison table; rows are clickable; columns: run, status (glow pill), sweep params (superheading), pub/consume rate msg/s + MB/s, pub/e2e P99 + P99.9, Details button |
-| `/workloads` | WorkloadLibraryPage | Saved workload configs; "Use" navigates to `/runs/new` |
+| `/sweeps/:id` | SweepDetailPage | Sweep overview — sortable run comparison table; rows clickable; two-row sticky super-header groups sweep parameter columns; checkbox-driven percentile curve charts + heatmap (capped at 10 runs); Grafana link above table |
+| `/workloads` | WorkloadLibraryPage | Workload and driver library — two tabs (Workloads / Drivers); full CRUD for custom entries; bundled entries are read-only |
 | `/settings` | SettingsPage | Cluster connectivity (seed brokers, TLS, SASL) + Prometheus scrape targets |
 | `/cluster` | ClusterPage | k8s cluster status, worker health, pod restart |
 
@@ -649,16 +649,29 @@ migrations in `init_db`.
 **NewRunPage prefills from the most recent run.** On mount it calls `listRuns`
 then `getRun(runs[0].id)` to seed `initialDriverContent` and
 `initialWorkload`. If navigating from WorkloadLibrary (`location.state?.workloadContent`),
-the prefill fetch is skipped and the library content is used instead.
+the prefill fetch is skipped and the library content is used instead. If
+`driverInitOverride` or `workloadInitOverride` state is set (from the in-page
+library drawer), those values take precedence over both paths.
 
 **NewRunPage layout: sweep section above the 2×2 panel grid.** The page renders
-top-to-bottom: (1) header card with name, launch button, and projected load;
+top-to-bottom: (1) header card with name, launch button, and projected load
+(including runtime estimate: warmup + bench duration per run, total sweep time);
 (2) Parameter Sweep card with toggle, cooldown input, and Driver (left) + Workload
-(right) axis panels; (3) 2×2 CSS grid sitting directly on the page background —
-top row: Driver form panel (blue accent) + Workload form panel (green accent);
-bottom row: Driver YAML panel + Workload YAML panel (darker `#0d1018` to read as code).
-The form is constrained to `maxWidth: 1400px, margin: 0 auto` to prevent inputs
-becoming comically wide on large monitors.
+(right) axis panels; (3) 2×2 CSS grid — top row: Driver form panel (blue accent) +
+Workload form panel (green accent), each with a `PanelHeader` that includes a
+"Browse library" button; bottom row: Driver YAML panel + Workload YAML panel
+(darker `#0d1018`). The form is constrained to `maxWidth: 1400px, margin: 0 auto`.
+
+**Library drawer (`components/LibraryDrawer.jsx`) replaces navigation to the library page.** Each
+panel header has a "Browse library" button that opens a fixed 440px right-side drawer
+with a semi-transparent backdrop. The drawer fetches `/api/drivers` or `/api/workloads`
+on open and shows bundled + custom sections. Clicking an entry toggles an inline YAML
+preview; "Use this config" calls `onApply(content, name)`. The parent (`NewRunPage`)
+sets `driverInitOverride`/`workloadInitOverride`, sets the YAML state directly, and
+increments `driverFormKey`/`workloadFormKey` to force the form to re-mount with the
+new `initialYaml`. A `window.confirm` fires if the form already has content. All
+buttons inside the drawer must carry `type="button"` — the drawer renders inside the
+`<form>` element and untyped buttons default to `type="submit"`.
 
 ## Future work specs
 
@@ -706,6 +719,22 @@ Payload section at init time regardless of what was in stored YAML.
 
 **Section divider colors:** driver form uses indigo `#818cf8`; workload form uses
 green `#4ade80`. Both use the same `LABEL ———` flex-row visual pattern.
+
+## Driver library
+
+`/api/drivers` mirrors `/api/workloads` exactly — same `{bundled, custom}` response
+shape, same CRUD endpoints, same `is_bundled` read-only guard. The `Driver` model
+lives in `models.py`; schemas (`DriverOut`, `DriverCreate`, `DriverUpdate`) in
+`schemas.py`; router in `routers/drivers.py`.
+
+Five bundled driver YAMLs live in `control-plane/drivers/` and are copied into the
+image at `/app/drivers/` by the Dockerfile. `seed_bundled_drivers()` in
+`services/seeder.py` seeds them on first startup (no-ops if any bundled driver row
+exists). Driver names: `kafka-acks-1-throughput`, `kafka-acks-all-durable`,
+`kafka-acks-1-low-latency`, `redpanda-acks-all-throughput`, `redpanda-acks-all-strict`.
+
+Do not add `last_used_at` or `last_used_run_id` to the Driver model — drivers are
+referenced by content, not by run history (unlike workloads).
 
 ## SQLite database
 
