@@ -97,29 +97,62 @@ group). Each pod row shows a health dot and a restart button.
 
 ---
 
-## Section 3: Using the Workload Library
+## Section 3: Using the Workload and Driver Library
 
-The Workload Library (**Benchmark Runs → Workload Library**) contains pre-bundled
-workload configurations. These are good starting points for common scenarios.
+The **Workload Library** page (**Benchmark Runs → Workload Library**) has two tabs:
+**Workloads** and **Drivers**. Both contain bundled entries (read-only) and any
+custom entries you have saved.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Workload Library                                            │
-├──────────────────────────────┬────────────┬─────────────────┤
-│ Name                         │ Msg Size   │ Actions         │
-├──────────────────────────────┼────────────┼─────────────────┤
-│ basic-1topic-100b-10prod     │ 100 B      │ [Use] [Clone]   │
-│ throughput-1k-messages       │ 1024 B     │ [Use] [Clone]   │
-│ latency-small-payload        │ 64 B       │ [Use] [Clone]   │
-└──────────────────────────────┴────────────┴─────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│ [Workloads]  [Drivers]                                          │
+├────────────────────────────────────┬────────────┬───────────────┤
+│ Name                               │ Tags       │ Actions       │
+├────────────────────────────────────┼────────────┼───────────────┤
+│ throughput-1k-messages             │ 1KB 16part │ [Use] [Clone] │
+│ latency-small-payload              │ 64B 1K/s   │ [Use] [Clone] │
+├────────────────────────────────────┼────────────┼───────────────┤
+│ kafka-acks-1-throughput            │ Kafka acks=1 lz4 512KB │ [Use] [Clone] │
+│ redpanda-acks-all-strict           │ Redpanda acks=all min.isr=3 │ [Use] [Clone] │
+└────────────────────────────────────┴────────────┴───────────────┘
 ```
 
-- **Use** — navigates to New Run with the workload pre-filled; you can adjust
-  any field before launching
-- **Clone** — copies the workload to a new entry you can rename and modify
+- **Use** — navigates to New Run with the workload or driver pre-filled
+- **Clone** — copies the entry to a new custom entry you can rename and modify
+- **Create** — build a workload or driver from scratch and save it for reuse
 
-You can also **create a workload from scratch** on the Workload Library page and
-save it for reuse across multiple runs.
+### In-page library drawer
+
+You don't need to leave the New Run page to browse or apply a library entry. Each
+form panel has a **Browse library** button in its header. Clicking it opens a
+right-side drawer:
+
+```
+┌──────────────────────────────────┐
+│ Driver Library              [✕]  │
+├──────────────────────────────────┤
+│ BUNDLED                          │
+│ ┌────────────────────────────┐   │
+│ │ Kafka Acks 1 Throughput ▶  │   │
+│ │ Kafka  acks=1  lz4  512KB  │   │
+│ └────────────────────────────┘   │
+│ ┌────────────────────────────┐   │
+│ │ ▼ Kafka Acks All Durable   │   │
+│ │ name: Kafka                │   │
+│ │ driverClass: io.openmessag │   │
+│ │ ...                        │   │
+│ │         [Use this config]  │   │
+│ └────────────────────────────┘   │
+│ CUSTOM                           │
+│ No custom drivers yet.           │
+│ Open Library to create one.      │
+└──────────────────────────────────┘
+```
+
+Click an entry to expand a YAML preview, then click **Use this config**. If the
+form already has content, a confirmation prompt fires before overwriting. The
+drawer closes and the form re-loads with the selected config — no navigation, no
+lost state.
 
 ---
 
@@ -261,20 +294,43 @@ appears above the page header:
 
 ### Reviewing sweep results
 
-When all runs are complete, go to **Benchmark Runs → Sweeps** and open the sweep.
-The **Sweep Detail** page shows a comparison table:
+The **Sweeps** list (**Benchmark Runs → Sweeps**) shows each sweep's best publish
+P99 and best end-to-end P99 across all its runs — a quick indicator of whether a
+sweep is worth investigating further without opening it.
+
+Click a sweep to open the **Sweep Detail** page. It shows a sortable comparison
+table with a sticky two-row header — the top row groups the sweep parameter columns
+under a "Sweep Parameters" superheading:
 
 ```
-┌──────────────┬──────────┬───────────┬───────────┬───────────┐
-│ producerRate │ MB/s     │ p50 (ms)  │ p99 (ms)  │ p999 (ms) │
-├──────────────┼──────────┼───────────┼───────────┼───────────┤
-│ 100,000      │ 97.4     │ 2.1       │ 4.8       │ 12.3      │
-│ 500,000      │ 489.2    │ 3.2       │ 9.1       │ 28.7      │
-│ 1,000,000    │ 891.6    │ 8.4       │ 42.0      │ 145.2     │
-└──────────────┴──────────┴───────────┴───────────┴───────────┘
+┌────┬────────┬────────────────────────┬──────────┬────────┬────────┐
+│    │        │    Sweep Parameters    │          │        │        │
+│    │ Run    │ producerRate │  acks   │  MB/s    │ p99    │ p999   │
+├────┼────────┼──────────────┼─────────┼──────────┼────────┼────────┤
+│ ☐  │ run-1  │ 100,000      │ 1       │  97.4    │  4.8   │  12.3  │
+│ ☐  │ run-2  │ 500,000      │ 1       │ 489.2    │  9.1   │  28.7  │
+│ ☐  │ run-3  │ 1,000,000    │ 1       │ 891.6    │  42.0  │ 145.2  │
+└────┴────────┴──────────────┴─────────┴──────────┴────────┴────────┘
 ```
 
-Click any run row to open that run's detail page with full charts and logs.
+Click any row to open that run's detail page with full charts and logs.
+
+### Sweep visualizations
+
+Use the checkboxes to select runs for visual comparison (up to 10 at a time).
+Two chart types appear above the table:
+
+**Percentile curves** — one line per selected run, x-axis is percentile (nines
+scale), y-axis is latency in ms. Shows how tail latency diverges across parameter
+values.
+
+**Heatmap** — each column is a run, each row is a percentile bucket (p50 through
+p999); color intensity maps to latency value. Good for spotting which runs have
+high tail latency at a glance.
+
+The **Select all** checkbox at the top selects the 10 best-performing runs (by
+publish P99). A warning fires if you try to select more than 10 — rendering
+hundreds of chart series degrades browser performance.
 
 ---
 
