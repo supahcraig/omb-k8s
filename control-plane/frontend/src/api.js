@@ -35,6 +35,12 @@ export const createWorkload = (body) => request('POST', '/workloads', body)
 export const updateWorkload = (id, body) => request('PUT', `/workloads/${id}`, body)
 export const deleteWorkload = (id) => request('DELETE', `/workloads/${id}`)
 
+// Drivers
+export const listDrivers = () => request('GET', '/drivers')
+export const createDriver = (body) => request('POST', '/drivers', body)
+export const updateDriver = (id, body) => request('PUT', `/drivers/${id}`, body)
+export const deleteDriver = (id) => request('DELETE', `/drivers/${id}`)
+
 // Runs
 export const listRuns = () => request('GET', '/runs')
 export const getRun = (id) => request('GET', `/runs/${id}`)

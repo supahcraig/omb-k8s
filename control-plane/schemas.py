@@ -165,6 +165,37 @@ class WorkloadUpdate(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Drivers
+# ---------------------------------------------------------------------------
+
+
+class DriverOut(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    content: str
+    is_bundled: bool
+    cloned_from_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class DriverCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    content: str
+    cloned_from_id: Optional[str] = None
+
+
+class DriverUpdate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    content: str
+
+
+# ---------------------------------------------------------------------------
 # Settings — Cluster & Prometheus config
 # ---------------------------------------------------------------------------
 

@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from database import AsyncSessionLocal, init_db
-from services.seeder import seed_bundled_workloads
+from services.seeder import seed_bundled_drivers, seed_bundled_workloads
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialised.")
     await seed_bundled_workloads()
+    await seed_bundled_drivers()
     try:
         from routers.settings import sync_scrape_secret_from_db
         async with AsyncSessionLocal() as db:
@@ -53,6 +54,7 @@ _routers_to_mount = [
     ("routers.prometheus", "/api/prometheus", ["prometheus"]),
     ("routers.cluster",   "/api/cluster",    ["cluster"]),
     ("routers.grafana",   "/api/grafana",    ["grafana"]),
+    ("routers.drivers",   "/api/drivers",    ["drivers"]),
 ]
 
 for module_path, prefix, tags in _routers_to_mount:
