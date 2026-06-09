@@ -206,6 +206,9 @@ export default function NewRunPage() {
       ? (perPartitionMsgSec * (lingerMs / 1000) * msgSize) / 1_048_576
       : null
 
+    const warmupMin = Number(values.warmupDurationMinutes) || 0
+    const testMin   = Number(values.testDurationMinutes)   || 0
+
     return {
       totalMsgSec, totalMBSec,
       consumeMsgSec, consumeMBSec,
@@ -213,8 +216,19 @@ export default function NewRunPage() {
       perProducerMBSec:  perProducerCount > 0 ? totalMBSec  / perProducerCount : 0,
       perPartitionMsgSec, perPartitionMBSec,
       msgsPerBatch, msFillBatch, lingerMs, mbPerBatchActual,
+      warmupMin, testMin,
     }
   }, [workloadYaml, driverYaml])
+
+  function fmtDur(totalMinutes) {
+    const m = Math.round(totalMinutes)
+    if (m <= 0) return '0m'
+    const h = Math.floor(m / 60)
+    const rem = m % 60
+    if (h === 0) return `${rem}m`
+    if (rem === 0) return `${h}h`
+    return `${h}h ${rem}m`
+  }
 
   const totalRuns = sweepEnabled
     ? [...workloadAxes, ...driverAxes].reduce((acc, { values }) => acc * (values.length || 1), 1)
@@ -309,7 +323,23 @@ export default function NewRunPage() {
           <div className="projected-load" style={{ marginBottom: 0 }}>
             <div className="projected-load-title">Projected Load</div>
             <div className="projected-load-grid" style={{ gridTemplateColumns: '110px 1fr 1fr' }}>
-              <span>Publish</span>
+              {/* Runtime estimate */}
+              <span>Runtime</span>
+              <span>{fmtDur(projectedLoad.warmupMin)} warmup + {fmtDur(projectedLoad.testMin)} bench</span>
+              <span style={{ fontWeight: 600 }}>= {fmtDur(projectedLoad.warmupMin + projectedLoad.testMin)} / run</span>
+              {sweepEnabled && totalRuns > 1 && (() => {
+                const cooldownMin = Number(cooldown) / 60
+                const totalMin = totalRuns * (projectedLoad.warmupMin + projectedLoad.testMin)
+                               + (totalRuns - 1) * cooldownMin
+                return (
+                  <>
+                    <span>Sweep total</span>
+                    <span>{totalRuns} runs + {fmtDur((totalRuns - 1) * cooldownMin)} cooldown</span>
+                    <span style={{ fontWeight: 600 }}>≈ {fmtDur(totalMin)}</span>
+                  </>
+                )
+              })()}
+              <span style={{ borderTop: '1px solid rgba(74,222,128,0.15)', paddingTop: 4, marginTop: 2 }}>Publish</span>
               <span>{projectedLoad.totalMsgSec.toLocaleString()} msg/s</span>
               <span>{projectedLoad.totalMBSec.toFixed(1)} MB/s</span>
               <span>Consume</span>
