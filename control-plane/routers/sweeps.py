@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database import AsyncSessionLocal, get_db
-from models import Run, RunResult, Sweep
+from models import Metrics, Run, RunResult, Sweep
 from routers.runs import launch_run
 from schemas import RunOut, RunStatus, SweepCreate, SweepOut
 from services.omb_runner import runner
@@ -40,20 +40,26 @@ async def list_sweeps(db: AsyncSession = Depends(get_db)):
     best_result = await db.execute(
         select(
             Run.sweep_id,
-            func.min(func.json_extract(Run.metrics, '$.publish_latency_p99')).label('best_pub_p99'),
-            func.min(func.json_extract(Run.metrics, '$.end_to_end_latency_p99')).label('best_e2e_p99'),
+            func.min(Metrics.publish_latency_p99).label('best_pub_p99'),
+            func.min(Metrics.publish_latency_p999).label('best_pub_p999'),
+            func.min(Metrics.end_to_end_latency_p99).label('best_e2e_p99'),
+            func.min(Metrics.end_to_end_latency_p999).label('best_e2e_p999'),
         )
+        .join(Metrics, Metrics.run_id == Run.id)
         .where(Run.sweep_id.isnot(None))
         .group_by(Run.sweep_id)
     )
-    best_map = {row.sweep_id: (row.best_pub_p99, row.best_e2e_p99) for row in best_result}
+    best_map = {row.sweep_id: row for row in best_result}
 
     out = []
     for s in sweeps:
         sweep_out = SweepOut.model_validate(s)
-        best_pub, best_e2e = best_map.get(s.id, (None, None))
-        sweep_out.best_publish_p99 = float(best_pub) if best_pub is not None else None
-        sweep_out.best_e2e_p99 = float(best_e2e) if best_e2e is not None else None
+        row = best_map.get(s.id)
+        if row:
+            sweep_out.best_publish_p99  = float(row.best_pub_p99)   if row.best_pub_p99   is not None else None
+            sweep_out.best_publish_p999 = float(row.best_pub_p999)  if row.best_pub_p999  is not None else None
+            sweep_out.best_e2e_p99      = float(row.best_e2e_p99)   if row.best_e2e_p99   is not None else None
+            sweep_out.best_e2e_p999     = float(row.best_e2e_p999)  if row.best_e2e_p999  is not None else None
         out.append(sweep_out)
     return out
 

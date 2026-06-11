@@ -21,8 +21,10 @@ const COLS = [
   { key: 'status',           label: 'Status',       num: false },
   { key: 'started_at',       label: 'Started',      num: false },
   { key: 'completed_at',     label: 'Completed',    num: false },
-  { key: 'best_publish_p99', label: 'Best Pub P99', num: true  },
-  { key: 'best_e2e_p99',     label: 'Best E2E P99', num: true  },
+  { key: 'best_publish_p99',  label: 'Best Pub P99',   num: true  },
+  { key: 'best_publish_p999', label: 'Best Pub P99.9', num: true  },
+  { key: 'best_e2e_p99',      label: 'Best E2E P99',   num: true  },
+  { key: 'best_e2e_p999',     label: 'Best E2E P99.9', num: true  },
 ]
 
 function sortedSweeps(sweeps, col, dir) {
@@ -127,7 +129,9 @@ export default function SweepsPage() {
                     {s.completed_at ? new Date(s.completed_at).toLocaleString() : '—'}
                   </td>
                   <td className="num">{fmt(s.best_publish_p99)}</td>
+                  <td className="num">{fmt(s.best_publish_p999)}</td>
                   <td className="num">{fmt(s.best_e2e_p99)}</td>
+                  <td className="num">{fmt(s.best_e2e_p999)}</td>
                 </tr>
               ))}
             </tbody>

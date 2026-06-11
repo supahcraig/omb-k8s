@@ -68,8 +68,10 @@ async def list_runs(db: AsyncSession = Depends(get_db)):
                 publish_rate_avg=m.publish_rate_avg if m else None,
                 publish_latency_avg=m.publish_latency_avg if m else None,
                 publish_latency_p99=m.publish_latency_p99 if m else None,
+                publish_latency_p999=m.publish_latency_p999 if m else None,
                 end_to_end_latency_avg=m.end_to_end_latency_avg if m else None,
                 end_to_end_latency_p99=m.end_to_end_latency_p99 if m else None,
+                end_to_end_latency_p999=m.end_to_end_latency_p999 if m else None,
                 consume_rate_avg=m.consume_rate_avg if m else None,
             )
         )

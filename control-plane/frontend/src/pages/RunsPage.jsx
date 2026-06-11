@@ -20,7 +20,9 @@ const COLS = [
   { key: 'started_at',             label: 'Started',          num: false },
   { key: 'publish_rate_avg',       label: 'Pub Rate (msg/s)', num: true  },
   { key: 'publish_latency_p99',    label: 'Pub P99 (ms)',     num: true  },
+  { key: 'publish_latency_p999',   label: 'Pub P99.9 (ms)',   num: true  },
   { key: 'end_to_end_latency_p99', label: 'E2E P99 (ms)',     num: true  },
+  { key: 'end_to_end_latency_p999',label: 'E2E P99.9 (ms)',   num: true  },
   { key: 'consume_rate_avg',       label: 'Consume Rate',     num: true  },
 ]
 
@@ -136,7 +138,9 @@ export default function RunsPage() {
                   </td>
                   <td className="num">{fmt(run.publish_rate_avg)}</td>
                   <td className="num">{fmt(run.publish_latency_p99)}</td>
+                  <td className="num">{fmt(run.publish_latency_p999)}</td>
                   <td className="num">{fmt(run.end_to_end_latency_p99)}</td>
+                  <td className="num">{fmt(run.end_to_end_latency_p999)}</td>
                   <td className="num">{fmt(run.consume_rate_avg)}</td>
                 </tr>
               ))}
