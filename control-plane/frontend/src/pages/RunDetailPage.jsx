@@ -574,6 +574,7 @@ export default function RunDetailPage() {
           {hdrResults && <FinalizedCharts results={hdrResults} warmupSamples={warmupSamples} />}
 
           {/* Run charts — throughput, backlog, worker metrics */}
+          <div style={{ marginTop: 12 }}>
           <RunCharts
             livePoints={livePoints}
             metricsOut={run?.metrics ?? null}
@@ -592,6 +593,7 @@ export default function RunDetailPage() {
             expectedConsMsgSec={expectedConsMsgSec}
             expectedConsMBSec={expectedConsMBSec}
           />
+          </div>
         </>
       )}
 
@@ -646,14 +648,14 @@ export default function RunDetailPage() {
         <summary style={{ padding: '12px 20px', cursor: 'pointer', fontWeight: 600 }}>
           Configuration YAML
         </summary>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, padding: '0 20px 20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '0 20px 20px' }}>
           <div>
             <div className="text-small text-muted mb-4">Driver</div>
-            <pre className="log-viewer" style={{ maxHeight: 300, fontSize: 11 }}>{run.driver_config}</pre>
+            <pre className="log-viewer" style={{ maxHeight: 'none', fontSize: 11 }}>{run.driver_config}</pre>
           </div>
           <div>
             <div className="text-small text-muted mb-4">Workload</div>
-            <pre className="log-viewer" style={{ maxHeight: 300, fontSize: 11 }}>{run.workload_config}</pre>
+            <pre className="log-viewer" style={{ maxHeight: 'none', fontSize: 11 }}>{run.workload_config}</pre>
           </div>
         </div>
       </details>

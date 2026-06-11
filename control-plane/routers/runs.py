@@ -8,13 +8,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, outerjoin
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from config import settings
 from database import AsyncSessionLocal, get_db
-from models import Metrics, Run
+from models import Metrics, Run, Sweep
 from schemas import RunListItem, RunOut, RunStatus
 from services.k8s_resources import read_worker_resources
 from services.omb_runner import runner
@@ -45,14 +45,15 @@ class RunCreate(BaseModel):
 @router.get("", response_model=list[RunListItem])
 async def list_runs(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Run)
+        select(Run, Sweep.name.label("sweep_name"))
+        .outerjoin(Sweep, Run.sweep_id == Sweep.id)
         .options(selectinload(Run.metrics))
         .order_by(Run.started_at.desc())
     )
-    runs = result.scalars().all()
+    rows = result.all()
 
     items = []
-    for run in runs:
+    for run, sweep_name in rows:
         m = run.metrics
         items.append(
             RunListItem(
@@ -61,6 +62,8 @@ async def list_runs(db: AsyncSession = Depends(get_db)):
                 status=run.status,
                 started_at=run.started_at,
                 completed_at=run.completed_at,
+                sweep_id=run.sweep_id,
+                sweep_name=sweep_name,
                 publish_rate_avg=m.publish_rate_avg if m else None,
                 publish_latency_avg=m.publish_latency_avg if m else None,
                 publish_latency_p99=m.publish_latency_p99 if m else None,

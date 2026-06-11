@@ -66,6 +66,8 @@ class RunListItem(BaseModel):
     status: RunStatus
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    sweep_id: Optional[int] = None
+    sweep_name: Optional[str] = None
     # Key summary metric fields for table display
     publish_rate_avg: Optional[float] = None
     publish_latency_avg: Optional[float] = None
