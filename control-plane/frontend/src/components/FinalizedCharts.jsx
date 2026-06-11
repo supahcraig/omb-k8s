@@ -231,7 +231,7 @@ export default function FinalizedCharts({ results }) {
 
       {/* ── Latency distribution — histograms + nines table ── */}
       <SectionHeading>Latency distribution — histograms <OmbBadge /></SectionHeading>
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 12, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 12, alignItems: 'stretch' }}>
         <div className="card" style={{ padding: '0 0 4px' }}>
           <NinesTable aggregates={aggregates} />
         </div>
