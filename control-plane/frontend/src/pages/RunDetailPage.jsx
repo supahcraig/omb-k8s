@@ -129,6 +129,7 @@ export default function RunDetailPage() {
   const [hdrResults, setHdrResults] = useState(null)
   const [hdrLoading, setHdrLoading] = useState(false)
   const [logOpen, setLogOpen] = useState(true)
+  const [configOpen, setConfigOpen] = useState(false)
   const wsRef = useRef(null)
   const logEndRef = useRef(null)
   const liveMatchedRef = useRef(false)
@@ -574,6 +575,7 @@ export default function RunDetailPage() {
           {hdrResults && <FinalizedCharts results={hdrResults} warmupSamples={warmupSamples} />}
 
           {/* Run charts — throughput, backlog, worker metrics */}
+          <div style={{ marginTop: 12 }}>
           <RunCharts
             livePoints={livePoints}
             metricsOut={run?.metrics ?? null}
@@ -592,6 +594,7 @@ export default function RunDetailPage() {
             expectedConsMsgSec={expectedConsMsgSec}
             expectedConsMBSec={expectedConsMBSec}
           />
+          </div>
         </>
       )}
 
@@ -642,18 +645,36 @@ export default function RunDetailPage() {
       </details>
 
       {/* Config details */}
-      <details className="card mt-20" style={{ padding: 0 }}>
-        <summary style={{ padding: '12px 20px', cursor: 'pointer', fontWeight: 600 }}>
-          Configuration YAML
+      <details className="card mt-20" style={{ padding: 0 }} open={configOpen} onToggle={e => setConfigOpen(e.target.open)}>
+        <summary style={{ padding: '12px 20px', cursor: 'pointer', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10 }}>{configOpen ? '▼' : '▶'}</span>
+            Configuration YAML
+          </span>
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{ background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.4)', color: '#4ade80', fontWeight: 600 }}
+            onClick={e => {
+              e.preventDefault()
+              navigate('/runs/new', { state: {
+                driverContent: run.driver_config,
+                workloadContent: run.workload_config,
+                workloadName: run.name || `Run #${run.id}`,
+              }})
+            }}
+          >
+            ↺ Re-run with this config
+          </button>
         </summary>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, padding: '0 20px 20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '0 20px 20px' }}>
           <div>
             <div className="text-small text-muted mb-4">Driver</div>
-            <pre className="log-viewer" style={{ maxHeight: 300, fontSize: 11 }}>{run.driver_config}</pre>
+            <pre className="log-viewer" style={{ maxHeight: 'none', fontSize: 11 }}>{run.driver_config}</pre>
           </div>
           <div>
             <div className="text-small text-muted mb-4">Workload</div>
-            <pre className="log-viewer" style={{ maxHeight: 300, fontSize: 11 }}>{run.workload_config}</pre>
+            <pre className="log-viewer" style={{ maxHeight: 'none', fontSize: 11 }}>{run.workload_config}</pre>
           </div>
         </div>
       </details>

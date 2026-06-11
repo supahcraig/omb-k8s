@@ -218,13 +218,6 @@ export default function FinalizedCharts({ results }) {
 
   return (
     <div>
-      {/* ── Results summary — nines table (narrow) ── */}
-      <SectionHeading>Results summary <OmbBadge /></SectionHeading>
-      <div className="card" style={{ padding: '0 0 4px', maxWidth: 360 }}>
-        <NinesTable aggregates={aggregates} />
-      </div>
-
-
       {/* ── Latency distribution — percentile curves ── */}
       <SectionHeading>Latency distribution — percentile curves</SectionHeading>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -236,9 +229,12 @@ export default function FinalizedCharts({ results }) {
         </div>
       </div>
 
-      {/* ── Latency distribution — histograms ── */}
-      <SectionHeading>Latency distribution — histograms</SectionHeading>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      {/* ── Latency distribution — histograms + nines table ── */}
+      <SectionHeading>Latency distribution — histograms <OmbBadge /></SectionHeading>
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 12, alignItems: 'stretch' }}>
+        <div className="card" style={{ padding: '0 0 4px' }}>
+          <NinesTable aggregates={aggregates} />
+        </div>
         <div className="chart-card">
           <HistogramRecharts data={pubHist} title="Publish latency histogram" color={C.publish} />
         </div>

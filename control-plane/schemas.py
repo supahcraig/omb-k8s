@@ -66,12 +66,16 @@ class RunListItem(BaseModel):
     status: RunStatus
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    sweep_id: Optional[int] = None
+    sweep_name: Optional[str] = None
     # Key summary metric fields for table display
     publish_rate_avg: Optional[float] = None
     publish_latency_avg: Optional[float] = None
     publish_latency_p99: Optional[float] = None
+    publish_latency_p999: Optional[float] = None
     end_to_end_latency_avg: Optional[float] = None
     end_to_end_latency_p99: Optional[float] = None
+    end_to_end_latency_p999: Optional[float] = None
     consume_rate_avg: Optional[float] = None
 
     model_config = {"from_attributes": True}
@@ -126,7 +130,9 @@ class SweepOut(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     best_publish_p99: Optional[float] = None
+    best_publish_p999: Optional[float] = None
     best_e2e_p99: Optional[float] = None
+    best_e2e_p999: Optional[float] = None
 
     model_config = {"from_attributes": True}
 
