@@ -15,11 +15,41 @@ function fmt(n, digits = 1) {
   return `${n.toLocaleString(undefined, { maximumFractionDigits: digits })} ms`
 }
 
+const COLS = [
+  { key: 'id',               label: 'ID',           num: false },
+  { key: 'name',             label: 'Name',         num: false },
+  { key: 'status',           label: 'Status',       num: false },
+  { key: 'started_at',       label: 'Started',      num: false },
+  { key: 'completed_at',     label: 'Completed',    num: false },
+  { key: 'best_publish_p99', label: 'Best Pub P99', num: true  },
+  { key: 'best_e2e_p99',     label: 'Best E2E P99', num: true  },
+]
+
+function sortedSweeps(sweeps, col, dir) {
+  if (!col || !dir) return sweeps
+  return [...sweeps].sort((a, b) => {
+    const av = a[col] ?? null
+    const bv = b[col] ?? null
+    if (av == null && bv == null) return 0
+    if (av == null) return 1
+    if (bv == null) return -1
+    const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv))
+    return dir === 'asc' ? cmp : -cmp
+  })
+}
+
+function SortIcon({ active, dir }) {
+  if (!active) return <span style={{ opacity: 0.3, marginLeft: 4 }}>⇅</span>
+  return <span style={{ marginLeft: 4 }}>{dir === 'asc' ? '▲' : '▼'}</span>
+}
+
 export default function SweepsPage() {
   const navigate = useNavigate()
   const [sweeps, setSweeps] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [sortCol, setSortCol] = useState('started_at')
+  const [sortDir, setSortDir] = useState('desc')
 
   async function load() {
     try {
@@ -34,6 +64,18 @@ export default function SweepsPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  function handleSort(key) {
+    if (sortCol === key) {
+      if (sortDir === 'asc') setSortDir('desc')
+      else if (sortDir === 'desc') { setSortCol(null); setSortDir(null) }
+    } else {
+      setSortCol(key)
+      setSortDir('asc')
+    }
+  }
+
+  const displayed = sortedSweeps(sweeps, sortCol, sortDir)
 
   return (
     <div>
@@ -55,17 +97,21 @@ export default function SweepsPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Status</th>
-                <th>Started</th>
-                <th>Completed</th>
-                <th className="num">Best Pub P99</th>
-                <th className="num">Best E2E P99</th>
+                {COLS.map(col => (
+                  <th
+                    key={col.key}
+                    className={col.num ? 'num' : ''}
+                    style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                    onClick={() => handleSort(col.key)}
+                  >
+                    {col.label}
+                    <SortIcon active={sortCol === col.key} dir={sortDir} />
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {sweeps.map(s => (
+              {displayed.map(s => (
                 <tr
                   key={s.id}
                   style={{ cursor: 'pointer' }}
