@@ -695,8 +695,23 @@ export default function RunDetailPage() {
 
       {/* Config details */}
       <details className="card mt-20" style={{ padding: 0 }}>
-        <summary style={{ padding: '12px 20px', cursor: 'pointer', fontWeight: 600 }}>
-          Configuration YAML
+        <summary style={{ padding: '12px 20px', cursor: 'pointer', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Configuration YAML</span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ fontWeight: 400 }}
+            onClick={e => {
+              e.preventDefault()
+              navigate('/runs/new', { state: {
+                driverContent: run.driver_config,
+                workloadContent: run.workload_config,
+                workloadName: run.name || `Run #${run.id}`,
+              }})
+            }}
+          >
+            ↺ Re-run with this config
+          </button>
         </summary>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '0 20px 20px' }}>
           <div>
