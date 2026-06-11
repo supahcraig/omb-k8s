@@ -129,6 +129,7 @@ export default function RunDetailPage() {
   const [hdrResults, setHdrResults] = useState(null)
   const [hdrLoading, setHdrLoading] = useState(false)
   const [logOpen, setLogOpen] = useState(true)
+  const [configOpen, setConfigOpen] = useState(false)
   const wsRef = useRef(null)
   const logEndRef = useRef(null)
   const liveMatchedRef = useRef(false)
@@ -644,13 +645,16 @@ export default function RunDetailPage() {
       </details>
 
       {/* Config details */}
-      <details className="card mt-20" style={{ padding: 0 }}>
+      <details className="card mt-20" style={{ padding: 0 }} open={configOpen} onToggle={e => setConfigOpen(e.target.open)}>
         <summary style={{ padding: '12px 20px', cursor: 'pointer', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Configuration YAML</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10 }}>{configOpen ? '▼' : '▶'}</span>
+            Configuration YAML
+          </span>
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
-            style={{ fontWeight: 400 }}
+            className="btn btn-sm"
+            style={{ background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.4)', color: '#4ade80', fontWeight: 600 }}
             onClick={e => {
               e.preventDefault()
               navigate('/runs/new', { state: {
