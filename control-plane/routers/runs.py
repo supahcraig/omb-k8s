@@ -8,13 +8,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from config import settings
 from database import AsyncSessionLocal, get_db
-from models import Metrics, Run
+from models import Metrics, Run, WorkerPool
 from schemas import RunListItem, RunOut, RunStatus
 from services.k8s_resources import read_worker_resources
 from services.omb_runner import runner
@@ -402,6 +402,15 @@ async def _finish_run(run_id: int) -> None:
             return
 
     logger.info("_finish_run: run %d finished — status=%s", run_id, run.status)
+
+    # Release pool claim so a new run can reclaim it before the teardown fires.
+    async with AsyncSessionLocal() as pool_db:
+        await pool_db.execute(
+            update(WorkerPool)
+            .where(WorkerPool.id == pool_id)
+            .values(status="ready", claimed_by_run_id=None)
+        )
+        await pool_db.commit()
 
     # Schedule pool teardown after the configured warm-retention period.
     # Default pool is never torn down; concurrent pools stay warm so nodes
