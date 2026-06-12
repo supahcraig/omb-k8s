@@ -307,7 +307,7 @@ async def _create_headless_service(svc_name: str, namespace: str) -> None:
 
 
 async def _wait_for_pool_ready(
-    sts_name: str, namespace: str, expected_replicas: int, timeout_seconds: int = 300
+    sts_name: str, namespace: str, expected_replicas: int, timeout_seconds: int = 600
 ) -> None:
     """Poll until all StatefulSet replicas report Ready, or timeout."""
     apps_api = k8s_client.AppsV1Api()
