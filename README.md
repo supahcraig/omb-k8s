@@ -38,12 +38,8 @@ cd ../..
 
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
 helm dependency build charts/omb
-helm install omb charts/omb -n omb --create-namespace \
-  -f charts/omb/values-aws.yaml \
-  --set clusterAutoscaler.clusterName=$(terraform -chdir=terraform/aws output -raw cluster_name) \
-  --set clusterAutoscaler.region=$(terraform -chdir=terraform/aws output -raw region) \
-  --set clusterAutoscaler.roleArn=$(terraform -chdir=terraform/aws output -raw cluster_autoscaler_iam_role_arn) \
-  --set "controlPlane.allowedCIDRs[0]=$(terraform -chdir=terraform/aws output -raw terraform_operator_ip)/32"
+# helm_install_command pre-fills all AWS-specific values (region, cluster name, CA role ARN, your IP)
+terraform -chdir=terraform/aws output -raw helm_install_command | bash
 
 # AWS returns a hostname (not an IP); DNS propagation takes ~1 min
 kubectl get svc omb-control-plane -n omb -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
