@@ -20,7 +20,11 @@ router = APIRouter()
 async def list_worker_pools():
     """Return all worker pool rows for the Cluster page."""
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(WorkerPool).order_by(WorkerPool.created_at.asc()))
+        result = await db.execute(
+            select(WorkerPool)
+            .where(WorkerPool.status != "deleted")
+            .order_by(WorkerPool.created_at.asc())
+        )
         pools = result.scalars().all()
         return [
             {
