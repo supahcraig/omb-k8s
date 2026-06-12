@@ -280,14 +280,17 @@ async def launch_run(
     Raises on runner.start() failure — callers mark the run failed and surface
     the error as appropriate for their context (HTTP 503 vs sweep continue).
     """
-    await runner.start(run_id, driver_content, workload_content)
+    pool = await runner.start(run_id, driver_content, workload_content)
     prom_url = (
         f"http://omb-kube-prometheus-stack-prometheus"
         f".{settings.omb_namespace}.svc.cluster.local:9090"
     )
     cpu_request_cores, _ = await read_worker_resources(settings.omb_namespace)
     asyncio.create_task(
-        collect_prometheus(run_id, settings.omb_namespace, prom_url, cpu_request_cores)
+        collect_prometheus(
+            run_id, settings.omb_namespace, prom_url, cpu_request_cores,
+            statefulset_name=pool.statefulset_name if pool else None,
+        )
     )
 
     # Probe broker Prometheus endpoints (diagnostic logging only)

@@ -249,6 +249,7 @@ class OmbRunner:
             "pool_id": pool.id,
         }
         asyncio.create_task(self._stream_logs(run_id, job_name))
+        return pool
 
     async def _probe_workers(self, pool: WorkerPool, namespace: str) -> None:
         """
