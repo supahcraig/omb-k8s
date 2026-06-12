@@ -400,12 +400,7 @@ operations after initial deployment.
 5. aws/gcloud/az eks/gke/aks get-credentials (configure local kubectl; writes to $KUBECONFIG path)
 6. helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update (one-time per machine; required before dependency build)
 7. helm dependency build charts/omb (downloads kube-prometheus-stack and other chart deps into charts/omb/charts/; safe to re-run)
-8. helm install omb charts/omb -n omb -f charts/omb/values-<cloud>.yaml \
-   --set "controlPlane.allowedCIDRs[0]=$(terraform output -raw terraform_operator_ip)/32" \
-   --set clusterAutoscaler.clusterName=$(terraform output -raw cluster_name) \
-   --set clusterAutoscaler.region=<aws-region> \
-   --set clusterAutoscaler.roleArn=$(terraform output -raw cluster_autoscaler_iam_role_arn) \
-   (AWS only: clusterName/region/roleArn are required for the Cluster Autoscaler; omit all three on GCP/Azure)
+8. On AWS: `terraform output -raw helm_install_command | bash` — this runs the pre-filled helm install command with all CA and CIDR values substituted. On GCP/Azure: `helm install omb charts/omb -n omb -f charts/omb/values-<cloud>.yaml --set "controlPlane.allowedCIDRs[0]=$(terraform output -raw terraform_operator_ip)/32"`
 6. Open the UI at the LoadBalancer address
 7. Configure cluster connectivity and Prometheus in Settings
 8. Run benchmarks
