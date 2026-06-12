@@ -260,6 +260,48 @@ used by single runs) or awaits it inline (`await_finish=True`, used by sweeps fo
 sequential execution). Both `create_run` and `_execute_sweep` call `launch_run` —
 do not duplicate the three-step sequence elsewhere.
 
+**Concurrent runs each get a dedicated worker pool.** `create_run` returns
+immediately with `status="pending"` and launches pool provisioning in
+`asyncio.create_task(_bg_launch(...))`. When a run starts and another is already
+active, `services/worker_pool_manager.py::claim_pool()` creates a new StatefulSet
+(`omb-worker-pool-{uuid}`) and headless Service by cloning the default worker
+spec. Once all replicas are ready, the run transitions to `status="running"`.
+If no other run is active, the pre-existing `omb-worker` default pool is used
+(no new StatefulSet created). Do not return a blocking HTTP response from
+`create_run` — pool provisioning can take up to 10 minutes on a cold node and the
+browser will time out and retry, creating duplicate runs.
+
+**Worker pool lifecycle: provisioning → in_use → ready → deleted.** All pool
+state transitions use Core-style `db.execute(update(...).values(...))`, never
+ORM attribute mutation followed by `db.expunge()`. The expunge pattern silently
+drops attribute changes before commit. `claim_pool` returns a fresh `WorkerPool`
+object (not the ORM instance) after every Core-style update.
+
+**Warm pool reclaim before provisioning.** When a new run starts while a concurrent
+pool is in `ready` (warm retention) state, `claim_pool` reclaims that pool instead
+of provisioning a new EC2 node. `cancel_teardown(pool_id)` cancels the pending
+asyncio teardown task. This avoids ~10-minute node cold-start delays when runs
+arrive in close succession.
+
+**`warm_until` tracks when warm retention expires.** Set by `_finish_run` when a
+concurrent pool transitions to `ready`. The Cluster page reads this value and shows
+a live M:SS countdown in the Worker Pools table. Default pool never gets
+`warm_until` (it is never torn down). Concurrent pools with `warm_until = NULL`
+were either set to `ready` manually or predate the feature — their teardown was
+never scheduled; release them manually from the Cluster page.
+
+**Pool teardown task registry.** `worker_pool_manager.py` maintains a module-level
+`dict[str, asyncio.Task]` mapping `pool_id → pending teardown task`. Control-plane
+pod restarts kill all in-flight asyncio tasks, leaving any `in_use` pool stuck.
+Manual fix: `UPDATE worker_pools SET status='ready', claimed_by_run_id=NULL WHERE
+status='in_use'` — then release via the Cluster page or let the next run reclaim
+them.
+
+**`concurrent_pool_retention_minutes` in Settings → Benchmark Behavior.** Controls
+how long concurrent pools stay warm after a run completes (default 30 min). Set to
+0 for "Manual only" — pool stays alive until explicitly released. Stored in the
+`settings` table under key `benchmark_behavior`.
+
 ## Target clouds
 
 - AWS — primary (~80% of usage)
@@ -283,8 +325,11 @@ do not duplicate the three-step sequence elsewhere.
 
 1. SE opens UI, selects or creates a workload config
 2. Control plane stores driver + workload YAML as text in SQLite
-3. SE clicks Run
-4. Control plane writes driver + workload YAML into a k8s ConfigMap
+3. SE clicks Run — HTTP returns immediately with `status="pending"`; pool provisioning
+   runs in a background task. If another run is active, a new worker pool StatefulSet
+   is provisioned; otherwise the default `omb-worker` pool is claimed.
+4. Once the pool is ready, control plane transitions run to `status="running"` and
+   writes driver + workload YAML into a k8s ConfigMap
 5. Control plane creates a k8s Job with:
    - An init container (busybox) that creates `/data/results/` on the PVC and
      generates `/payload/payload.data` with exactly `messageSize` random bytes
@@ -480,11 +525,12 @@ handles all navigation. Routes and pages:
 | `/sweeps/new` | NewSweepPage | Redirects to `/runs/new` with `state={{ enableSweep: true }}` |
 | `/sweeps/:id` | SweepDetailPage | Sweep overview — sortable run comparison table; rows clickable; two-row sticky super-header groups sweep parameter columns; checkbox-driven percentile curve charts + heatmap (capped at 10 runs); Grafana link above table |
 | `/workloads` | WorkloadLibraryPage | Workload and driver library — two tabs (Workloads / Drivers); full CRUD for custom entries; bundled entries are read-only |
-| `/settings` | SettingsPage | Cluster connectivity (seed brokers, TLS, SASL) + Prometheus scrape targets |
-| `/cluster` | ClusterPage | k8s cluster status, worker health, pod restart |
+| `/settings` | SettingsPage | Cluster connectivity (seed brokers, TLS, SASL) + Prometheus scrape targets + Benchmark Behavior (pool retention) |
+| `/cluster` | ClusterPage | k8s cluster status, worker health, pod restart; Worker Pools table with idle countdown and Release button |
+| `/timeline` | TimelinePage | SVG Gantt chart of all runs; zoom/scroll with 1-hour default window; bars colored by phase |
 
 Sidebar nav groups:
-- **Main:** Benchmark Runs → (sub) + New Run / Sweeps / Workload Library
+- **Main:** Benchmark Runs → (sub) + New Run / Sweeps / Workload Library / Timeline
 - **Infrastructure** (below divider): OMB Cluster / Settings
 - **Bottom:** Worker scaling control (label + readiness badge + input + Scale button)
 
@@ -622,10 +668,25 @@ accepts an `expected` prop; if actual < 95% of expected the value renders red,
 ≥ 95% renders green. All charts and tiles carry a source badge (`omb`, `redpanda`,
 or `worker`) identifying the data origin.
 
+**Timeline page (`/timeline`) is a zoomable SVG Gantt chart of all runs.** Fetches
+`GET /api/runs/timeline`. The default view window is `now − 1 hour` to `now + 1 min`.
+Bars are colored by phase (gray = initializing, blue = warmup, green = benchmark).
+In-progress bars extend to "now" with a pulse animation. Sweep runs are indented under
+their sweep with a shared left border. Click any bar navigates to `/runs/:id`. Scroll
+wheel zooms centered on mouse X; click-drag pans. Preset buttons: 1h, 3h, 6h, All.
+No new library dependency — pure SVG with `clipPath` to clip bars at view boundaries.
+
 **Cluster page shows image digest per pod.** The `/api/cluster/pods` endpoint extracts
 `container_statuses[0].image_id` and parses the sha256 digest (first 12 chars) as
 `image_hash`. Falls back to `image_ref` (the full image tag string) if the digest
 format is absent. Displayed as a small subtitle under each pod name in the table.
+
+**Cluster page Worker Pools table shows a live idle countdown.** `GET /api/worker-pools`
+returns all non-deleted pools. Ready concurrent pools with a `warm_until` value display
+a live M:SS countdown in the "Warm For" column (amber, turns red when expiring). The
+ticker runs only when warm pools are present. Default pool never shows a countdown. A
+**Release** button immediately tears down the StatefulSet and Service; disabled on
+`in_use` pools.
 
 **Status badges in `RunDetailPage` reflect live run sub-phases.** While
 `run.status === 'running'`, a finer-grained `displayStatus` is derived from live

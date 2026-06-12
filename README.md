@@ -8,6 +8,10 @@ control-plane UI. Replaces the previous Terraform + Ansible approach.
 The target cluster (Redpanda or Kafka) is always external — this tool benchmarks
 existing clusters and never provisions them.
 
+Multiple benchmark runs can execute concurrently against the same target cluster.
+Each concurrent run gets a dedicated worker pool provisioned automatically. A
+Gantt timeline page shows overlapping runs side by side.
+
 ## Overview
 
 ![Architecture](docs/architecture.svg)
@@ -187,7 +191,7 @@ directory until after `terraform destroy` completes successfully.
 | [Deployment: AWS (EKS)](docs/deployment-aws.md) | Step-by-step EKS provisioning and Helm install |
 | [Deployment: GCP (GKE)](docs/deployment-gcp.md) | Step-by-step GKE provisioning and Helm install |
 | [Deployment: Azure (AKS)](docs/deployment-azure.md) | Step-by-step AKS provisioning and Helm install |
-| [Running Benchmarks](docs/running-benchmarks.md) | Configuring connectivity, workloads, single runs, sweeps |
+| [Running Benchmarks](docs/running-benchmarks.md) | Configuring connectivity, workloads, single runs, sweeps, concurrent workloads |
 | [Scaling Workers](docs/scaling-workers.md) | How to scale worker pods mid-engagement |
 | [Architecture](docs/architecture.md) | Component diagram, worker discovery, run lifecycle |
 | [Teardown](docs/teardown.md) | Safe cleanup — Helm uninstall and terraform destroy |
