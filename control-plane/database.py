@@ -51,6 +51,7 @@ async def init_db() -> None:
             "ALTER TABLE runs ADD COLUMN warmup_started_at DATETIME",
             "ALTER TABLE runs ADD COLUMN benchmark_started_at DATETIME",
             "ALTER TABLE runs ADD COLUMN worker_pool_id TEXT",
+            "ALTER TABLE worker_pools ADD COLUMN warm_until DATETIME",
         ):
             try:
                 await conn.execute(text(col_ddl))

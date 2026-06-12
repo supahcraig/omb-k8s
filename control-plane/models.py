@@ -168,6 +168,7 @@ class WorkerPool(Base):
     claimed_by_run_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     released_at = Column(DateTime, nullable=True)
+    warm_until = Column(DateTime, nullable=True)  # when the warm-retention period expires
 
 
 class Setting(Base):

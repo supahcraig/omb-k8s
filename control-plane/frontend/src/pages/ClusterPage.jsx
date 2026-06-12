@@ -54,7 +54,30 @@ const POOL_STATUS_BADGE = {
   deleted:      'failed',
 }
 
+function useNow(active) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    if (!active) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [active])
+  return now
+}
+
+function fmtCountdown(warmUntilStr, nowMs) {
+  if (!warmUntilStr) return null
+  const until = new Date(warmUntilStr.endsWith('Z') ? warmUntilStr : warmUntilStr + 'Z').getTime()
+  const remaining = Math.max(0, Math.floor((until - nowMs) / 1000))
+  if (remaining === 0) return 'expiring…'
+  const m = Math.floor(remaining / 60)
+  const s = remaining % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 function WorkerPoolsTable({ pools, onRelease, releasing }) {
+  const hasWarm = pools.some(p => p.status === 'ready' && p.warm_until && p.id !== 'default')
+  const now = useNow(hasWarm)
+
   if (!pools.length) return null
   return (
     <div className="card mt-20">
@@ -69,13 +92,17 @@ function WorkerPoolsTable({ pools, onRelease, releasing }) {
             <th className="num">Replicas</th>
             <th>Status</th>
             <th>Claimed By</th>
+            <th>Warm For</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {pools.map(pool => {
-            const isDefault   = pool.id === 'default'
-            const canRelease  = !isDefault && pool.status !== 'in_use' && pool.status !== 'deleted'
+            const isDefault  = pool.id === 'default'
+            const canRelease = !isDefault && pool.status !== 'in_use' && pool.status !== 'deleted'
+            const countdown  = pool.status === 'ready' && pool.warm_until
+              ? fmtCountdown(pool.warm_until, now)
+              : null
             return (
               <tr key={pool.id}>
                 <td style={{ fontFamily: 'monospace', fontSize: 12 }}>
@@ -94,6 +121,11 @@ function WorkerPoolsTable({ pools, onRelease, releasing }) {
                       Run #{pool.claimed_by_run_id}
                     </a>
                   ) : '—'}
+                </td>
+                <td className="text-muted text-small" style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                  {countdown
+                    ? <span style={{ color: countdown === 'expiring…' ? '#ef4444' : '#f59e0b' }}>{countdown}</span>
+                    : '—'}
                 </td>
                 <td style={{ textAlign: 'right', paddingRight: 8 }}>
                   {!isDefault && pool.status !== 'deleted' && (

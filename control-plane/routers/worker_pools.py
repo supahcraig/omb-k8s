@@ -36,6 +36,7 @@ async def list_worker_pools():
                 "claimed_by_run_id": p.claimed_by_run_id,
                 "created_at": p.created_at,
                 "released_at": p.released_at,
+                "warm_until": p.warm_until,
             }
             for p in pools
         ]

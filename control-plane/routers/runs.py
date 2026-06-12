@@ -3,7 +3,7 @@ Runs router — create, list, retrieve, and cancel benchmark runs.
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -404,16 +404,21 @@ async def _finish_run(run_id: int) -> None:
     logger.info("_finish_run: run %d finished — status=%s", run_id, run.status)
 
     # Release pool claim so a new run can reclaim it before the teardown fires.
+    retention = await _get_pool_retention_minutes()
+    warm_until = (
+        datetime.utcnow() + timedelta(minutes=retention)
+        if pool_id != DEFAULT_POOL_ID and retention > 0
+        else None
+    )
     async with AsyncSessionLocal() as pool_db:
         await pool_db.execute(
             update(WorkerPool)
             .where(WorkerPool.id == pool_id)
-            .values(status="ready", claimed_by_run_id=None)
+            .values(status="ready", claimed_by_run_id=None, warm_until=warm_until)
         )
         await pool_db.commit()
 
     # Schedule pool teardown after the configured warm-retention period.
     # Default pool is never torn down; concurrent pools stay warm so nodes
     # don't need to be reprovisioned for the next run.
-    retention = await _get_pool_retention_minutes()
     schedule_teardown(pool_id, settings.omb_namespace, retention)
