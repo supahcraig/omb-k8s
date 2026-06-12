@@ -80,37 +80,38 @@ async def create_run(
 ):
     run = Run(
         name=body.name,
-        status="running",
         driver_config=body.driver_content,
         workload_config=body.workload_content,
+        # status defaults to "pending" — transitions to "running" once pool is ready
+        # and the k8s Job is created. This allows the HTTP response to return
+        # immediately instead of blocking for up to 300s on pool provisioning.
     )
     db.add(run)
     await db.commit()
     await db.refresh(run)
 
-    try:
-        await launch_run(run.id, body.driver_content, body.workload_content)
-    except Exception as exc:
-        logger.error("Failed to start k8s Job for run %d: %s", run.id, exc)
-        async with AsyncSessionLocal() as fail_db:
-            fail_run = await fail_db.get(Run, run.id)
-            if fail_run:
-                fail_run.status = RunStatus.failed.value
-                fail_run.error_message = str(exc)
-                fail_run.completed_at = datetime.utcnow()
-                await fail_db.commit()
-        raise HTTPException(
-            status_code=503,
-            detail=f"Failed to start benchmark job: {exc}",
-        )
+    asyncio.create_task(_bg_launch(run.id, body.driver_content, body.workload_content))
 
-    # Re-query with selectinload so Pydantic can access the metrics relationship
-    # without hitting the lazy-load greenlet restriction.
     result = await db.execute(
         select(Run).options(selectinload(Run.metrics)).where(Run.id == run.id)
     )
     run = result.scalar_one()
     return RunOut.model_validate(run)
+
+
+async def _bg_launch(run_id: int, driver_content: str, workload_content: str) -> None:
+    """Background wrapper for launch_run — marks run failed on any exception."""
+    try:
+        await launch_run(run_id, driver_content, workload_content)
+    except Exception as exc:
+        logger.error("Failed to start k8s Job for run %d: %s", run_id, exc)
+        async with AsyncSessionLocal() as fail_db:
+            fail_run = await fail_db.get(Run, run_id)
+            if fail_run:
+                fail_run.status = RunStatus.failed.value
+                fail_run.error_message = str(exc)
+                fail_run.completed_at = datetime.utcnow()
+                await fail_db.commit()
 
 
 @router.get("/timeline")

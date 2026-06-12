@@ -101,10 +101,13 @@ class OmbRunner:
         )
         await self._probe_workers(pool, namespace)
 
-        # Record pool association on the run so _finish_run can schedule teardown.
+        # Pool claimed and workers healthy — transition run to "running" and record pool.
         async with AsyncSessionLocal() as db:
             await db.execute(
-                update(Run).where(Run.id == run_id).values(worker_pool_id=pool.id)
+                update(Run).where(Run.id == run_id).values(
+                    worker_pool_id=pool.id,
+                    status="running",
+                )
             )
             await db.commit()
 
