@@ -74,23 +74,21 @@ async def claim_pool(run_id: int, namespace: str) -> WorkerPool:
 
             if not active_runs:
                 # No concurrent activity — claim the default pool.
-                pool = await db.get(WorkerPool, DEFAULT_POOL_ID)
-                if pool is None:
-                    raise RuntimeError(
-                        "Default worker pool record not found — was init_db run?"
-                    )
                 cancel_teardown(DEFAULT_POOL_ID)
-                pool.status = "in_use"
-                pool.claimed_by_run_id = run_id
-                pool.released_at = None
-                # Reflect live replica count in memory (not persisted — always read from k8s).
-                pool.replicas = replica_count
+                await db.execute(
+                    update(WorkerPool)
+                    .where(WorkerPool.id == DEFAULT_POOL_ID)
+                    .values(status="in_use", claimed_by_run_id=run_id, released_at=None)
+                )
                 logger.info("Run %d claimed default pool (%d workers)", run_id, replica_count)
-                # Return a detached copy so the session can close cleanly.
-                from sqlalchemy.orm import make_transient
-                db.expunge(pool)
-                make_transient(pool)
-                return pool
+                return WorkerPool(
+                    id=DEFAULT_POOL_ID,
+                    statefulset_name=DEFAULT_STATEFULSET,
+                    service_name=DEFAULT_SERVICE,
+                    replicas=replica_count,
+                    status="in_use",
+                    claimed_by_run_id=run_id,
+                )
 
             # Concurrent run(s) active — check for a warm ready pool before creating one.
             result = await db.execute(
@@ -102,15 +100,20 @@ async def claim_pool(run_id: int, namespace: str) -> WorkerPool:
             warm_pool = result.scalar_one_or_none()
             if warm_pool is not None:
                 cancel_teardown(warm_pool.id)
-                warm_pool.status = "in_use"
-                warm_pool.claimed_by_run_id = run_id
-                warm_pool.released_at = None
-                warm_pool.replicas = replica_count
+                await db.execute(
+                    update(WorkerPool)
+                    .where(WorkerPool.id == warm_pool.id)
+                    .values(status="in_use", claimed_by_run_id=run_id, released_at=None, replicas=replica_count)
+                )
                 logger.info("Run %d claimed warm pool %s (%d workers)", run_id, warm_pool.id, replica_count)
-                from sqlalchemy.orm import make_transient
-                db.expunge(warm_pool)
-                make_transient(warm_pool)
-                return warm_pool
+                return WorkerPool(
+                    id=warm_pool.id,
+                    statefulset_name=warm_pool.statefulset_name,
+                    service_name=warm_pool.service_name,
+                    replicas=replica_count,
+                    status="in_use",
+                    claimed_by_run_id=run_id,
+                )
 
             # No warm pool available — create a new one.
             pool_id = f"pool-{uuid.uuid4().hex[:8]}"
