@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { listPods, getPodLogs, restartPod } from '../api.js'
+import { listPods, getPodLogs, restartPod, listWorkerPools, releaseWorkerPool } from '../api.js'
 
 const GROUPS = [
   { label: 'Control Plane',  match: n => n.startsWith('omb-control-plane') },
@@ -46,6 +46,80 @@ function WorkerHealthDot({ healthy }) {
   )
 }
 
+const POOL_STATUS_BADGE = {
+  ready:        'completed',
+  in_use:       'running',
+  provisioning: 'pending',
+  tearing_down: 'pending',
+  deleted:      'failed',
+}
+
+function WorkerPoolsTable({ pools, onRelease, releasing }) {
+  if (!pools.length) return null
+  return (
+    <div className="card mt-20">
+      <div className="card-header">
+        <h3 style={{ margin: 0, fontSize: 14 }}>Worker Pools</h3>
+      </div>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Pool ID</th>
+            <th>StatefulSet</th>
+            <th className="num">Replicas</th>
+            <th>Status</th>
+            <th>Claimed By</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {pools.map(pool => {
+            const isDefault   = pool.id === 'default'
+            const canRelease  = !isDefault && pool.status !== 'in_use' && pool.status !== 'deleted'
+            return (
+              <tr key={pool.id}>
+                <td style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                  {isDefault ? <span title="Pre-existing default worker StatefulSet">default</span> : pool.id}
+                </td>
+                <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{pool.statefulset_name}</td>
+                <td className="num">{pool.replicas}</td>
+                <td>
+                  <span className={`badge badge-${POOL_STATUS_BADGE[pool.status] || 'pending'}`}>
+                    {pool.status}
+                  </span>
+                </td>
+                <td className="text-muted text-small">
+                  {pool.claimed_by_run_id ? (
+                    <a href={`/runs/${pool.claimed_by_run_id}`} style={{ color: 'var(--color-accent)' }}>
+                      Run #{pool.claimed_by_run_id}
+                    </a>
+                  ) : '—'}
+                </td>
+                <td style={{ textAlign: 'right', paddingRight: 8 }}>
+                  {!isDefault && pool.status !== 'deleted' && (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onRelease(pool.id)}
+                      disabled={!canRelease || releasing === pool.id}
+                      title={
+                        pool.status === 'in_use'
+                          ? 'Cannot release while a run is active'
+                          : 'Release pool and tear down StatefulSet'
+                      }
+                    >
+                      {releasing === pool.id ? '…' : 'Release'}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function ClusterPage() {
   const [namespace, setNamespace]           = useState('')
   const [pods, setPods]                     = useState([])
@@ -59,6 +133,35 @@ export default function ClusterPage() {
   const [logsLoading, setLogsLoading]       = useState(false)
   const [logsError, setLogsError]           = useState(null)
   const logEndRef = useRef(null)
+
+  const [pools, setPools]           = useState([])
+  const [poolsLoading, setPoolsLoading] = useState(false)
+  const [releasingPool, setReleasingPool] = useState(null)
+
+  async function fetchPools() {
+    setPoolsLoading(true)
+    try {
+      const data = await listWorkerPools()
+      setPools(data)
+    } catch (_) {
+      // pools section is optional; don't error the whole page
+    } finally {
+      setPoolsLoading(false)
+    }
+  }
+
+  async function handleReleasePool(poolId) {
+    if (!confirm(`Release pool ${poolId}? This will delete its StatefulSet and Service immediately.`)) return
+    setReleasingPool(poolId)
+    try {
+      await releaseWorkerPool(poolId)
+      await fetchPools()
+    } catch (err) {
+      alert(`Failed to release pool ${poolId}: ${err.message}`)
+    } finally {
+      setReleasingPool(null)
+    }
+  }
 
   async function fetchPods() {
     setPodsLoading(true)
@@ -88,7 +191,7 @@ export default function ClusterPage() {
     }
   }
 
-  useEffect(() => { fetchPods() }, [])
+  useEffect(() => { fetchPods(); fetchPools() }, [])
 
   useEffect(() => {
     if (logs !== null) logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -218,6 +321,14 @@ export default function ClusterPage() {
           </tbody>
         </table>
       </div>
+
+      {!poolsLoading && pools.length > 0 && (
+        <WorkerPoolsTable
+          pools={pools}
+          onRelease={handleReleasePool}
+          releasing={releasingPool}
+        />
+      )}
 
       {selectedPod && (
         <div className="card mt-20">

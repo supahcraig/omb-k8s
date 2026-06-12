@@ -54,7 +54,8 @@ _routers_to_mount = [
     ("routers.prometheus", "/api/prometheus", ["prometheus"]),
     ("routers.cluster",   "/api/cluster",    ["cluster"]),
     ("routers.grafana",   "/api/grafana",    ["grafana"]),
-    ("routers.drivers",   "/api/drivers",    ["drivers"]),
+    ("routers.drivers",       "/api/drivers",       ["drivers"]),
+    ("routers.worker_pools",  "/api/worker-pools",  ["worker-pools"]),
 ]
 
 for module_path, prefix, tags in _routers_to_mount:

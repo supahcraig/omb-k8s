@@ -300,6 +300,70 @@ function PrometheusTab({ initial, onChange }) {
   )
 }
 
+// ── Benchmark Behavior Tab ────────────────────────────────────────────────────
+
+const RETENTION_OPTIONS = [
+  { value: 15,  label: '15 minutes' },
+  { value: 30,  label: '30 minutes (default)' },
+  { value: 60,  label: '1 hour' },
+  { value: 0,   label: 'Manual only' },
+]
+
+function BenchmarkBehaviorTab({ initial, onChange }) {
+  const [retention, setRetention] = useState(
+    initial?.concurrent_pool_retention_minutes ?? 30
+  )
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState(null)
+
+  async function handleSave() {
+    setSaving(true)
+    setSaveMsg(null)
+    try {
+      await onChange({ concurrent_pool_retention_minutes: retention })
+      setSaveMsg({ type: 'success', text: 'Benchmark behavior settings saved.' })
+    } catch (e) {
+      setSaveMsg({ type: 'error', text: e.message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="form-group">
+        <label className="form-label">Concurrent pool warm retention</label>
+        <select
+          className="form-select"
+          value={retention}
+          onChange={e => setRetention(Number(e.target.value))}
+        >
+          {RETENTION_OPTIONS.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        <span className="form-hint">
+          How long concurrent worker pools stay provisioned after a run completes.
+          Longer values avoid EC2 re-provision delays between runs.
+          "Manual only" means pools stay alive until released from the Cluster page.
+        </span>
+      </div>
+
+      {saveMsg && (
+        <div className={`alert alert-${saveMsg.type === 'success' ? 'success' : 'error'} mt-16`}>
+          {saveMsg.text}
+        </div>
+      )}
+
+      <div className="mt-20">
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? <><span className="spinner" /> Saving…</> : 'Save'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Settings Page ────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -333,6 +397,15 @@ export default function SettingsPage() {
     reloadSettings()
   }
 
+  async function saveBehavior(behaviorConfig) {
+    const updated = await updateSettings({
+      cluster: settings?.cluster ?? null,
+      prometheus: settings?.prometheus ?? null,
+      benchmark_behavior: behaviorConfig,
+    })
+    setSettings(updated)
+  }
+
   if (loading) return <div className="text-muted mt-20">Loading settings…</div>
   if (loadError) return <div className="alert alert-error">Failed to load settings: {loadError}</div>
 
@@ -357,6 +430,12 @@ export default function SettingsPage() {
             >
               Prometheus
             </button>
+            <button
+              className={`tab${activeTab === 'behavior' ? ' active' : ''}`}
+              onClick={() => setActiveTab('behavior')}
+            >
+              Benchmark Behavior
+            </button>
           </div>
 
           {activeTab === 'cluster' && (
@@ -370,6 +449,13 @@ export default function SettingsPage() {
             <PrometheusTab
               initial={settings?.prometheus}
               onChange={savePrometheus}
+            />
+          )}
+
+          {activeTab === 'behavior' && (
+            <BenchmarkBehaviorTab
+              initial={settings?.benchmark_behavior}
+              onChange={saveBehavior}
             />
           )}
         </div>

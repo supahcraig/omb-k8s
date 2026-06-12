@@ -33,6 +33,7 @@ class Run(Base):
     sweep_id = Column(Integer, nullable=True)  # not FK-constrained intentionally
     sweep_params = Column(Text, nullable=True)  # stored as JSON text
     error_message = Column(Text, nullable=True)
+    worker_pool_id = Column(String, nullable=True)  # FK to worker_pools.id; null = default pool
 
     metrics = relationship(
         "Metrics",
@@ -153,6 +154,20 @@ class Driver(Base):
     cloned_from_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WorkerPool(Base):
+    __tablename__ = "worker_pools"
+
+    id = Column(String, primary_key=True)
+    statefulset_name = Column(String, nullable=False)
+    service_name = Column(String, nullable=False)
+    replicas = Column(Integer, nullable=False, default=0)
+    status = Column(String, nullable=False, default="ready")
+    # "provisioning" | "ready" | "in_use" | "tearing_down" | "deleted"
+    claimed_by_run_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    released_at = Column(DateTime, nullable=True)
 
 
 class Setting(Base):

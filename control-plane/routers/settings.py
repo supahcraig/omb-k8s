@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings as app_settings
 from database import get_db
 from models import Setting
-from schemas import ClusterConfig, PrometheusConfig, SettingsOut
+from schemas import BenchmarkBehaviorConfig, ClusterConfig, PrometheusConfig, SettingsOut
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,7 @@ router = APIRouter()
 
 CLUSTER_KEY = "cluster"
 PROMETHEUS_KEY = "prometheus"
+BENCHMARK_BEHAVIOR_KEY = "benchmark_behavior"
 
 _CLUSTER_PASSWORD_FIELDS = ("sasl_password",)
 
@@ -216,10 +217,18 @@ async def sync_scrape_secret_from_db(db: AsyncSession) -> None:
 async def get_settings(db: AsyncSession = Depends(get_db)) -> SettingsOut:
     cluster_stored = await _load_setting(db, CLUSTER_KEY)
     prometheus_stored = await _load_setting(db, PROMETHEUS_KEY)
+    behavior_stored = await _load_setting(db, BENCHMARK_BEHAVIOR_KEY)
+
+    behavior_out = None
+    if behavior_stored is not None:
+        behavior_out = BenchmarkBehaviorConfig(**behavior_stored)
+    else:
+        behavior_out = BenchmarkBehaviorConfig()  # return defaults
 
     return SettingsOut(
         cluster=_build_cluster_out(cluster_stored),
         prometheus=_build_prometheus_out(prometheus_stored),
+        benchmark_behavior=behavior_out,
     )
 
 
@@ -236,6 +245,7 @@ async def update_settings(
     cluster_stored = await _load_setting(db, CLUSTER_KEY)
     prometheus_stored = await _load_setting(db, PROMETHEUS_KEY)
 
+    prometheus_to_save = None
     try:
         if body.cluster is not None:
             cluster_dict = body.cluster.model_dump()
@@ -246,21 +256,28 @@ async def update_settings(
             prometheus_to_save = _prometheus_to_storage(body.prometheus, prometheus_stored)
             await _store_setting(db, PROMETHEUS_KEY, prometheus_to_save)
 
+        if body.benchmark_behavior is not None:
+            await _store_setting(db, BENCHMARK_BEHAVIOR_KEY, body.benchmark_behavior.model_dump())
+
         await db.commit()
     except Exception:
         await db.rollback()
         raise
 
-    if body.prometheus is not None:
+    if prometheus_to_save is not None:
         await _sync_scrape_secret(prometheus_to_save)
 
     # Re-read from DB to build the canonical response.
     cluster_stored = await _load_setting(db, CLUSTER_KEY)
     prometheus_stored = await _load_setting(db, PROMETHEUS_KEY)
+    behavior_stored = await _load_setting(db, BENCHMARK_BEHAVIOR_KEY)
+
+    behavior_out = BenchmarkBehaviorConfig(**(behavior_stored or {}))
 
     return SettingsOut(
         cluster=_build_cluster_out(cluster_stored),
         prometheus=_build_prometheus_out(prometheus_stored),
+        benchmark_behavior=behavior_out,
     )
 
 

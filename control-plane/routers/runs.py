@@ -20,6 +20,7 @@ from services.k8s_resources import read_worker_resources
 from services.omb_runner import runner
 from services.prometheus_collector import collect_prometheus, probe_broker_prometheus
 from services.result_parser import parse_result_from_file, parse_result_from_logs
+from services.worker_pool_manager import DEFAULT_POOL_ID, schedule_teardown
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,78 @@ async def create_run(
     )
     run = result.scalar_one()
     return RunOut.model_validate(run)
+
+
+@router.get("/timeline")
+async def get_timeline(db: AsyncSession = Depends(get_db)):
+    """
+    Return all runs with timing columns for the Gantt chart.
+    Ordered by started_at ascending so bars render chronologically.
+    """
+    result = await db.execute(
+        select(Run).order_by(Run.started_at.asc())
+    )
+    runs = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "status": r.status,
+            "started_at": r.started_at,
+            "completed_at": r.completed_at,
+            "warmup_started_at": r.warmup_started_at,
+            "benchmark_started_at": r.benchmark_started_at,
+            "sweep_id": r.sweep_id,
+            "sweep_params": r.sweep_params,
+            "worker_pool_id": r.worker_pool_id,
+        }
+        for r in runs
+    ]
+
+
+@router.get("/{run_id}/concurrent")
+async def get_concurrent_runs(run_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Return runs whose started_at/completed_at overlap with this run's execution window.
+    Excludes the run itself and its own sweep siblings.
+    """
+    run = await db.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    if run.completed_at is None:
+        # Still running — overlap = started before now AND (still running OR ended after our start)
+        stmt = select(Run).where(
+            Run.id != run_id,
+            Run.started_at < datetime.utcnow(),
+            (Run.completed_at == None) | (Run.completed_at > run.started_at),
+        )
+    else:
+        stmt = select(Run).where(
+            Run.id != run_id,
+            Run.started_at < run.completed_at,
+            (Run.completed_at == None) | (Run.completed_at > run.started_at),
+        )
+
+    # Exclude sweep siblings (same sweep_id) — they're sequential, not concurrent.
+    if run.sweep_id is not None:
+        stmt = stmt.where((Run.sweep_id == None) | (Run.sweep_id != run.sweep_id))
+
+    result = await db.execute(stmt.order_by(Run.started_at.asc()))
+    overlapping = result.scalars().all()
+
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "status": r.status,
+            "started_at": r.started_at,
+            "completed_at": r.completed_at,
+            "workload_config": r.workload_config,
+            "sweep_id": r.sweep_id,
+        }
+        for r in overlapping
+    ]
 
 
 @router.get("/{run_id}", response_model=RunOut)
@@ -231,6 +304,20 @@ async def launch_run(
 # ---------------------------------------------------------------------------
 
 
+async def _get_pool_retention_minutes() -> int:
+    """Return the configured concurrent pool warm-retention in minutes (default 30)."""
+    try:
+        async with AsyncSessionLocal() as db:
+            row = await db.get(__import__("models").Setting, "benchmark_behavior")
+            if row:
+                import json as _json
+                data = _json.loads(row.value or "{}")
+                return int(data.get("concurrent_pool_retention_minutes", 30))
+    except Exception:
+        pass
+    return 30
+
+
 async def _finish_run(run_id: int) -> None:
     """
     Poll until the k8s Job finishes, then parse results and update the DB.
@@ -304,6 +391,7 @@ async def _finish_run(run_id: int) -> None:
             )
 
         run.completed_at = datetime.utcnow()
+        pool_id = run.worker_pool_id or DEFAULT_POOL_ID
 
         try:
             await db.commit()
@@ -312,6 +400,10 @@ async def _finish_run(run_id: int) -> None:
             logger.exception("_finish_run: DB commit failed for run %d", run_id)
             return
 
-    logger.info(
-        "_finish_run: run %d finished — status=%s", run_id, run.status
-    )
+    logger.info("_finish_run: run %d finished — status=%s", run_id, run.status)
+
+    # Schedule pool teardown after the configured warm-retention period.
+    # Default pool is never torn down; concurrent pools stay warm so nodes
+    # don't need to be reprovisioned for the next run.
+    retention = await _get_pool_retention_minutes()
+    schedule_teardown(pool_id, settings.omb_namespace, retention)

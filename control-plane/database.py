@@ -50,11 +50,20 @@ async def init_db() -> None:
             "ALTER TABLE prometheus_samples ADD COLUMN worker_net_drop_per_pod TEXT",
             "ALTER TABLE runs ADD COLUMN warmup_started_at DATETIME",
             "ALTER TABLE runs ADD COLUMN benchmark_started_at DATETIME",
+            "ALTER TABLE runs ADD COLUMN worker_pool_id TEXT",
         ):
             try:
                 await conn.execute(text(col_ddl))
             except Exception:
                 pass  # column already exists
+
+        # Seed the default worker pool row (idempotent).
+        # worker_pools table is created by create_all above; this row represents
+        # the pre-existing omb-worker StatefulSet so existing runs are backward-compat.
+        await conn.execute(text(
+            "INSERT OR IGNORE INTO worker_pools (id, statefulset_name, service_name, replicas, status) "
+            "VALUES ('default', 'omb-worker', 'omb-worker', 0, 'ready')"
+        ))
 
 
 async def get_db():

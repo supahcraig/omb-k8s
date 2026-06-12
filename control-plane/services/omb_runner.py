@@ -22,8 +22,13 @@ from sqlalchemy import update
 
 from config import settings
 from database import AsyncSessionLocal
-from models import Run
+from models import Run, WorkerPool
 from services.k8s_client import load_incluster_once, run_sync
+from services.worker_pool_manager import (
+    build_workers_arg,
+    cancel_teardown,
+    claim_pool,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,16 +92,21 @@ class OmbRunner:
         configmap_name = f"omb-run-{run_id}"
         namespace = settings.omb_namespace
 
-        # 0. Query replica count and probe workers before touching anything.
+        # 0. Claim a worker pool (default or new concurrent pool) and probe workers.
         #    /stop-all is safe on healthy idle workers (200 OK) but returns 500
         #    on workers stuck from a prior cancelled run.
-        apps_api = k8s_client.AppsV1Api()
-        sts = await run_sync(
-            apps_api.read_namespaced_stateful_set, "omb-worker", namespace
+        pool: WorkerPool = await claim_pool(run_id, namespace)
+        logger.info(
+            "Run %d using pool %s (%d worker(s))", run_id, pool.id, pool.replicas
         )
-        replica_count: int = sts.spec.replicas or 1
-        logger.info("omb-worker StatefulSet has %d replica(s)", replica_count)
-        await self._probe_workers(replica_count, namespace)
+        await self._probe_workers(pool, namespace)
+
+        # Record pool association on the run so _finish_run can schedule teardown.
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                update(Run).where(Run.id == run_id).values(worker_pool_id=pool.id)
+            )
+            await db.commit()
 
         # 1. Create ConfigMap
         core_api = k8s_client.CoreV1Api()
@@ -113,13 +123,8 @@ class OmbRunner:
         await run_sync(core_api.create_namespaced_config_map, namespace, cm)
         logger.info("Created ConfigMap %s in namespace %s", configmap_name, namespace)
 
-        # 2. (replica_count already known from step 0)
-
-        # 3. Construct --workers argument
-        workers_arg = ",".join(
-            f"http://omb-worker-{i}.omb-worker.{namespace}.svc.cluster.local:{settings.omb_worker_port}"
-            for i in range(replica_count)
-        )
+        # 2. Construct --workers argument from pool
+        workers_arg = build_workers_arg(pool, namespace, settings.omb_worker_port)
 
         # Parse messageSize so the init container generates the right payload size
         import yaml as _yaml
@@ -238,19 +243,23 @@ class OmbRunner:
         self._active[run_id] = {
             "lines": [], "done": False, "success": False,
             "warmup_started_at": None, "benchmark_started_at": None,
+            "pool_id": pool.id,
         }
         asyncio.create_task(self._stream_logs(run_id, job_name))
 
-    async def _probe_workers(self, replica_count: int, namespace: str) -> None:
+    async def _probe_workers(self, pool: WorkerPool, namespace: str) -> None:
         """
-        POST /stop-all to every worker pod concurrently.
+        POST /stop-all to every worker pod in the given pool concurrently.
 
         A healthy idle worker returns 200. A worker stuck from a prior cancelled
         run returns 500. Raises RuntimeError listing every unhealthy worker so
         the caller can surface a clear message to the SE.
         """
         async def _probe_one(idx: int) -> Optional[str]:
-            url = f"http://omb-worker-{idx}.omb-worker.{namespace}.svc.cluster.local:{settings.omb_worker_port}/stop-all"
+            url = (
+                f"http://{pool.statefulset_name}-{idx}.{pool.service_name}"
+                f".{namespace}.svc.cluster.local:{settings.omb_worker_port}/stop-all"
+            )
             def _sync_post() -> int:
                 with httpx.Client(timeout=3.0) as client:
                     return client.post(url).status_code
@@ -258,18 +267,18 @@ class OmbRunner:
                 status = await asyncio.to_thread(_sync_post)
                 if status != 200:
                     return (
-                        f"omb-worker-{idx} is not ready (HTTP {status}) — "
+                        f"{pool.statefulset_name}-{idx} is not ready (HTTP {status}) — "
                         "it may be stuck from a previous cancelled run. "
                         "Go to the Cluster tab and restart it before running."
                     )
             except Exception as exc:
                 return (
-                    f"omb-worker-{idx} is unreachable ({exc}) — "
+                    f"{pool.statefulset_name}-{idx} is unreachable ({exc}) — "
                     "verify the worker pod is Running in the Cluster tab."
                 )
             return None
 
-        results = await asyncio.gather(*[_probe_one(i) for i in range(replica_count)])
+        results = await asyncio.gather(*[_probe_one(i) for i in range(pool.replicas)])
         errors = [r for r in results if r is not None]
         if errors:
             raise RuntimeError("; ".join(errors))

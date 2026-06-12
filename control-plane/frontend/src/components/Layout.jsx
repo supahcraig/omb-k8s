@@ -26,6 +26,9 @@ export default function Layout({ children }) {
           <NavLink to="/runs/new" className={({ isActive }) => 'nav-link-sub' + (isActive ? ' active' : '')}>
             + New Run
           </NavLink>
+          <NavLink to="/timeline" className={({ isActive }) => 'nav-link-sub' + (isActive ? ' active' : '')}>
+            Timeline
+          </NavLink>
           <NavLink to="/sweeps" end className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
             Sweeps
           </NavLink>

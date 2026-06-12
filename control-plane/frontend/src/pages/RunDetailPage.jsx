@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { getRun, cancelRun, getPrometheusSamples, getSweepRuns, getSweep, getWorkerResources, getRunResults } from '../api.js'
+import { getRun, cancelRun, getPrometheusSamples, getSweepRuns, getSweep, getWorkerResources, getRunResults, getConcurrentRuns } from '../api.js'
 import RunCharts from '../components/RunCharts.jsx'
 import FinalizedCharts from '../components/FinalizedCharts.jsx'
 import { parseLiveMetric, parseE2ELatency } from '../lib/ombLogParser.js'
@@ -126,6 +126,7 @@ export default function RunDetailPage() {
   const [sweep, setSweep] = useState(null)
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
   const [workerResources, setWorkerResources] = useState(null)
+  const [concurrentRuns, setConcurrentRuns] = useState([])
   const [hdrResults, setHdrResults] = useState(null)
   const [hdrLoading, setHdrLoading] = useState(false)
   const [logOpen, setLogOpen] = useState(true)
@@ -220,6 +221,13 @@ export default function RunDetailPage() {
   useEffect(() => {
     getWorkerResources().then(setWorkerResources).catch(() => {})
   }, [])
+
+  // Fetch concurrent runs (temporally overlapping) whenever this run's status changes.
+  // After completion the overlap set is final; during a run it may be incomplete.
+  useEffect(() => {
+    if (!run?.id) return
+    getConcurrentRuns(run.id).then(setConcurrentRuns).catch(() => {})
+  }, [run?.id, run?.status])
 
   // Open WebSocket once the run is no longer pending.
   // Pending runs haven't been picked up by _execute_sweep yet — opening a WS
@@ -540,6 +548,48 @@ export default function RunDetailPage() {
           <button className="btn btn-danger" onClick={handleCancel}>Cancel Run</button>
         )}
       </div>
+
+      {/* Concurrent runs panel */}
+      {concurrentRuns.length > 0 && (
+        <div style={{
+          background: 'rgba(251,191,36,0.07)',
+          border: '1px solid rgba(251,191,36,0.25)',
+          borderRadius: 6,
+          padding: '10px 14px',
+          marginBottom: 12,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}>
+          <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', flexShrink: 0 }}>
+            Concurrent
+          </span>
+          {concurrentRuns.map(cr => (
+            <Link
+              key={cr.id}
+              to={`/runs/${cr.id}`}
+              style={{ textDecoration: 'none' }}
+            >
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '2px 8px',
+                borderRadius: 12,
+                fontSize: 12,
+                background: 'rgba(251,191,36,0.12)',
+                border: '1px solid rgba(251,191,36,0.3)',
+                color: '#e2e8f0',
+                cursor: 'pointer',
+              }}>
+                <span className={`badge badge-${cr.status}`} style={{ padding: '1px 5px', fontSize: 10 }}>{cr.status}</span>
+                {cr.name || `Run #${cr.id}`}
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Error banner */}
       {run.status === 'failed' && run.error_message && (

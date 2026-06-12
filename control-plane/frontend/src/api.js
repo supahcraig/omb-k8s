@@ -47,6 +47,12 @@ export const getRun = (id) => request('GET', `/runs/${id}`)
 export const createRun = (body) => request('POST', '/runs', body)
 export const cancelRun = (id) => request('DELETE', `/runs/${id}`)
 export const getRunResults = (runId) => request('GET', `/runs/${runId}/results`)
+export const getTimelineRuns = () => request('GET', '/runs/timeline')
+export const getConcurrentRuns = (runId) => request('GET', `/runs/${runId}/concurrent`)
+
+// Worker pools
+export const listWorkerPools = () => request('GET', '/worker-pools')
+export const releaseWorkerPool = (poolId) => request('POST', `/worker-pools/${encodeURIComponent(poolId)}/release`)
 
 // Sweeps
 export const listSweeps = () => request('GET', '/sweeps')
