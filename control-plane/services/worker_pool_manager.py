@@ -92,7 +92,27 @@ async def claim_pool(run_id: int, namespace: str) -> WorkerPool:
                 make_transient(pool)
                 return pool
 
-            # Concurrent run(s) active — create a new pool.
+            # Concurrent run(s) active — check for a warm ready pool before creating one.
+            result = await db.execute(
+                select(WorkerPool).where(
+                    WorkerPool.status == "ready",
+                    WorkerPool.id != DEFAULT_POOL_ID,
+                ).limit(1)
+            )
+            warm_pool = result.scalar_one_or_none()
+            if warm_pool is not None:
+                cancel_teardown(warm_pool.id)
+                warm_pool.status = "in_use"
+                warm_pool.claimed_by_run_id = run_id
+                warm_pool.released_at = None
+                warm_pool.replicas = replica_count
+                logger.info("Run %d claimed warm pool %s (%d workers)", run_id, warm_pool.id, replica_count)
+                from sqlalchemy.orm import make_transient
+                db.expunge(warm_pool)
+                make_transient(warm_pool)
+                return warm_pool
+
+            # No warm pool available — create a new one.
             pool_id = f"pool-{uuid.uuid4().hex[:8]}"
             sts_name = f"omb-worker-{pool_id}"
             svc_name = f"omb-worker-{pool_id}"
