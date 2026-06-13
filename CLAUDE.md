@@ -291,11 +291,14 @@ were either set to `ready` manually or predate the feature — their teardown wa
 never scheduled; release them manually from the Cluster page.
 
 **Pool teardown task registry.** `worker_pool_manager.py` maintains a module-level
-`dict[str, asyncio.Task]` mapping `pool_id → pending teardown task`. Control-plane
-pod restarts kill all in-flight asyncio tasks, leaving any `in_use` pool stuck.
-Manual fix: `UPDATE worker_pools SET status='ready', claimed_by_run_id=NULL WHERE
-status='in_use'` — then release via the Cluster page or let the next run reclaim
-them.
+`dict[str, asyncio.Task]` mapping `pool_id → pending teardown task`. On startup,
+`recover_pool_teardowns()` (called from the FastAPI lifespan) scans for `ready`
+non-default pools with a `warm_until` value and either releases them immediately
+(if `warm_until` is in the past) or reschedules the teardown for the remaining
+time. This recovers from control-plane pod restarts that killed in-flight tasks.
+Pools stuck as `in_use` after a restart (no `warm_until`) still require a manual
+fix: `UPDATE worker_pools SET status='ready', claimed_by_run_id=NULL WHERE
+status='in_use'` — then release via the Cluster page or let the next run reclaim.
 
 **`concurrent_pool_retention_minutes` in Settings → Benchmark Behavior.** Controls
 how long concurrent pools stay warm after a run completes (default 30 min). Set to

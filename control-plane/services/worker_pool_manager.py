@@ -256,6 +256,43 @@ async def release_pool_now(pool_id: str, namespace: str) -> None:
     logger.info("Pool %s fully released", pool_id)
 
 
+async def recover_pool_teardowns(namespace: str) -> None:
+    """
+    On startup, reschedule or immediately execute teardowns for warm pools whose
+    asyncio tasks were killed by a pod restart.
+
+    - ready pool with warm_until in the past  → release immediately
+    - ready pool with warm_until in the future → schedule for remaining seconds
+    - ready pool with no warm_until           → leave alone (manual-only retention)
+    """
+    now = datetime.utcnow()
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(WorkerPool).where(
+                WorkerPool.status == "ready",
+                WorkerPool.id != DEFAULT_POOL_ID,
+                WorkerPool.warm_until.is_not(None),
+            )
+        )
+        pools = result.scalars().all()
+
+    for pool in pools:
+        remaining = (pool.warm_until - now).total_seconds()
+        if remaining <= 0:
+            logger.info(
+                "Startup recovery: pool %s warm_until expired %.0fs ago — releasing now",
+                pool.id, -remaining,
+            )
+            asyncio.create_task(release_pool_now(pool.id, namespace))
+        else:
+            remaining_minutes = remaining / 60
+            logger.info(
+                "Startup recovery: rescheduling teardown for pool %s in %.1f min",
+                pool.id, remaining_minutes,
+            )
+            schedule_teardown(pool.id, namespace, int(remaining_minutes) or 1)
+
+
 def build_workers_arg(pool: WorkerPool, namespace: str, port: int) -> str:
     """Construct the --workers argument for the OMB driver Job."""
     return ",".join(

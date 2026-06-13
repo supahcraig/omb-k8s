@@ -29,6 +29,12 @@ async def lifespan(app: FastAPI):
             await sync_scrape_secret_from_db(db)
     except Exception:
         logger.warning("Startup scrape config sync failed — skipping", exc_info=True)
+    try:
+        from services.worker_pool_manager import recover_pool_teardowns
+        from config import settings as _settings
+        await recover_pool_teardowns(_settings.omb_namespace)
+    except Exception:
+        logger.warning("Startup pool teardown recovery failed — skipping", exc_info=True)
     yield
     logger.info("Shutting down.")
 
