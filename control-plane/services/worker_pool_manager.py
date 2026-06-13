@@ -256,41 +256,39 @@ async def release_pool_now(pool_id: str, namespace: str) -> None:
     logger.info("Pool %s fully released", pool_id)
 
 
-async def recover_pool_teardowns(namespace: str) -> None:
+async def pool_expiry_poller(namespace: str) -> None:
     """
-    On startup, reschedule or immediately execute teardowns for warm pools whose
-    asyncio tasks were killed by a pod restart.
+    Background loop: every 60 s, release any ready concurrent pool whose
+    warm_until has passed. This is the primary teardown mechanism — it is
+    immune to pod restarts because it re-evaluates the DB on every tick
+    rather than relying on a long asyncio.sleep().
 
-    - ready pool with warm_until in the past  → release immediately
-    - ready pool with warm_until in the future → schedule for remaining seconds
-    - ready pool with no warm_until           → leave alone (manual-only retention)
+    schedule_teardown() is kept as a fast-path hint but the poller is the
+    guarantee — even if the hint task is killed, the poller catches the pool
+    within 60 s of warm_until expiring.
     """
-    now = datetime.utcnow()
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(WorkerPool).where(
-                WorkerPool.status == "ready",
-                WorkerPool.id != DEFAULT_POOL_ID,
-                WorkerPool.warm_until.is_not(None),
-            )
-        )
-        pools = result.scalars().all()
-
-    for pool in pools:
-        remaining = (pool.warm_until - now).total_seconds()
-        if remaining <= 0:
-            logger.info(
-                "Startup recovery: pool %s warm_until expired %.0fs ago — releasing now",
-                pool.id, -remaining,
-            )
-            asyncio.create_task(release_pool_now(pool.id, namespace))
-        else:
-            remaining_minutes = remaining / 60
-            logger.info(
-                "Startup recovery: rescheduling teardown for pool %s in %.1f min",
-                pool.id, remaining_minutes,
-            )
-            schedule_teardown(pool.id, namespace, int(remaining_minutes) or 1)
+    while True:
+        await asyncio.sleep(60)
+        try:
+            now = datetime.utcnow()
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(WorkerPool).where(
+                        WorkerPool.status == "ready",
+                        WorkerPool.id != DEFAULT_POOL_ID,
+                        WorkerPool.warm_until.isnot(None),
+                        WorkerPool.warm_until <= now,
+                    )
+                )
+                expired = result.scalars().all()
+            for pool in expired:
+                logger.warning(
+                    "Pool expiry poller: pool %s warm_until expired — releasing",
+                    pool.id,
+                )
+                await release_pool_now(pool.id, namespace)
+        except Exception as exc:
+            logger.warning("Pool expiry poller error: %s", exc)
 
 
 def build_workers_arg(pool: WorkerPool, namespace: str, port: int) -> str:

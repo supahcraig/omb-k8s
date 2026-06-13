@@ -290,15 +290,16 @@ a live M:SS countdown in the Worker Pools table. Default pool never gets
 were either set to `ready` manually or predate the feature — their teardown was
 never scheduled; release them manually from the Cluster page.
 
-**Pool teardown task registry.** `worker_pool_manager.py` maintains a module-level
-`dict[str, asyncio.Task]` mapping `pool_id → pending teardown task`. On startup,
-`recover_pool_teardowns()` (called from the FastAPI lifespan) scans for `ready`
-non-default pools with a `warm_until` value and either releases them immediately
-(if `warm_until` is in the past) or reschedules the teardown for the remaining
-time. This recovers from control-plane pod restarts that killed in-flight tasks.
-Pools stuck as `in_use` after a restart (no `warm_until`) still require a manual
-fix: `UPDATE worker_pools SET status='ready', claimed_by_run_id=NULL WHERE
-status='in_use'` — then release via the Cluster page or let the next run reclaim.
+**Pool teardown uses a 60-second background poller, not long-sleeping tasks.**
+`pool_expiry_poller(namespace)` runs as an `asyncio.create_task` from the FastAPI
+lifespan. Every 60 s it queries for `ready` non-default pools where
+`warm_until <= NOW()` and calls `release_pool_now` on each. This is immune to pod
+restarts — it re-evaluates the DB on every tick rather than relying on a
+multi-hour `asyncio.sleep`. `schedule_teardown` is kept as a fast-path hint
+(schedules a short-sleep task to tear down sooner) but the poller is the
+guarantee. Pools stuck as `in_use` after a restart (no `warm_until`) still
+require a manual fix: `UPDATE worker_pools SET status='ready',
+claimed_by_run_id=NULL WHERE status='in_use'`.
 
 **`concurrent_pool_retention_minutes` in Settings → Benchmark Behavior.** Controls
 how long concurrent pools stay warm after a run completes (default 30 min). Set to

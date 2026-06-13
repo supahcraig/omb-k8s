@@ -3,6 +3,11 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:%(name)s:%(message)s",
+)
+
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -29,13 +34,13 @@ async def lifespan(app: FastAPI):
             await sync_scrape_secret_from_db(db)
     except Exception:
         logger.warning("Startup scrape config sync failed — skipping", exc_info=True)
-    try:
-        from services.worker_pool_manager import recover_pool_teardowns
-        from config import settings as _settings
-        await recover_pool_teardowns(_settings.omb_namespace)
-    except Exception:
-        logger.warning("Startup pool teardown recovery failed — skipping", exc_info=True)
+    import asyncio as _asyncio
+    from services.worker_pool_manager import pool_expiry_poller
+    from config import settings as _settings
+    _poller = _asyncio.create_task(pool_expiry_poller(_settings.omb_namespace))
+    logger.info("Pool expiry poller started.")
     yield
+    _poller.cancel()
     logger.info("Shutting down.")
 
 
