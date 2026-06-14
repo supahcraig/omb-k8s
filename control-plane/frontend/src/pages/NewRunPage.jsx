@@ -153,7 +153,7 @@ function AxisPanel({ axes, fields, color, title, onUpdate, onRemove, onAdd }) {
 export default function NewRunPage() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { workersReady, status } = useWorker()
+  const { pools } = useWorker()
   const { hasClusterConfig } = useSettings()
 
   const fromWorkloadLibrary    = !!location.state?.workloadContent
@@ -162,6 +162,7 @@ export default function NewRunPage() {
   const initialWorkloadContent = location.state?.workloadContent || ''
   const initialWorkloadName    = location.state?.workloadName || location.state?.driverName || ''
 
+  const [poolId, setPoolId]           = useState(null)
   const [name, setName]               = useState(initialWorkloadName ? `Run — ${initialWorkloadName}` : '')
   const [driverYaml, setDriverYaml]   = useState('')
   const [workloadYaml, setWorkloadYaml] = useState(initialWorkloadContent)
@@ -202,6 +203,12 @@ export default function NewRunPage() {
       })
       .catch(() => setLastRun(false))
   }, [])
+
+  // Auto-select the pool if exactly one ready pool exists.
+  useEffect(() => {
+    const ready = pools.filter(p => p.status === 'ready')
+    if (ready.length === 1) setPoolId(prev => prev ?? ready[0].id)
+  }, [pools])
 
   const initialDriverContent = fromDriverLibrary
     ? location.state.driverContent
@@ -261,11 +268,12 @@ export default function NewRunPage() {
     ? [...workloadAxes, ...driverAxes].reduce((acc, { values }) => acc * (values.length || 1), 1)
     : 1
 
-  const notReady  = !workersReady
-  const noCluster = !hasClusterConfig
-  const blockMessage = status
-    ? `Waiting for workers: ${status.ready}/${status.desired} ready. Please wait before starting a run.`
-    : 'Worker status unknown. Please wait…'
+  const readyPools = pools.filter(p => p.status === 'ready')
+  const notReady   = !poolId
+  const noCluster  = !hasClusterConfig
+  const blockMessage = readyPools.length === 0
+    ? 'No worker pools are available. Create one on the Cluster page before launching a run.'
+    : 'Select a worker pool below to launch a run.'
 
   function applyFromLibrary(content, entryName) {
     const hasContent = drawerType === 'driver' ? driverYaml.trim() : workloadYaml.trim()
@@ -314,6 +322,7 @@ export default function NewRunPage() {
           cooldown_seconds:    Number(cooldown),
           workload_parameter_axes,
           driver_parameter_axes,
+          pool_id:             poolId,
         })
         const runs = await getSweepRuns(sweep.id)
         navigate(runs.length > 0 ? `/runs/${runs[0].id}` : `/sweeps/${sweep.id}`)
@@ -322,6 +331,7 @@ export default function NewRunPage() {
           name: name.trim() || null,
           driver_content:   driverYaml,
           workload_content: workloadYaml,
+          pool_id:          poolId,
         })
         navigate(`/runs/${run.id}`)
       }
@@ -349,7 +359,32 @@ export default function NewRunPage() {
           </button>
         </div>
         <div className="card-body">
-          {notReady && status && <div className="alert alert-warning mb-16">{blockMessage}</div>}
+          {notReady && <div className="alert alert-warning mb-16">{blockMessage}</div>}
+          {/* Pool selector */}
+          <div className="form-group mb-16">
+            <label className="form-label">Worker Pool <span style={{ color: '#ef4444' }}>*</span></label>
+            {pools.length === 0 ? (
+              <div className="text-muted text-small">Loading pools…</div>
+            ) : (
+              <select
+                className="form-select"
+                value={poolId || ''}
+                onChange={e => setPoolId(e.target.value || null)}
+              >
+                <option value="">— select a pool —</option>
+                {pools.filter(p => p.status !== 'deleted').map(p => (
+                  <option
+                    key={p.id}
+                    value={p.id}
+                    disabled={p.status !== 'ready'}
+                  >
+                    {p.name} — {p.replicas} worker{p.replicas !== 1 ? 's' : ''}
+                    {p.status !== 'ready' ? ` (${p.status})` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
           {noCluster && (
             <div className="alert alert-warning mb-16">
               Configure cluster settings before launching a run.{' '}

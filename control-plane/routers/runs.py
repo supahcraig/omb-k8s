@@ -3,24 +3,24 @@ Runs router — create, list, retrieve, and cancel benchmark runs.
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from config import settings
 from database import AsyncSessionLocal, get_db
-from models import Metrics, Run, Sweep, WorkerPool
+from models import Metrics, Run, Sweep
 from schemas import RunListItem, RunOut, RunStatus
 from services.k8s_resources import read_worker_resources
 from services.omb_runner import runner
 from services.prometheus_collector import collect_prometheus, probe_broker_prometheus
 from services.result_parser import parse_result_from_file, parse_result_from_logs
-from services.worker_pool_manager import DEFAULT_POOL_ID, schedule_teardown
+from services.worker_pool_manager import claim_pool, release_pool
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ class RunCreate(BaseModel):
     name: Optional[str] = None
     driver_content: str
     workload_content: str
+    pool_id: str
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +96,7 @@ async def create_run(
     await db.commit()
     await db.refresh(run)
 
-    asyncio.create_task(_bg_launch(run.id, body.driver_content, body.workload_content))
+    asyncio.create_task(_bg_launch(run.id, body.driver_content, body.workload_content, body.pool_id))
 
     result = await db.execute(
         select(Run).options(selectinload(Run.metrics)).where(Run.id == run.id)
@@ -104,10 +105,10 @@ async def create_run(
     return RunOut.model_validate(run)
 
 
-async def _bg_launch(run_id: int, driver_content: str, workload_content: str) -> None:
+async def _bg_launch(run_id: int, driver_content: str, workload_content: str, pool_id: str) -> None:
     """Background wrapper for launch_run — marks run failed on any exception."""
     try:
-        await launch_run(run_id, driver_content, workload_content)
+        await launch_run(run_id, driver_content, workload_content, pool_id)
     except Exception as exc:
         logger.error("Failed to start k8s Job for run %d: %s", run_id, exc)
         async with AsyncSessionLocal() as fail_db:
@@ -270,11 +271,13 @@ async def launch_run(
     run_id: int,
     driver_content: str,
     workload_content: str,
+    pool_id: str,
     *,
     await_finish: bool = False,
 ) -> None:
     """
-    Start a k8s Job, kick off the Prometheus collector, and handle completion.
+    Claim the specified pool, start a k8s Job, kick off the Prometheus collector,
+    and handle completion.
 
     await_finish=False (default): _finish_run runs as a background task so the
     caller returns immediately. Used by single runs via create_run.
@@ -282,10 +285,11 @@ async def launch_run(
     await_finish=True: _finish_run is awaited inline so the caller blocks until
     the run completes. Used by _execute_sweep to enforce sequential execution.
 
-    Raises on runner.start() failure — callers mark the run failed and surface
-    the error as appropriate for their context (HTTP 503 vs sweep continue).
+    Raises on claim_pool or runner.start() failure — callers mark the run failed
+    and surface the error as appropriate (HTTP 503 vs sweep continue).
     """
-    pool = await runner.start(run_id, driver_content, workload_content)
+    pool = await claim_pool(pool_id, run_id)
+    await runner.start(run_id, driver_content, workload_content, pool)
     prom_url = (
         f"http://omb-kube-prometheus-stack-prometheus"
         f".{settings.omb_namespace}.svc.cluster.local:9090"
@@ -294,7 +298,7 @@ async def launch_run(
     asyncio.create_task(
         collect_prometheus(
             run_id, settings.omb_namespace, prom_url, cpu_request_cores,
-            statefulset_name=pool.statefulset_name if pool else None,
+            statefulset_name=pool.statefulset_name,
         )
     )
 
@@ -311,20 +315,6 @@ async def launch_run(
 # ---------------------------------------------------------------------------
 # Background task
 # ---------------------------------------------------------------------------
-
-
-async def _get_pool_retention_minutes() -> int:
-    """Return the configured concurrent pool warm-retention in minutes (default 30)."""
-    try:
-        async with AsyncSessionLocal() as db:
-            row = await db.get(__import__("models").Setting, "benchmark_behavior")
-            if row:
-                import json as _json
-                data = _json.loads(row.value or "{}")
-                return int(data.get("concurrent_pool_retention_minutes", 30))
-    except Exception:
-        pass
-    return 30
 
 
 async def _finish_run(run_id: int) -> None:
@@ -400,7 +390,7 @@ async def _finish_run(run_id: int) -> None:
             )
 
         run.completed_at = datetime.utcnow()
-        pool_id = run.worker_pool_id or DEFAULT_POOL_ID
+        pool_id = run.worker_pool_id
 
         try:
             await db.commit()
@@ -411,22 +401,6 @@ async def _finish_run(run_id: int) -> None:
 
     logger.info("_finish_run: run %d finished — status=%s", run_id, run.status)
 
-    # Release pool claim so a new run can reclaim it before the teardown fires.
-    retention = await _get_pool_retention_minutes()
-    warm_until = (
-        datetime.utcnow() + timedelta(minutes=retention)
-        if pool_id != DEFAULT_POOL_ID and retention > 0
-        else None
-    )
-    async with AsyncSessionLocal() as pool_db:
-        await pool_db.execute(
-            update(WorkerPool)
-            .where(WorkerPool.id == pool_id)
-            .values(status="ready", claimed_by_run_id=None, warm_until=warm_until)
-        )
-        await pool_db.commit()
-
-    # Schedule pool teardown after the configured warm-retention period.
-    # Default pool is never torn down; concurrent pools stay warm so nodes
-    # don't need to be reprovisioned for the next run.
-    schedule_teardown(pool_id, settings.omb_namespace, retention)
+    # Release the pool back to ready so another run can claim it.
+    if pool_id:
+        await release_pool(pool_id)

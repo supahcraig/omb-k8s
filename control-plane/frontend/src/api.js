@@ -52,6 +52,8 @@ export const getConcurrentRuns = (runId) => request('GET', `/runs/${runId}/concu
 
 // Worker pools
 export const listWorkerPools = () => request('GET', '/worker-pools')
+export const createWorkerPool = (name, replicas) => request('POST', '/worker-pools', { name, replicas })
+export const scaleWorkerPool = (poolId, replicas) => request('PATCH', `/worker-pools/${encodeURIComponent(poolId)}/scale`, { replicas })
 export const releaseWorkerPool = (poolId) => request('POST', `/worker-pools/${encodeURIComponent(poolId)}/release`)
 
 // Sweeps

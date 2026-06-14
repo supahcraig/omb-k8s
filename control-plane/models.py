@@ -160,6 +160,7 @@ class WorkerPool(Base):
     __tablename__ = "worker_pools"
 
     id = Column(String, primary_key=True)
+    name = Column(String, nullable=True)           # SE-provided display name
     statefulset_name = Column(String, nullable=False)
     service_name = Column(String, nullable=False)
     replicas = Column(Integer, nullable=False, default=0)
@@ -168,7 +169,6 @@ class WorkerPool(Base):
     claimed_by_run_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     released_at = Column(DateTime, nullable=True)
-    warm_until = Column(DateTime, nullable=True)  # when the warm-retention period expires
 
 
 class Setting(Base):

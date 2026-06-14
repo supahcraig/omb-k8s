@@ -24,11 +24,7 @@ from config import settings
 from database import AsyncSessionLocal
 from models import Run, WorkerPool
 from services.k8s_client import load_incluster_once, run_sync
-from services.worker_pool_manager import (
-    build_workers_arg,
-    cancel_teardown,
-    claim_pool,
-)
+from services.worker_pool_manager import build_workers_arg
 
 logger = logging.getLogger(__name__)
 
@@ -71,15 +67,16 @@ class OmbRunner:
         run_id: int,
         driver_content: str,
         workload_content: str,
+        pool: WorkerPool,
         worker_image: Optional[str] = None,
     ) -> None:
         """
         Launch a benchmark run as a k8s Job.
 
         Steps:
-          1. Create ConfigMap omb-run-{run_id} with driver.yaml + workload.yaml
-          2. Query StatefulSet omb-worker for current replica count
-          3. Build --workers argument from replica count
+          1. Probe workers in the claimed pool
+          2. Create ConfigMap omb-run-{run_id} with driver.yaml + workload.yaml
+          3. Build --workers argument from pool
           4. Create k8s Job mounting the ConfigMap
           5. Initialise state and start background log-streaming task
         """
@@ -92,13 +89,9 @@ class OmbRunner:
         configmap_name = f"omb-run-{run_id}"
         namespace = settings.omb_namespace
 
-        # 0. Claim a worker pool (default or new concurrent pool) and probe workers.
-        #    /stop-all is safe on healthy idle workers (200 OK) but returns 500
-        #    on workers stuck from a prior cancelled run.
-        pool: WorkerPool = await claim_pool(run_id, namespace)
-        logger.info(
-            "Run %d using pool %s (%d worker(s))", run_id, pool.id, pool.replicas
-        )
+        # 0. Probe workers — /stop-all returns 200 on a healthy idle worker and
+        #    500 on a worker stuck from a prior cancelled run.
+        logger.info("Run %d using pool %s (%d worker(s))", run_id, pool.id, pool.replicas)
         await self._probe_workers(pool, namespace)
 
         # Pool claimed and workers healthy — transition run to "running" and record pool.

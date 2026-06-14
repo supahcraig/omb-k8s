@@ -112,6 +112,7 @@ class SweepCreate(BaseModel):
     cooldown_seconds: int = 60
     workload_content: str
     driver_base_content: str
+    pool_id: str
 
     @property
     def effective_workload_axes(self) -> Dict[str, Any]:

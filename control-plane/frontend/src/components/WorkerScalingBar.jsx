@@ -1,65 +1,67 @@
-import { useState } from 'react'
 import { useWorker } from '../context/WorkerContext.jsx'
 
+const STATUS_DOT = {
+  ready:        { color: '#4ade80', title: 'Ready' },
+  in_use:       { color: '#60a5fa', title: 'In use' },
+  provisioning: { color: '#f59e0b', title: 'Provisioning' },
+  tearing_down: { color: '#f59e0b', title: 'Tearing down' },
+  deleted:      { color: '#6b7280', title: 'Deleted' },
+}
+
 export default function WorkerScalingBar() {
-  const { status, error, desired, setDesired, scale, ready, desiredFromServer } = useWorker()
-  const [scaling, setScaling] = useState(false)
-  const [scaleError, setScaleError] = useState(null)
-
-  const isReady = status !== null && status.ready === status.desired && status.desired > 0
-
-  async function handleScale() {
-    if (desired < 1 || desired > 20) return
-    setScaling(true)
-    setScaleError(null)
-    try {
-      await scale(desired)
-    } catch (e) {
-      setScaleError(e.message)
-    } finally {
-      setScaling(false)
-    }
-  }
-
-  let readinessLabel = '—'
-  let readinessClass = 'loading'
+  const { pools, error } = useWorker()
 
   if (error) {
-    readinessLabel = 'unavailable'
-    readinessClass = 'not-ready'
-  } else if (status !== null) {
-    readinessLabel = `${status.ready}/${status.desired} ready`
-    readinessClass = isReady ? 'ready' : 'not-ready'
+    return (
+      <div className="worker-bar">
+        <span className="worker-label" style={{ color: '#f87171' }}>Pools unavailable</span>
+      </div>
+    )
+  }
+
+  if (!pools.length) {
+    return (
+      <div className="worker-bar">
+        <span className="worker-label" style={{ color: 'var(--color-text-muted)' }}>No worker pools</span>
+      </div>
+    )
   }
 
   return (
-    <div className="worker-bar">
-      <span className="worker-label">Workers</span>
-      <span className={`worker-readiness ${readinessClass}`}>{readinessLabel}</span>
-      <div className="worker-controls">
-        <input
-          type="number"
-          className="worker-spinner-input"
-          value={desired}
-          min={1}
-          max={20}
-          onChange={e => setDesired(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-          title="Desired worker count (1–20)"
-        />
-        <button
-          className="btn-nav"
-          onClick={handleScale}
-          disabled={scaling || desired === desiredFromServer}
-          title={desired === desiredFromServer ? 'Already at desired count' : `Scale to ${desired} workers`}
-        >
-          {scaling ? <span className="spinner" /> : 'Scale'}
-        </button>
-        {scaleError && (
-          <span style={{ color: '#f87171', fontSize: 12 }} title={scaleError}>
-            Scale failed
-          </span>
-        )}
-      </div>
+    <div className="worker-bar" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
+      {pools.map(pool => {
+        const dot = STATUS_DOT[pool.status] || STATUS_DOT.ready
+        return (
+          <div key={pool.id} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <span
+              style={{
+                flexShrink: 0,
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                background: dot.color,
+              }}
+              title={dot.title}
+            />
+            <span
+              style={{
+                fontSize: 12,
+                color: 'var(--color-text)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flex: 1,
+              }}
+              title={pool.name}
+            >
+              {pool.name}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', flexShrink: 0 }}>
+              {pool.replicas}w
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }

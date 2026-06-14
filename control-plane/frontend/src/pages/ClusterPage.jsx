@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { listPods, getPodLogs, restartPod, listWorkerPools, releaseWorkerPool } from '../api.js'
+import { listPods, getPodLogs, restartPod, listWorkerPools, createWorkerPool, scaleWorkerPool, releaseWorkerPool } from '../api.js'
 
 const GROUPS = [
   { label: 'Control Plane',  match: n => n.startsWith('omb-control-plane') },
@@ -54,100 +54,164 @@ const POOL_STATUS_BADGE = {
   deleted:      'failed',
 }
 
-function useNow(active) {
-  const [now, setNow] = useState(Date.now())
-  useEffect(() => {
-    if (!active) return
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [active])
-  return now
-}
+function WorkerPoolsTable({ pools, onRelease, releasing, onScale, scaling, onCreate, creating }) {
+  const [newName, setNewName]       = useState('')
+  const [newReplicas, setNewReplicas] = useState(2)
+  const [createError, setCreateError] = useState(null)
+  const [scaleValues, setScaleValues] = useState({})
 
-function fmtCountdown(warmUntilStr, nowMs) {
-  if (!warmUntilStr) return null
-  const until = new Date(warmUntilStr.endsWith('Z') ? warmUntilStr : warmUntilStr + 'Z').getTime()
-  const remaining = Math.max(0, Math.floor((until - nowMs) / 1000))
-  if (remaining === 0) return 'expiring…'
-  const m = Math.floor(remaining / 60)
-  const s = remaining % 60
-  return `${m}:${String(s).padStart(2, '0')}`
-}
+  async function handleCreate(e) {
+    e.preventDefault()
+    if (!newName.trim()) return
+    setCreateError(null)
+    try {
+      await onCreate(newName.trim(), newReplicas)
+      setNewName('')
+      setNewReplicas(2)
+    } catch (err) {
+      setCreateError(err.message)
+    }
+  }
 
-function WorkerPoolsTable({ pools, onRelease, releasing }) {
-  const hasWarm = pools.some(p => p.status === 'ready' && p.warm_until && p.id !== 'default')
-  const now = useNow(hasWarm)
-
-  if (!pools.length) return null
   return (
     <div className="card mt-20">
       <div className="card-header">
         <h3 style={{ margin: 0, fontSize: 14 }}>Worker Pools</h3>
       </div>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Pool ID</th>
-            <th>StatefulSet</th>
-            <th className="num">Replicas</th>
-            <th>Status</th>
-            <th>Claimed By</th>
-            <th>Warm For</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {pools.map(pool => {
-            const isDefault  = pool.id === 'default'
-            const canRelease = !isDefault && pool.status !== 'in_use' && pool.status !== 'deleted'
-            const countdown  = pool.status === 'ready' && pool.warm_until
-              ? fmtCountdown(pool.warm_until, now)
-              : null
-            return (
-              <tr key={pool.id}>
-                <td style={{ fontFamily: 'monospace', fontSize: 12 }}>
-                  {isDefault ? <span title="Pre-existing default worker StatefulSet">default</span> : pool.id}
-                </td>
-                <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{pool.statefulset_name}</td>
-                <td className="num">{pool.replicas}</td>
-                <td>
-                  <span className={`badge badge-${POOL_STATUS_BADGE[pool.status] || 'pending'}`}>
-                    {pool.status}
-                  </span>
-                </td>
-                <td className="text-muted text-small">
-                  {pool.claimed_by_run_id ? (
-                    <a href={`/runs/${pool.claimed_by_run_id}`} style={{ color: 'var(--color-accent)' }}>
-                      Run #{pool.claimed_by_run_id}
-                    </a>
-                  ) : '—'}
-                </td>
-                <td className="text-muted text-small" style={{ fontFamily: 'monospace', fontSize: 12 }}>
-                  {countdown
-                    ? <span style={{ color: countdown === 'expiring…' ? '#ef4444' : '#f59e0b' }}>{countdown}</span>
-                    : '—'}
-                </td>
-                <td style={{ textAlign: 'right', paddingRight: 8 }}>
-                  {!isDefault && pool.status !== 'deleted' && (
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => onRelease(pool.id)}
-                      disabled={!canRelease || releasing === pool.id}
-                      title={
-                        pool.status === 'in_use'
-                          ? 'Cannot release while a run is active'
-                          : 'Release pool and tear down StatefulSet'
-                      }
-                    >
-                      {releasing === pool.id ? '…' : 'Release'}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+
+      {/* Create form */}
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)' }}>
+        <form onSubmit={handleCreate} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="form-group" style={{ margin: 0, flex: '1 1 160px' }}>
+            <label className="form-label" style={{ fontSize: 11 }}>Pool name</label>
+            <input
+              className="form-input"
+              style={{ height: 30, fontSize: 13 }}
+              placeholder="e.g. high-throughput"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              disabled={creating}
+            />
+          </div>
+          <div className="form-group" style={{ margin: 0, flex: '0 0 80px' }}>
+            <label className="form-label" style={{ fontSize: 11 }}>Workers</label>
+            <input
+              type="number"
+              className="form-input"
+              style={{ height: 30, fontSize: 13 }}
+              min={1} max={20}
+              value={newReplicas}
+              onChange={e => setNewReplicas(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+              disabled={creating}
+            />
+          </div>
+          <button
+            type="submit"
+            className="btn btn-primary btn-sm"
+            style={{ height: 30, marginBottom: 1 }}
+            disabled={creating || !newName.trim()}
+          >
+            {creating ? '…' : 'Create Pool'}
+          </button>
+          {createError && <span style={{ color: '#f87171', fontSize: 12 }}>{createError}</span>}
+        </form>
+      </div>
+
+      {!pools.length ? (
+        <div className="text-muted text-small" style={{ padding: '12px 16px' }}>No pools yet.</div>
+      ) : (
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>StatefulSet</th>
+              <th className="num">Workers</th>
+              <th>Status</th>
+              <th>Claimed By</th>
+              <th>Scale to</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {pools.map(pool => {
+              const isDefault  = pool.id === 'default'
+              const canDelete  = !isDefault && pool.status !== 'in_use' && pool.status !== 'deleted'
+              const canScale   = pool.status !== 'in_use' && pool.status !== 'provisioning' && pool.status !== 'tearing_down'
+              const scaleVal   = scaleValues[pool.id] ?? pool.replicas
+              return (
+                <tr key={pool.id}>
+                  <td style={{ fontWeight: 500 }}>
+                    {pool.name}
+                    {isDefault && (
+                      <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginLeft: 6 }}>default</span>
+                    )}
+                  </td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{pool.statefulset_name}</td>
+                  <td className="num">{pool.replicas}</td>
+                  <td>
+                    <span className={`badge badge-${POOL_STATUS_BADGE[pool.status] || 'pending'}`}>
+                      {pool.status}
+                    </span>
+                  </td>
+                  <td className="text-muted text-small">
+                    {pool.claimed_by_run_id ? (
+                      <a href={`/runs/${pool.claimed_by_run_id}`} style={{ color: 'var(--color-accent)' }}>
+                        Run #{pool.claimed_by_run_id}
+                      </a>
+                    ) : '—'}
+                  </td>
+                  <td style={{ paddingTop: 4, paddingBottom: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <input
+                        type="number"
+                        min={1} max={20}
+                        value={scaleVal}
+                        onChange={e => setScaleValues(prev => ({
+                          ...prev,
+                          [pool.id]: Math.max(1, Math.min(20, Number(e.target.value) || 1)),
+                        }))}
+                        disabled={!canScale || scaling === pool.id}
+                        style={{
+                          width: 52, height: 26, fontSize: 13, textAlign: 'center',
+                          background: 'var(--color-surface)',
+                          color: 'var(--color-text)',
+                          border: '1px solid var(--color-border)',
+                          borderRadius: 4,
+                        }}
+                      />
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        style={{ height: 26 }}
+                        onClick={() => onScale(pool.id, scaleVal)}
+                        disabled={!canScale || scaling === pool.id || scaleVal === pool.replicas}
+                        title={!canScale ? `Cannot scale while ${pool.status}` : `Scale to ${scaleVal} workers`}
+                      >
+                        {scaling === pool.id ? '…' : 'Scale'}
+                      </button>
+                    </div>
+                  </td>
+                  <td style={{ textAlign: 'right', paddingRight: 8 }}>
+                    {!isDefault && pool.status !== 'deleted' && (
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => onRelease(pool.id)}
+                        disabled={!canDelete || releasing === pool.id}
+                        title={
+                          pool.status === 'in_use'
+                            ? 'Cannot delete while a run is active'
+                            : 'Delete pool and tear down StatefulSet'
+                        }
+                      >
+                        {releasing === pool.id ? '…' : 'Delete'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }
@@ -166,9 +230,11 @@ export default function ClusterPage() {
   const [logsError, setLogsError]           = useState(null)
   const logEndRef = useRef(null)
 
-  const [pools, setPools]           = useState([])
+  const [pools, setPools]             = useState([])
   const [poolsLoading, setPoolsLoading] = useState(false)
   const [releasingPool, setReleasingPool] = useState(null)
+  const [scalingPool, setScalingPool]   = useState(null)
+  const [creatingPool, setCreatingPool] = useState(false)
 
   async function fetchPools() {
     setPoolsLoading(true)
@@ -182,14 +248,36 @@ export default function ClusterPage() {
     }
   }
 
-  async function handleReleasePool(poolId) {
-    if (!confirm(`Release pool ${poolId}? This will delete its StatefulSet and Service immediately.`)) return
+  async function handleCreatePool(name, replicas) {
+    setCreatingPool(true)
+    try {
+      await createWorkerPool(name, replicas)
+      await fetchPools()
+    } finally {
+      setCreatingPool(false)
+    }
+  }
+
+  async function handleScalePool(poolId, replicas) {
+    setScalingPool(poolId)
+    try {
+      await scaleWorkerPool(poolId, replicas)
+      await fetchPools()
+    } catch (err) {
+      alert(`Failed to scale pool: ${err.message}`)
+    } finally {
+      setScalingPool(null)
+    }
+  }
+
+  async function handleReleasePool(poolId, name) {
+    if (!confirm(`Delete pool "${name}"? This will tear down its StatefulSet and Service immediately.`)) return
     setReleasingPool(poolId)
     try {
       await releaseWorkerPool(poolId)
       await fetchPools()
     } catch (err) {
-      alert(`Failed to release pool ${poolId}: ${err.message}`)
+      alert(`Failed to delete pool: ${err.message}`)
     } finally {
       setReleasingPool(null)
     }
@@ -354,11 +442,18 @@ export default function ClusterPage() {
         </table>
       </div>
 
-      {!poolsLoading && pools.length > 0 && (
+      {!poolsLoading && (
         <WorkerPoolsTable
           pools={pools}
-          onRelease={handleReleasePool}
+          onRelease={(id) => {
+            const pool = pools.find(p => p.id === id)
+            handleReleasePool(id, pool?.name || id)
+          }}
           releasing={releasingPool}
+          onScale={handleScalePool}
+          scaling={scalingPool}
+          onCreate={handleCreatePool}
+          creating={creatingPool}
         />
       )}
 

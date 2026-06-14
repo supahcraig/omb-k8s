@@ -34,13 +34,7 @@ async def lifespan(app: FastAPI):
             await sync_scrape_secret_from_db(db)
     except Exception:
         logger.warning("Startup scrape config sync failed — skipping", exc_info=True)
-    import asyncio as _asyncio
-    from services.worker_pool_manager import pool_expiry_poller
-    from config import settings as _settings
-    _poller = _asyncio.create_task(pool_expiry_poller(_settings.omb_namespace))
-    logger.info("Pool expiry poller started.")
     yield
-    _poller.cancel()
     logger.info("Shutting down.")
 
 
