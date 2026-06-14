@@ -178,7 +178,7 @@ function CreatePoolForm({ onCreate, creating }) {
   }
 
   return (
-    <div className="card mt-20">
+    <div className="card mt-20" style={{ maxWidth: 480 }}>
       <div className="card-header">
         <h3 style={{ margin: 0, fontSize: 14 }}>Create Worker Pool</h3>
       </div>

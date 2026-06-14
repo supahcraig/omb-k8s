@@ -361,13 +361,14 @@ export default function NewRunPage() {
         <div className="card-body">
           {notReady && <div className="alert alert-warning mb-16">{blockMessage}</div>}
           {/* Pool selector */}
-          <div className="form-group mb-16">
+          <div className="form-group mb-16" style={{ width: 'fit-content' }}>
             <label className="form-label">Worker Pool <span style={{ color: '#ef4444' }}>*</span></label>
             {pools.length === 0 ? (
               <div className="text-muted text-small">Loading pools…</div>
             ) : (
               <select
                 className="form-select"
+                style={{ width: 'fit-content' }}
                 value={poolId || ''}
                 onChange={e => setPoolId(e.target.value || null)}
               >
