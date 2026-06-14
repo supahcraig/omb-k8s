@@ -258,6 +258,7 @@ async def _create_statefulset(
         spec=k8s_client.V1StatefulSetSpec(
             replicas=replicas,
             service_name=svc_name,
+            pod_management_policy="Parallel",
             selector=k8s_client.V1LabelSelector(match_labels={"app": sts_name}),
             template=k8s_client.V1PodTemplateSpec(
                 metadata=k8s_client.V1ObjectMeta(labels={"app": sts_name}),

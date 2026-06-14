@@ -2,15 +2,16 @@
 Worker pools router — SE-controlled worker pool management.
 """
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
+from kubernetes import client as k8s_client
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from config import settings
 from database import AsyncSessionLocal
 from models import WorkerPool
+from services.k8s_client import load_incluster_once, run_sync
 from services.worker_pool_manager import create_pool, delete_pool, scale_pool
 
 logger = logging.getLogger(__name__)
@@ -27,18 +28,30 @@ class PoolScale(BaseModel):
     replicas: int
 
 
-def _pool_row(p: WorkerPool) -> dict:
+def _pool_row(p: WorkerPool, live_replicas: int | None = None) -> dict:
     return {
         "id": p.id,
         "name": p.name or p.id,
         "statefulset_name": p.statefulset_name,
         "service_name": p.service_name,
-        "replicas": p.replicas,
+        "replicas": live_replicas if live_replicas is not None else p.replicas,
         "status": p.status,
         "claimed_by_run_id": p.claimed_by_run_id,
         "created_at": p.created_at,
         "released_at": p.released_at,
     }
+
+
+async def _live_replicas(sts_name: str, namespace: str) -> int | None:
+    """Query the StatefulSet's current spec.replicas from k8s. Returns None on error."""
+    try:
+        load_incluster_once()
+        apps_api = k8s_client.AppsV1Api()
+        sts = await run_sync(apps_api.read_namespaced_stateful_set, sts_name, namespace)
+        return sts.spec.replicas or 0
+    except Exception as exc:
+        logger.debug("Could not read StatefulSet %s: %s", sts_name, exc)
+        return None
 
 
 @router.get("")
@@ -51,7 +64,16 @@ async def list_worker_pools():
             .order_by(WorkerPool.created_at.asc())
         )
         pools = result.scalars().all()
-        return [_pool_row(p) for p in pools]
+
+    # For the default pool the DB replicas column is always 0 (it's managed by
+    # Helm/kubectl, not our API), so query k8s for the live count.
+    rows = []
+    for p in pools:
+        live = None
+        if p.id == "default":
+            live = await _live_replicas(p.statefulset_name, settings.omb_namespace)
+        rows.append(_pool_row(p, live))
+    return rows
 
 
 @router.post("", status_code=201)
