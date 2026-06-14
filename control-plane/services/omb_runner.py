@@ -105,6 +105,21 @@ class OmbRunner:
             await db.commit()
 
         # 1. Create ConfigMap
+        # Inject run_id into the workload name so OMB generates unique topic names
+        # per run (topics are named "<workload.name>-0", "<workload.name>-1", etc.).
+        # Without this, concurrent runs using identical workload configs share the
+        # same topic names — the second run's driver init deletes and recreates the
+        # topic while the first run's producers are actively writing to it.
+        import yaml as _yaml
+        try:
+            _wl = _yaml.safe_load(workload_content) or {}
+            base_name = _wl.get("name", "run")
+            _wl["name"] = f"{base_name}-r{run_id}"
+            workload_content = _yaml.dump(_wl, default_flow_style=False)
+            message_size = int(_wl.get("messageSize", 1024))
+        except Exception:
+            message_size = 1024
+
         core_api = k8s_client.CoreV1Api()
         cm = k8s_client.V1ConfigMap(
             metadata=k8s_client.V1ObjectMeta(
@@ -121,14 +136,6 @@ class OmbRunner:
 
         # 2. Construct --workers argument from pool
         workers_arg = build_workers_arg(pool, namespace, settings.omb_worker_port)
-
-        # Parse messageSize so the init container generates the right payload size
-        import yaml as _yaml
-        try:
-            _wl = _yaml.safe_load(workload_content) or {}
-            message_size = int(_wl.get("messageSize", 1024))
-        except Exception:
-            message_size = 1024
 
         results_path = f"/data/results/run-{run_id}"
 
