@@ -111,6 +111,20 @@ async def claim_pool(pool_id: str, run_id: int) -> WorkerPool:
         )
         await db.commit()
 
+    # Default pool's DB replicas is always 0 (managed by Helm, not our API).
+    # Query k8s for the live spec.replicas so build_workers_arg generates the
+    # correct --workers list.
+    if pool_id == DEFAULT_POOL_ID:
+        load_incluster_once()
+        apps_api = k8s_client.AppsV1Api()
+        sts = await run_sync(
+            apps_api.read_namespaced_stateful_set,
+            sts_name,
+            app_settings.omb_namespace,
+        )
+        replicas = sts.spec.replicas or 0
+        logger.info("Default pool live replica count: %d", replicas)
+
     logger.info("Run %d claimed pool %s (%d worker(s))", run_id, pool_id, replicas)
     return WorkerPool(
         id=pool_id,
