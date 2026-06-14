@@ -105,6 +105,14 @@ class OmbRunner:
             await db.commit()
 
         # 1. Create ConfigMap
+        # Prepend a per-run topicNamePrefix to the driver YAML so each run's
+        # workers use a distinct Kafka topic prefix. Without this, every worker
+        # init deletes ALL topics matching the shared "test-topic" prefix,
+        # which destroys topics owned by concurrently running benchmarks.
+        # The patched OMB Kafka driver reads this field from the driver YAML;
+        # unpatched workers fall back to "test-topic" (same as before).
+        driver_content = f"topicNamePrefix: omb-r{run_id}\n" + driver_content
+
         core_api = k8s_client.CoreV1Api()
         cm = k8s_client.V1ConfigMap(
             metadata=k8s_client.V1ObjectMeta(
