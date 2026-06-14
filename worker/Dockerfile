@@ -16,22 +16,11 @@ WORKDIR /omb
 # YAML. Without this, all runs share the hardcoded prefix "test-topic" and
 # each new run's worker init deletes every topic matching that prefix —
 # including topics owned by concurrently running benchmarks.
-RUN python3 -c "
-config_path = 'driver-kafka/src/main/java/io/openmessaging/benchmark/driver/kafka/Config.java'
-content = open(config_path).read()
-content = content.replace(
-    'public short replicationFactor;',
-    'public String topicNamePrefix = \"test-topic\";\n\n    public short replicationFactor;',
-    1,
-)
-open(config_path, 'w').write(content)
-
-driver_path = 'driver-kafka/src/main/java/io/openmessaging/benchmark/driver/kafka/KafkaBenchmarkDriver.java'
-content = open(driver_path).read()
-content = content.replace('return \"test-topic\";', 'return config.topicNamePrefix;', 1)
-open(driver_path, 'w').write(content)
-print('OMB topic prefix patch applied')
-"
+RUN CONFIG_FILE="driver-kafka/src/main/java/io/openmessaging/benchmark/driver/kafka/Config.java" && \
+    DRIVER_FILE="driver-kafka/src/main/java/io/openmessaging/benchmark/driver/kafka/KafkaBenchmarkDriver.java" && \
+    sed -i 's/public short replicationFactor;/public String topicNamePrefix = "test-topic";\n\n    public short replicationFactor;/' "$CONFIG_FILE" && \
+    sed -i 's/return "test-topic";/return config.topicNamePrefix;/' "$DRIVER_FILE" && \
+    echo "OMB topic prefix patch applied"
 
 # Build benchmark-framework + driver-kafka (+ transitive deps via -am).
 # The package module assembles a tar.gz distribution.
