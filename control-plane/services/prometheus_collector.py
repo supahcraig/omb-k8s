@@ -74,7 +74,7 @@ async def _collect_sample(
     statefulset_name: str = "omb-worker",
 ) -> None:
     """Query Prometheus and write one PrometheusSample row."""
-    pod_regex = f"{statefulset_name}-\\d+"
+    pod_regex = f"{statefulset_name}-[0-9]+"
     worker_selector = f'namespace="{namespace}",pod=~"{pod_regex}",container="worker"'
 
     cpu_pct = await _query(client, prom_url,
