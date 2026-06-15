@@ -211,10 +211,13 @@ async def delete_run(run_id: int, db: AsyncSession = Depends(get_db)):
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
+    pool_id = run.worker_pool_id
     await runner.stop(run_id)
     run.status = RunStatus.cancelled.value
     run.completed_at = datetime.utcnow()
     await db.commit()
+    if pool_id:
+        await release_pool(pool_id)
 
 
 @router.get("/{run_id}/results")
@@ -340,6 +343,10 @@ async def _finish_run(run_id: int) -> None:
         run = await db.get(Run, run_id)
         if run is None:
             logger.warning("_finish_run: run %d not found in DB", run_id)
+            return
+
+        if run.status == RunStatus.cancelled.value:
+            logger.info("_finish_run: run %d was cancelled — pool already released", run_id)
             return
 
         lines = runner.get_lines(run_id)
