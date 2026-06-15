@@ -26,13 +26,7 @@ def load_incluster_once() -> None:
 
 
 async def run_sync(func, *args, **kwargs):
-    """Run a synchronous k8s API call in the default thread-pool executor.
-
-    Defaults _request_timeout to (5, 15) — 5s connect, 15s read — so that stale
-    TCP connections to the k8s API server fail fast rather than hanging the thread
-    pool indefinitely.  Callers can override by passing _request_timeout explicitly.
-    """
-    kwargs.setdefault("_request_timeout", (5.0, 15.0))
+    """Run a synchronous callable in the default thread-pool executor."""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
 

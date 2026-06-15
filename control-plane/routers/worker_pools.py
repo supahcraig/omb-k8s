@@ -47,7 +47,7 @@ async def _live_replicas(sts_name: str, namespace: str) -> int | None:
     try:
         load_incluster_once()
         apps_api = k8s_client.AppsV1Api()
-        sts = await run_sync(apps_api.read_namespaced_stateful_set, sts_name, namespace)
+        sts = await run_sync(apps_api.read_namespaced_stateful_set, sts_name, namespace, _request_timeout=(5.0, 15.0))
         return sts.spec.replicas or 0
     except Exception as exc:
         logger.debug("Could not read StatefulSet %s: %s", sts_name, exc)
