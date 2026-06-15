@@ -26,6 +26,9 @@ export default function Layout({ children }) {
           <NavLink to="/runs/new" className={({ isActive }) => 'nav-link-sub' + (isActive ? ' active' : '')}>
             + New Run
           </NavLink>
+          <NavLink to="/timeline" className={({ isActive }) => 'nav-link-sub' + (isActive ? ' active' : '')}>
+            Timeline
+          </NavLink>
           <NavLink to="/sweeps" end className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
             Sweeps
           </NavLink>
@@ -64,6 +67,9 @@ export default function Layout({ children }) {
         )}
 
         <div className="nav-bottom">
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-muted)', paddingBottom: 6 }}>
+            Worker Pools
+          </div>
           <WorkerScalingBar />
         </div>
       </nav>

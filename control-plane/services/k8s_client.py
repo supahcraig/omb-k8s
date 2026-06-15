@@ -27,7 +27,7 @@ def load_incluster_once() -> None:
 
 async def run_sync(func, *args, **kwargs):
     """Run a synchronous callable in the default thread-pool executor."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
 
 

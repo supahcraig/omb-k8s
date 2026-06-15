@@ -46,13 +46,13 @@ $(terraform output -raw kubeconfig_command)
 kubectl get nodes  # should show 4 nodes in Ready state (2 control-plane, 2 benchmark-workers)
 ```
 
-**4. Note the Cluster Autoscaler role ARN from outputs:**
+**4. Install the Helm chart using the pre-filled install command:**
 
 ```bash
-terraform output cluster_autoscaler_iam_role_arn
+terraform output -raw helm_install_command | bash
 ```
 
-Pass this to the Helm chart as `--set clusterAutoscaler.roleArn=<arn>`.
+This pre-fills all AWS-specific values — cluster name, region, Cluster Autoscaler role ARN, and your current IP for `controlPlane.allowedCIDRs`.
 
 **5. If using BYOC: complete the peering handshake**
 

@@ -50,7 +50,7 @@ async def list_pods():
     load_incluster_once()
     core_api = k8s_client.CoreV1Api()
     try:
-        pod_list = await run_sync(core_api.list_namespaced_pod, settings.omb_namespace)
+        pod_list = await run_sync(core_api.list_namespaced_pod, settings.omb_namespace, _request_timeout=(5.0, 15.0))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

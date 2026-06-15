@@ -12,10 +12,22 @@ RUN git clone --depth=1 https://github.com/redpanda-data/openmessaging-benchmark
 
 WORKDIR /omb
 
-# Build benchmark-framework + driver-kafka (+ transitive deps via -am).
+# Patch both Kafka and Redpanda drivers to make topicNamePrefix configurable
+# from the driver YAML. Without this, all runs share the hardcoded prefix
+# "test-topic" and each new run's worker init deletes every topic matching
+# that prefix — including topics owned by concurrently running benchmarks.
+RUN KAFKA_CONFIG="driver-kafka/src/main/java/io/openmessaging/benchmark/driver/kafka/Config.java" && \
+    KAFKA_DRIVER="driver-kafka/src/main/java/io/openmessaging/benchmark/driver/kafka/KafkaBenchmarkDriver.java" && \
+    RP_CONFIG="driver-redpanda/src/main/java/io/openmessaging/benchmark/driver/redpanda/Config.java" && \
+    RP_DRIVER="driver-redpanda/src/main/java/io/openmessaging/benchmark/driver/redpanda/RedpandaBenchmarkDriverBase.java" && \
+    sed -i 's/public short replicationFactor;/public String topicNamePrefix = "test-topic";\n\n    public short replicationFactor;/' "$KAFKA_CONFIG" "$RP_CONFIG" && \
+    sed -i 's/return "test-topic";/return config.topicNamePrefix;/' "$KAFKA_DRIVER" "$RP_DRIVER" && \
+    echo "OMB topic prefix patch applied"
+
+# Build benchmark-framework + both drivers + package (+ transitive deps via -am).
 # The package module assembles a tar.gz distribution.
 RUN mvn clean package -DskipTests \
-    -pl benchmark-framework,driver-kafka,package \
+    -pl benchmark-framework,driver-kafka,driver-redpanda,package \
     -am \
     --no-transfer-progress
 

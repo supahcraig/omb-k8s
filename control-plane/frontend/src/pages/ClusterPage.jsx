@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { listPods, getPodLogs, restartPod } from '../api.js'
+import { listPods, getPodLogs, restartPod, createWorkerPool, scaleWorkerPool, releaseWorkerPool } from '../api.js'
+import { useWorker } from '../context/WorkerContext.jsx'
 
 const GROUPS = [
   { label: 'Control Plane',  match: n => n.startsWith('omb-control-plane') },
@@ -46,6 +47,182 @@ function WorkerHealthDot({ healthy }) {
   )
 }
 
+const POOL_STATUS_BADGE = {
+  ready:        'completed',
+  in_use:       'running',
+  provisioning: 'pending',
+  tearing_down: 'pending',
+  deleted:      'failed',
+}
+
+function WorkerPoolsTable({ pools, onRelease, releasing, onScale, scaling }) {
+  const [scaleValues, setScaleValues] = useState({})
+
+  if (!pools.length) return null
+
+  return (
+    <div className="card mt-20">
+      <div className="card-header">
+        <h3 style={{ margin: 0, fontSize: 14 }}>Worker Pools</h3>
+      </div>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>StatefulSet</th>
+            <th className="num">Workers</th>
+            <th>Status</th>
+            <th>Claimed By</th>
+            <th>Scale to</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {pools.map(pool => {
+            const isDefault = pool.id === 'default'
+            const canDelete = !isDefault && pool.status !== 'in_use' && pool.status !== 'deleted'
+            const canScale  = pool.status !== 'in_use' && pool.status !== 'provisioning' && pool.status !== 'tearing_down'
+            const scaleVal  = scaleValues[pool.id] ?? pool.replicas
+            return (
+              <tr key={pool.id}>
+                <td style={{ fontWeight: 500 }}>
+                  {pool.name}
+                  {isDefault && (
+                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginLeft: 6 }}>default</span>
+                  )}
+                </td>
+                <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{pool.statefulset_name}</td>
+                <td className="num">{pool.replicas}</td>
+                <td>
+                  <span className={`badge badge-${POOL_STATUS_BADGE[pool.status] || 'pending'}`}>
+                    {pool.status}
+                  </span>
+                </td>
+                <td className="text-muted text-small">
+                  {pool.claimed_by_run_id ? (
+                    <a href={`/runs/${pool.claimed_by_run_id}`} style={{ color: 'var(--color-accent)' }}>
+                      Run #{pool.claimed_by_run_id}
+                    </a>
+                  ) : '—'}
+                </td>
+                <td style={{ paddingTop: 4, paddingBottom: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input
+                      type="number"
+                      min={1} max={20}
+                      value={scaleVal}
+                      onChange={e => setScaleValues(prev => ({
+                        ...prev,
+                        [pool.id]: Math.max(1, Math.min(20, Number(e.target.value) || 1)),
+                      }))}
+                      disabled={!canScale || scaling === pool.id}
+                      style={{
+                        width: 52, height: 26, fontSize: 13, textAlign: 'center',
+                        background: 'var(--color-surface)',
+                        color: 'var(--color-text)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 4,
+                      }}
+                    />
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      style={{ height: 26 }}
+                      onClick={() => onScale(pool.id, scaleVal)}
+                      disabled={!canScale || scaling === pool.id || scaleVal === pool.replicas}
+                      title={!canScale ? `Cannot scale while ${pool.status}` : `Scale to ${scaleVal} workers`}
+                    >
+                      {scaling === pool.id ? '…' : 'Scale'}
+                    </button>
+                  </div>
+                </td>
+                <td style={{ textAlign: 'right', paddingRight: 8 }}>
+                  {!isDefault && pool.status !== 'deleted' && (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onRelease(pool.id)}
+                      disabled={!canDelete || releasing === pool.id}
+                      title={
+                        pool.status === 'in_use'
+                          ? 'Cannot delete while a run is active'
+                          : 'Delete pool and tear down StatefulSet'
+                      }
+                    >
+                      {releasing === pool.id ? '…' : 'Delete'}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function CreatePoolForm({ onCreate, creating }) {
+  const [newName, setNewName]         = useState('')
+  const [newReplicas, setNewReplicas] = useState(2)
+  const [createError, setCreateError] = useState(null)
+
+  async function handleCreate(e) {
+    e.preventDefault()
+    if (!newName.trim()) return
+    setCreateError(null)
+    try {
+      await onCreate(newName.trim(), newReplicas)
+      setNewName('')
+      setNewReplicas(2)
+    } catch (err) {
+      setCreateError(err.message)
+    }
+  }
+
+  return (
+    <div className="card mt-20" style={{ maxWidth: 480 }}>
+      <div className="card-header">
+        <h3 style={{ margin: 0, fontSize: 14 }}>Create Worker Pool</h3>
+      </div>
+      <div style={{ padding: '16px' }}>
+        <form onSubmit={handleCreate} style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="form-group" style={{ margin: 0, flex: '1 1 200px' }}>
+            <label className="form-label">Pool name</label>
+            <input
+              className="form-input"
+              placeholder="e.g. high-throughput"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              disabled={creating}
+            />
+          </div>
+          <div className="form-group" style={{ margin: 0, flex: '0 0 100px' }}>
+            <label className="form-label">Workers</label>
+            <input
+              type="number"
+              className="form-input"
+              min={1} max={20}
+              value={newReplicas}
+              onChange={e => setNewReplicas(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+              disabled={creating}
+            />
+          </div>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            style={{ marginBottom: 1 }}
+            disabled={creating || !newName.trim()}
+          >
+            {creating ? '…' : 'Create Pool'}
+          </button>
+        </form>
+        {createError && (
+          <div className="alert alert-error mt-16">{createError}</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function ClusterPage() {
   const [namespace, setNamespace]           = useState('')
   const [pods, setPods]                     = useState([])
@@ -59,6 +236,46 @@ export default function ClusterPage() {
   const [logsLoading, setLogsLoading]       = useState(false)
   const [logsError, setLogsError]           = useState(null)
   const logEndRef = useRef(null)
+
+  const { pools, refresh: refreshPools } = useWorker()
+  const [releasingPool, setReleasingPool] = useState(null)
+  const [scalingPool, setScalingPool]   = useState(null)
+  const [creatingPool, setCreatingPool] = useState(false)
+
+  async function handleCreatePool(name, replicas) {
+    setCreatingPool(true)
+    try {
+      await createWorkerPool(name, replicas)
+      await refreshPools()
+    } finally {
+      setCreatingPool(false)
+    }
+  }
+
+  async function handleScalePool(poolId, replicas) {
+    setScalingPool(poolId)
+    try {
+      await scaleWorkerPool(poolId, replicas)
+      await refreshPools()
+    } catch (err) {
+      alert(`Failed to scale pool: ${err.message}`)
+    } finally {
+      setScalingPool(null)
+    }
+  }
+
+  async function handleReleasePool(poolId, name) {
+    if (!confirm(`Delete pool "${name}"? This will tear down its StatefulSet and Service immediately.`)) return
+    setReleasingPool(poolId)
+    try {
+      await releaseWorkerPool(poolId)
+      await refreshPools()
+    } catch (err) {
+      alert(`Failed to delete pool: ${err.message}`)
+    } finally {
+      setReleasingPool(null)
+    }
+  }
 
   async function fetchPods() {
     setPodsLoading(true)
@@ -88,7 +305,11 @@ export default function ClusterPage() {
     }
   }
 
-  useEffect(() => { fetchPods() }, [])
+  useEffect(() => {
+    fetchPods()
+    const id = setInterval(fetchPods, 30_000)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     if (logs !== null) logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -218,6 +439,22 @@ export default function ClusterPage() {
           </tbody>
         </table>
       </div>
+
+      {pools !== null && (
+        <>
+          <WorkerPoolsTable
+            pools={pools}
+            onRelease={(id) => {
+              const pool = pools.find(p => p.id === id)
+              handleReleasePool(id, pool?.name || id)
+            }}
+            releasing={releasingPool}
+            onScale={handleScalePool}
+            scaling={scalingPool}
+          />
+          <CreatePoolForm onCreate={handleCreatePool} creating={creatingPool} />
+        </>
+      )}
 
       {selectedPod && (
         <div className="card mt-20">

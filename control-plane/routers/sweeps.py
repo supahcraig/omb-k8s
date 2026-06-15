@@ -128,6 +128,7 @@ async def create_sweep(
         driver_contents,
         workload_contents,
         body.cooldown_seconds,
+        body.pool_id,
     )
 
     return SweepOut.model_validate(sweep)
@@ -313,6 +314,7 @@ async def _execute_sweep(
     driver_contents: list[str],
     workload_contents: list[str],
     cooldown_seconds: int,
+    pool_id: str,
 ) -> None:
     """
     Execute sweep runs sequentially with cooldown between them.
@@ -338,7 +340,7 @@ async def _execute_sweep(
             await db.commit()
 
         try:
-            await launch_run(run_id, driver_content, workload_content, await_finish=True)
+            await launch_run(run_id, driver_content, workload_content, pool_id, await_finish=True)
         except Exception as exc:
             logger.error("Sweep %d: failed to start run %d: %s", sweep_id, run_id, exc)
             async with AsyncSessionLocal() as db:

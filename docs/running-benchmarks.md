@@ -334,7 +334,71 @@ hundreds of chart series degrades browser performance.
 
 ---
 
-## Section 6: Configuring Prometheus metrics
+## Section 6: Running concurrent workloads
+
+Concurrent workloads let you run multiple benchmarks simultaneously against the
+same target cluster. Common use cases:
+
+- **Mixed-workload characterization:** one high-throughput producer workload running
+  alongside a latency-sensitive workload to measure interference
+- **Background load + sweep:** a sustained baseline workload running continuously
+  while you sweep a second workload's parameters
+- **Multi-tenant simulation:** reproducing a production environment where multiple
+  applications share the same cluster
+
+### How it works
+
+Start a run as normal. If another run is already active when you click **Launch**,
+the control plane automatically provisions a new dedicated worker pool (a new
+StatefulSet and headless Service cloned from the default `omb-worker` spec). The
+new pool appears on the **OMB Cluster** page with status `provisioning` while the
+node is being added by the Cluster Autoscaler.
+
+- The HTTP response returns immediately with status `pending` — you don't need to
+  wait on the Launch page. Navigate to the run while it provisions.
+- Once all workers are ready, the run transitions to `running` automatically.
+- Provisioning a cold EC2 node takes ~5–10 minutes (node startup + image pull).
+  If another warm pool is available (status `ready`), the run claims it
+  immediately with no wait.
+
+### Worker pool warm retention
+
+After a concurrent run completes, its worker pool stays provisioned for a
+configurable warm retention period (default 30 minutes). The **OMB Cluster** page
+shows a countdown in the **Warm For** column. This allows the next concurrent run
+to start instantly by reclaiming the warm pool.
+
+To change the retention period: **Settings → Benchmark Behavior →
+Concurrent pool warm retention**.
+
+Setting retention to **Manual only** keeps pools alive until you explicitly click
+**Release** on the Cluster page.
+
+### Viewing concurrent runs — Timeline
+
+The **Timeline** page (Benchmark Runs → Timeline in the sidebar) shows all runs
+as a Gantt chart. Each bar spans from run start to completion; in-progress bars
+extend to the current time with a pulsing animation. Bars are colored by phase:
+gray (initializing), blue (warmup), green (benchmark).
+
+Use the timeline to verify that concurrent runs overlapped as intended and to
+compare their relative durations.
+
+**Navigation:** scroll wheel zooms (centered on cursor); click and drag pans.
+Preset buttons (1h, 3h, 6h, All) jump to common time windows.
+
+### Cancelling a concurrent run
+
+Cancelling a concurrent run from the Run Detail page cleans up its k8s Job and
+ConfigMap. The worker pool itself is not immediately deleted — it enters the warm
+retention period as normal, then tears down automatically.
+
+To force immediate cleanup: **OMB Cluster → Worker Pools → Release**.
+
+---
+
+## Section 7: Configuring Prometheus metrics
+
 
 Prometheus is deployed with omb-k8s. When enabled, it collects worker CPU and
 memory metrics every 15 seconds during runs — these power the per-pod charts on
@@ -365,7 +429,7 @@ normally but the per-pod charts will not have data.
 
 ---
 
-## Section 7: Interpreting results
+## Section 8: Interpreting results
 
 ### Key metrics
 
@@ -423,7 +487,7 @@ badge to show all workers ready, then rerun.
 
 ---
 
-## Section 8: Tips for common engagement scenarios
+## Section 9: Tips for common engagement scenarios
 
 ### Establishing a throughput ceiling
 

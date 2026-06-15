@@ -53,6 +53,18 @@ output "terraform_operator_ip" {
   value       = chomp(data.http.my_ip.response_body)
 }
 
+output "helm_install_command" {
+  description = "Ready-to-run helm install command with all AWS-specific values pre-filled"
+  value       = <<-EOT
+    helm install omb charts/omb -n omb \
+      -f charts/omb/values-aws.yaml \
+      --set "controlPlane.allowedCIDRs[0]=${chomp(data.http.my_ip.response_body)}/32" \
+      --set clusterAutoscaler.clusterName=${local.cluster_name} \
+      --set clusterAutoscaler.region=${var.region} \
+      --set clusterAutoscaler.roleArn=${aws_iam_role.cluster_autoscaler.arn}
+  EOT
+}
+
 output "find_elb_sg_command" {
   description = "The ELB security group is created by Kubernetes when the LoadBalancer Service is provisioned — Terraform cannot reference it directly. After helm install, run this to find it:"
   value       = "aws elb describe-load-balancers --region ${var.region} --query 'LoadBalancerDescriptions[*].{Name:LoadBalancerName,SGName:SourceSecurityGroup.GroupName}' --output table"

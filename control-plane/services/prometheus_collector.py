@@ -71,9 +71,11 @@ async def _collect_sample(
     run_id: int,
     t: int,
     cpu_request_cores: float,
+    statefulset_name: str = "omb-worker",
 ) -> None:
     """Query Prometheus and write one PrometheusSample row."""
-    worker_selector = f'namespace="{namespace}",pod=~"omb-worker-.*",container="worker"'
+    pod_regex = f"{statefulset_name}-[0-9]+"
+    worker_selector = f'namespace="{namespace}",pod=~"{pod_regex}",container="worker"'
 
     cpu_pct = await _query(client, prom_url,
         f'100 * avg(rate(container_cpu_usage_seconds_total{{{worker_selector}}}[2m]))'
@@ -97,7 +99,7 @@ async def _collect_sample(
 
     # container_network_* metrics are pod-level (no container label) — use a
     # separate selector that omits container="worker" from worker_selector.
-    net_selector = f'namespace="{namespace}",pod=~"omb-worker-.*"'
+    net_selector = f'namespace="{namespace}",pod=~"{pod_regex}"'
 
     net_tx_per_pod = await _query_per_pod(client, prom_url,
         f'sum by (pod) ('
@@ -160,21 +162,24 @@ async def collect_prometheus(
     namespace: str,
     prom_url: str,
     cpu_request_cores: float = 4.0,
+    statefulset_name: str = None,
 ) -> None:
     """
     Poll Prometheus every POLL_INTERVAL seconds until the run finishes.
     Takes an immediate sample on start, then continues at POLL_INTERVAL cadence.
     Writes one PrometheusSample row per interval.
+    statefulset_name scopes queries to only this run's worker pods.
     """
     if not prom_url:
         logger.debug("No Prometheus URL configured — skipping collection for run %d", run_id)
         return
 
-    logger.info("Starting Prometheus collection for run %d → %s", run_id, prom_url)
+    sts = statefulset_name or "omb-worker"
+    logger.info("Starting Prometheus collection for run %d → %s (pool: %s)", run_id, prom_url, sts)
     t = 0
 
     async with httpx.AsyncClient() as client:
-        await _collect_sample(client, prom_url, namespace, run_id, t, cpu_request_cores)
+        await _collect_sample(client, prom_url, namespace, run_id, t, cpu_request_cores, sts)
 
         while not runner.is_done(run_id):
             await asyncio.sleep(POLL_INTERVAL)
@@ -183,6 +188,6 @@ async def collect_prometheus(
             if runner.is_done(run_id):
                 break
 
-            await _collect_sample(client, prom_url, namespace, run_id, t, cpu_request_cores)
+            await _collect_sample(client, prom_url, namespace, run_id, t, cpu_request_cores, sts)
 
     logger.info("Prometheus collection done for run %d (%d samples)", run_id, t // POLL_INTERVAL)

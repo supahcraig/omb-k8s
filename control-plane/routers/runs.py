@@ -20,6 +20,7 @@ from services.k8s_resources import read_worker_resources
 from services.omb_runner import runner
 from services.prometheus_collector import collect_prometheus, probe_broker_prometheus
 from services.result_parser import parse_result_from_file, parse_result_from_logs
+from services.worker_pool_manager import claim_pool, release_pool
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class RunCreate(BaseModel):
     name: Optional[str] = None
     driver_content: str
     workload_content: str
+    pool_id: str
 
 
 # ---------------------------------------------------------------------------
@@ -84,37 +86,110 @@ async def create_run(
 ):
     run = Run(
         name=body.name,
-        status="running",
         driver_config=body.driver_content,
         workload_config=body.workload_content,
+        # status defaults to "pending" — transitions to "running" once pool is ready
+        # and the k8s Job is created. This allows the HTTP response to return
+        # immediately instead of blocking for up to 300s on pool provisioning.
     )
     db.add(run)
     await db.commit()
     await db.refresh(run)
 
-    try:
-        await launch_run(run.id, body.driver_content, body.workload_content)
-    except Exception as exc:
-        logger.error("Failed to start k8s Job for run %d: %s", run.id, exc)
-        async with AsyncSessionLocal() as fail_db:
-            fail_run = await fail_db.get(Run, run.id)
-            if fail_run:
-                fail_run.status = RunStatus.failed.value
-                fail_run.error_message = str(exc)
-                fail_run.completed_at = datetime.utcnow()
-                await fail_db.commit()
-        raise HTTPException(
-            status_code=503,
-            detail=f"Failed to start benchmark job: {exc}",
-        )
+    asyncio.create_task(_bg_launch(run.id, body.driver_content, body.workload_content, body.pool_id))
 
-    # Re-query with selectinload so Pydantic can access the metrics relationship
-    # without hitting the lazy-load greenlet restriction.
     result = await db.execute(
         select(Run).options(selectinload(Run.metrics)).where(Run.id == run.id)
     )
     run = result.scalar_one()
     return RunOut.model_validate(run)
+
+
+async def _bg_launch(run_id: int, driver_content: str, workload_content: str, pool_id: str) -> None:
+    """Background wrapper for launch_run — marks run failed on any exception."""
+    try:
+        await launch_run(run_id, driver_content, workload_content, pool_id)
+    except Exception as exc:
+        logger.error("Failed to start k8s Job for run %d: %s", run_id, exc)
+        async with AsyncSessionLocal() as fail_db:
+            fail_run = await fail_db.get(Run, run_id)
+            if fail_run:
+                fail_run.status = RunStatus.failed.value
+                fail_run.error_message = str(exc)
+                fail_run.completed_at = datetime.utcnow()
+                await fail_db.commit()
+
+
+@router.get("/timeline")
+async def get_timeline(db: AsyncSession = Depends(get_db)):
+    """
+    Return all runs with timing columns for the Gantt chart.
+    Ordered by started_at ascending so bars render chronologically.
+    """
+    result = await db.execute(
+        select(Run).order_by(Run.started_at.asc())
+    )
+    runs = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "status": r.status,
+            "started_at": r.started_at,
+            "completed_at": r.completed_at,
+            "warmup_started_at": r.warmup_started_at,
+            "benchmark_started_at": r.benchmark_started_at,
+            "sweep_id": r.sweep_id,
+            "sweep_params": r.sweep_params,
+            "worker_pool_id": r.worker_pool_id,
+        }
+        for r in runs
+    ]
+
+
+@router.get("/{run_id}/concurrent")
+async def get_concurrent_runs(run_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Return runs whose started_at/completed_at overlap with this run's execution window.
+    Excludes the run itself and its own sweep siblings.
+    """
+    run = await db.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    if run.completed_at is None:
+        # Still running — overlap = started before now AND (still running OR ended after our start)
+        stmt = select(Run).where(
+            Run.id != run_id,
+            Run.started_at < datetime.utcnow(),
+            (Run.completed_at == None) | (Run.completed_at > run.started_at),
+        )
+    else:
+        stmt = select(Run).where(
+            Run.id != run_id,
+            Run.started_at < run.completed_at,
+            (Run.completed_at == None) | (Run.completed_at > run.started_at),
+        )
+
+    # Exclude sweep siblings (same sweep_id) — they're sequential, not concurrent.
+    if run.sweep_id is not None:
+        stmt = stmt.where((Run.sweep_id == None) | (Run.sweep_id != run.sweep_id))
+
+    result = await db.execute(stmt.order_by(Run.started_at.asc()))
+    overlapping = result.scalars().all()
+
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "status": r.status,
+            "started_at": r.started_at,
+            "completed_at": r.completed_at,
+            "workload_config": r.workload_config,
+            "sweep_id": r.sweep_id,
+        }
+        for r in overlapping
+    ]
 
 
 @router.get("/{run_id}", response_model=RunOut)
@@ -136,10 +211,13 @@ async def delete_run(run_id: int, db: AsyncSession = Depends(get_db)):
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
+    pool_id = run.worker_pool_id
     await runner.stop(run_id)
     run.status = RunStatus.cancelled.value
     run.completed_at = datetime.utcnow()
     await db.commit()
+    if pool_id:
+        await release_pool(pool_id)
 
 
 @router.get("/{run_id}/results")
@@ -196,11 +274,13 @@ async def launch_run(
     run_id: int,
     driver_content: str,
     workload_content: str,
+    pool_id: str,
     *,
     await_finish: bool = False,
 ) -> None:
     """
-    Start a k8s Job, kick off the Prometheus collector, and handle completion.
+    Claim the specified pool, start a k8s Job, kick off the Prometheus collector,
+    and handle completion.
 
     await_finish=False (default): _finish_run runs as a background task so the
     caller returns immediately. Used by single runs via create_run.
@@ -208,17 +288,21 @@ async def launch_run(
     await_finish=True: _finish_run is awaited inline so the caller blocks until
     the run completes. Used by _execute_sweep to enforce sequential execution.
 
-    Raises on runner.start() failure — callers mark the run failed and surface
-    the error as appropriate for their context (HTTP 503 vs sweep continue).
+    Raises on claim_pool or runner.start() failure — callers mark the run failed
+    and surface the error as appropriate (HTTP 503 vs sweep continue).
     """
-    await runner.start(run_id, driver_content, workload_content)
+    pool = await claim_pool(pool_id, run_id)
+    await runner.start(run_id, driver_content, workload_content, pool)
     prom_url = (
         f"http://omb-kube-prometheus-stack-prometheus"
         f".{settings.omb_namespace}.svc.cluster.local:9090"
     )
     cpu_request_cores, _ = await read_worker_resources(settings.omb_namespace)
     asyncio.create_task(
-        collect_prometheus(run_id, settings.omb_namespace, prom_url, cpu_request_cores)
+        collect_prometheus(
+            run_id, settings.omb_namespace, prom_url, cpu_request_cores,
+            statefulset_name=pool.statefulset_name,
+        )
     )
 
     # Probe broker Prometheus endpoints (diagnostic logging only)
@@ -259,6 +343,10 @@ async def _finish_run(run_id: int) -> None:
         run = await db.get(Run, run_id)
         if run is None:
             logger.warning("_finish_run: run %d not found in DB", run_id)
+            return
+
+        if run.status == RunStatus.cancelled.value:
+            logger.info("_finish_run: run %d was cancelled — pool already released", run_id)
             return
 
         lines = runner.get_lines(run_id)
@@ -309,6 +397,7 @@ async def _finish_run(run_id: int) -> None:
             )
 
         run.completed_at = datetime.utcnow()
+        pool_id = run.worker_pool_id
 
         try:
             await db.commit()
@@ -317,6 +406,8 @@ async def _finish_run(run_id: int) -> None:
             logger.exception("_finish_run: DB commit failed for run %d", run_id)
             return
 
-    logger.info(
-        "_finish_run: run %d finished — status=%s", run_id, run.status
-    )
+    logger.info("_finish_run: run %d finished — status=%s", run_id, run.status)
+
+    # Release the pool back to ready so another run can claim it.
+    if pool_id:
+        await release_pool(pool_id)

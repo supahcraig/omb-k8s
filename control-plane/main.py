@@ -3,6 +3,11 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:%(name)s:%(message)s",
+)
+
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -54,7 +59,8 @@ _routers_to_mount = [
     ("routers.prometheus", "/api/prometheus", ["prometheus"]),
     ("routers.cluster",   "/api/cluster",    ["cluster"]),
     ("routers.grafana",   "/api/grafana",    ["grafana"]),
-    ("routers.drivers",   "/api/drivers",    ["drivers"]),
+    ("routers.drivers",       "/api/drivers",       ["drivers"]),
+    ("routers.worker_pools",  "/api/worker-pools",  ["worker-pools"]),
 ]
 
 for module_path, prefix, tags in _routers_to_mount:

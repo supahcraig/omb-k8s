@@ -112,6 +112,7 @@ class SweepCreate(BaseModel):
     cooldown_seconds: int = 60
     workload_content: str
     driver_base_content: str
+    pool_id: str
 
     @property
     def effective_workload_axes(self) -> Dict[str, Any]:
@@ -223,9 +224,16 @@ class PrometheusConfig(BaseModel):
     scrape_targets: Optional[List[str]] = None  # self-hosted, comma-separated
 
 
+class BenchmarkBehaviorConfig(BaseModel):
+    # Minutes to keep concurrent worker pools warm after a run completes.
+    # 0 = Manual only (no automatic teardown).
+    concurrent_pool_retention_minutes: int = 30
+
+
 class SettingsOut(BaseModel):
     cluster: Optional[ClusterConfig] = None
     prometheus: Optional[PrometheusConfig] = None
+    benchmark_behavior: Optional[BenchmarkBehaviorConfig] = None
 
 
 # ---------------------------------------------------------------------------

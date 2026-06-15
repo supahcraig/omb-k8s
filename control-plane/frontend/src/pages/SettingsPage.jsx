@@ -372,6 +372,7 @@ export default function SettingsPage() {
               onChange={savePrometheus}
             />
           )}
+
         </div>
       </div>
     </div>
