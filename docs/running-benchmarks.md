@@ -23,6 +23,7 @@ The control plane is a React SPA. A sticky left sidebar handles all navigation:
 │   New Run           │
 │   Sweeps            │
 │   Workload Library  │
+│   Timeline          │
 ├─────────────────────┤
 │ Infrastructure      │
 │   OMB Cluster       │
@@ -346,54 +347,102 @@ same target cluster. Common use cases:
 - **Multi-tenant simulation:** reproducing a production environment where multiple
   applications share the same cluster
 
-### How it works
+### Step 1: Create an additional worker pool
 
-Start a run as normal. If another run is already active when you click **Launch**,
-the control plane automatically provisions a new dedicated worker pool (a new
-StatefulSet and headless Service cloned from the default `omb-worker` spec). The
-new pool appears on the **OMB Cluster** page with status `provisioning` while the
-node is being added by the Cluster Autoscaler.
+The default `omb-worker` pool is always available and covers single-run usage.
+To run workloads concurrently, you need a second (or third) pool — one per
+simultaneous run.
 
-- The HTTP response returns immediately with status `pending` — you don't need to
-  wait on the Launch page. Navigate to the run while it provisions.
-- Once all workers are ready, the run transitions to `running` automatically.
-- Provisioning a cold EC2 node takes ~5–10 minutes (node startup + image pull).
-  If another warm pool is available (status `ready`), the run claims it
-  immediately with no wait.
+Go to **OMB Cluster** (sidebar, Infrastructure group) and use the
+**Create Worker Pool** form:
 
-### Worker pool warm retention
+```
+┌─────────────────────────────────────────────────────┐
+│ Create Worker Pool                                   │
+│                                                      │
+│ Pool name:  [latency-pool                         ]  │
+│ Replicas:   [3]                                      │
+│                                              [Create] │
+└─────────────────────────────────────────────────────┘
+```
 
-After a concurrent run completes, its worker pool stays provisioned for a
-configurable warm retention period (default 30 minutes). The **OMB Cluster** page
-shows a countdown in the **Warm For** column. This allows the next concurrent run
-to start instantly by reclaiming the warm pool.
+After clicking **Create**, the new pool appears in the Worker Pools table with
+status `provisioning`. The Cluster Autoscaler adds a new node for each replica
+(one worker per node, due to `hostNetwork: true`). On AWS this takes ~5–10 minutes
+for a cold node start. Wait until the status transitions to `ready` before
+launching a run against the pool.
 
-To change the retention period: **Settings → Benchmark Behavior →
-Concurrent pool warm retention**.
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Worker Pools                                                              │
+├───────────────┬────────────────┬──────────┬────────────┬─────────────────┤
+│ Pool          │ StatefulSet    │ Replicas │ Status     │ Claimed By      │
+├───────────────┼────────────────┼──────────┼────────────┼─────────────────┤
+│ default       │ omb-worker     │ 3/3      │ ready      │ —               │
+│ latency-pool  │ omb-worker-... │ 3/3      │ ready      │ —               │
+└───────────────┴────────────────┴──────────┴────────────┴─────────────────┘
+```
 
-Setting retention to **Manual only** keeps pools alive until you explicitly click
-**Release** on the Cluster page.
+### Step 2: Select the pool when launching a run
 
-### Viewing concurrent runs — Timeline
+On the **New Run** page, a **Worker Pool** dropdown lets you choose which pool
+to use:
 
-The **Timeline** page (Benchmark Runs → Timeline in the sidebar) shows all runs
-as a Gantt chart. Each bar spans from run start to completion; in-progress bars
-extend to the current time with a pulsing animation. Bars are colored by phase:
-gray (initializing), blue (warmup), green (benchmark).
+```
+┌─────────────────────────────────────────────────────┐
+│  Worker Pool: [latency-pool  ▼]                      │
+│  Run name:    [latency-characterization           ]   │
+│  ...                                    [Launch]      │
+└─────────────────────────────────────────────────────┘
+```
+
+- The dropdown auto-selects the pool if only one `ready` pool exists
+- If no `ready` pool exists, the launch button is blocked with:
+  "No worker pools are available. Create one on the Cluster page before launching a run."
+
+Launch as normal. The HTTP response returns immediately with `status="pending"`.
+Once the pool is claimed, the run transitions to `running` automatically.
+
+### Step 3: Monitor concurrent runs on the Timeline
+
+The **Timeline** page (**Benchmark Runs → Timeline**) shows all runs as a Gantt
+chart. Each bar spans from run start to completion; in-progress bars extend to the
+current time with a pulsing animation. Bars are colored by phase: gray
+(initializing), blue (warmup), green (benchmark).
 
 Use the timeline to verify that concurrent runs overlapped as intended and to
-compare their relative durations.
+compare their relative durations at a glance.
 
 **Navigation:** scroll wheel zooms (centered on cursor); click and drag pans.
-Preset buttons (1h, 3h, 6h, All) jump to common time windows.
+Preset buttons (1h, 3h, 6h, All) jump to common time windows. Clicking a bar
+navigates to that run's detail page.
+
+### Pool lifecycle
+
+```
+provisioning → ready → in_use → ready
+                                  │
+                                  └── (SE deletes from Cluster page)
+```
+
+- A pool enters `in_use` when a run claims it and returns to `ready` when the run
+  completes or is cancelled
+- Non-default pools can be deleted from the Cluster page when they are `ready`
+- The **default** pool (`omb-worker`) is permanent and is never deleted
+
+### Managing pools on the Cluster page
+
+From **OMB Cluster → Worker Pools**:
+
+- **Scale** — change replica count while the pool is `ready` (not while `in_use`)
+- **Delete** — tears down the StatefulSet and Service; enabled only on non-default
+  pools in `ready` state
 
 ### Cancelling a concurrent run
 
-Cancelling a concurrent run from the Run Detail page cleans up its k8s Job and
-ConfigMap. The worker pool itself is not immediately deleted — it enters the warm
-retention period as normal, then tears down automatically.
-
-To force immediate cleanup: **OMB Cluster → Worker Pools → Release**.
+Cancelling a run from the Run Detail page cleans up its k8s Job and ConfigMap.
+The worker pool returns to `ready` immediately — you can then either launch another
+run against it or delete it from the Cluster page if it is no longer needed.
 
 ---
 

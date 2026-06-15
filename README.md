@@ -9,8 +9,8 @@ The target cluster (Redpanda or Kafka) is always external — this tool benchmar
 existing clusters and never provisions them.
 
 Multiple benchmark runs can execute concurrently against the same target cluster.
-Each concurrent run gets a dedicated worker pool provisioned automatically. A
-Gantt timeline page shows overlapping runs side by side.
+Each concurrent run uses a dedicated worker pool created by the SE from the
+OMB Cluster page. A Gantt timeline page shows overlapping runs side by side.
 
 ## Overview
 
@@ -192,6 +192,7 @@ directory until after `terraform destroy` completes successfully.
 | [Deployment: GCP (GKE)](docs/deployment-gcp.md) | Step-by-step GKE provisioning and Helm install |
 | [Deployment: Azure (AKS)](docs/deployment-azure.md) | Step-by-step AKS provisioning and Helm install |
 | [Running Benchmarks](docs/running-benchmarks.md) | Configuring connectivity, workloads, single runs, sweeps, concurrent workloads |
+| [Concurrent Workloads](docs/concurrent-workloads.md) | Complete reference for single runs, sweeps, and concurrent workloads with worker pools |
 | [Scaling Workers](docs/scaling-workers.md) | How to scale worker pods mid-engagement |
 | [Architecture](docs/architecture.md) | Component diagram, worker discovery, run lifecycle |
 | [Teardown](docs/teardown.md) | Safe cleanup — Helm uninstall and terraform destroy |

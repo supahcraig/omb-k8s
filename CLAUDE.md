@@ -260,51 +260,28 @@ used by single runs) or awaits it inline (`await_finish=True`, used by sweeps fo
 sequential execution). Both `create_run` and `_execute_sweep` call `launch_run` —
 do not duplicate the three-step sequence elsewhere.
 
-**Concurrent runs each get a dedicated worker pool.** `create_run` returns
-immediately with `status="pending"` and launches pool provisioning in
-`asyncio.create_task(_bg_launch(...))`. When a run starts and another is already
-active, `services/worker_pool_manager.py::claim_pool()` creates a new StatefulSet
-(`omb-worker-pool-{uuid}`) and headless Service by cloning the default worker
-spec. Once all replicas are ready, the run transitions to `status="running"`.
-If no other run is active, the pre-existing `omb-worker` default pool is used
-(no new StatefulSet created). Do not return a blocking HTTP response from
-`create_run` — pool provisioning can take up to 10 minutes on a cold node and the
-browser will time out and retry, creating duplicate runs.
+**Worker pools are SE-managed, not auto-provisioned.** `create_run` takes a
+`pool_id` in the request body (selected from the **Worker Pool** dropdown on
+NewRunPage). It returns immediately with `status="pending"` and fires
+`_bg_launch` as an `asyncio.create_task`. `services/worker_pool_manager.py::claim_pool(pool_id, run_id)`
+marks an existing `ready` pool as `in_use` — it does NOT create a new StatefulSet.
+New pools are created by the SE from the **OMB Cluster** page
+(`POST /api/worker-pools`), which calls `create_pool()` to provision a new
+StatefulSet and headless Service. If no ready pool exists when a run is launched,
+the UI blocks with "No worker pools are available. Create one on the Cluster page
+before launching a run." Do not return a blocking HTTP response from `create_run`
+— pool provisioning on a cold node takes up to 10 minutes and the browser will
+time out and retry, creating duplicate runs. There is no auto-provisioning or
+warm-retention logic in `worker_pool_manager.py`.
 
-**Worker pool lifecycle: provisioning → in_use → ready → deleted.** All pool
-state transitions use Core-style `db.execute(update(...).values(...))`, never
-ORM attribute mutation followed by `db.expunge()`. The expunge pattern silently
-drops attribute changes before commit. `claim_pool` returns a fresh `WorkerPool`
-object (not the ORM instance) after every Core-style update.
-
-**Warm pool reclaim before provisioning.** When a new run starts while a concurrent
-pool is in `ready` (warm retention) state, `claim_pool` reclaims that pool instead
-of provisioning a new EC2 node. `cancel_teardown(pool_id)` cancels the pending
-asyncio teardown task. This avoids ~10-minute node cold-start delays when runs
-arrive in close succession.
-
-**`warm_until` tracks when warm retention expires.** Set by `_finish_run` when a
-concurrent pool transitions to `ready`. The Cluster page reads this value and shows
-a live M:SS countdown in the Worker Pools table. Default pool never gets
-`warm_until` (it is never torn down). Concurrent pools with `warm_until = NULL`
-were either set to `ready` manually or predate the feature — their teardown was
-never scheduled; release them manually from the Cluster page.
-
-**Pool teardown uses a 60-second background poller, not long-sleeping tasks.**
-`pool_expiry_poller(namespace)` runs as an `asyncio.create_task` from the FastAPI
-lifespan. Every 60 s it queries for `ready` non-default pools where
-`warm_until <= NOW()` and calls `release_pool_now` on each. This is immune to pod
-restarts — it re-evaluates the DB on every tick rather than relying on a
-multi-hour `asyncio.sleep`. `schedule_teardown` is kept as a fast-path hint
-(schedules a short-sleep task to tear down sooner) but the poller is the
-guarantee. Pools stuck as `in_use` after a restart (no `warm_until`) still
-require a manual fix: `UPDATE worker_pools SET status='ready',
-claimed_by_run_id=NULL WHERE status='in_use'`.
-
-**`concurrent_pool_retention_minutes` in Settings → Benchmark Behavior.** Controls
-how long concurrent pools stay warm after a run completes (default 30 min). Set to
-0 for "Manual only" — pool stays alive until explicitly released. Stored in the
-`settings` table under key `benchmark_behavior`.
+**Worker pool lifecycle: provisioning → ready → in_use → ready → (deleted by SE).**
+All pool state transitions use Core-style `db.execute(update(...).values(...))`,
+never ORM attribute mutation followed by `db.expunge()`. The expunge pattern
+silently drops attribute changes before commit. `claim_pool` returns a fresh
+`WorkerPool` object (not the ORM instance) after every Core-style update.
+Non-default pools can be deleted from the Cluster page when they are in `ready`
+state. The default pool (`id="default"`, `statefulset_name="omb-worker"`) is
+always present and is never deleted.
 
 ## Target clouds
 
@@ -329,9 +306,10 @@ how long concurrent pools stay warm after a run completes (default 30 min). Set 
 
 1. SE opens UI, selects or creates a workload config
 2. Control plane stores driver + workload YAML as text in SQLite
-3. SE clicks Run — HTTP returns immediately with `status="pending"`; pool provisioning
-   runs in a background task. If another run is active, a new worker pool StatefulSet
-   is provisioned; otherwise the default `omb-worker` pool is claimed.
+3. SE selects a worker pool from the **Worker Pool** dropdown and clicks Run — HTTP
+   returns immediately with `status="pending"`; `_bg_launch` runs as a background
+   task. `claim_pool` marks the selected `ready` pool as `in_use`. If no ready pool
+   exists, launch is blocked by the UI before the request is sent.
 4. Once the pool is ready, control plane transitions run to `status="running"` and
    writes driver + workload YAML into a k8s ConfigMap
 5. Control plane creates a k8s Job with:
@@ -529,7 +507,7 @@ handles all navigation. Routes and pages:
 | `/sweeps/new` | NewSweepPage | Redirects to `/runs/new` with `state={{ enableSweep: true }}` |
 | `/sweeps/:id` | SweepDetailPage | Sweep overview — sortable run comparison table; rows clickable; two-row sticky super-header groups sweep parameter columns; checkbox-driven percentile curve charts + heatmap (capped at 10 runs); Grafana link above table |
 | `/workloads` | WorkloadLibraryPage | Workload and driver library — two tabs (Workloads / Drivers); full CRUD for custom entries; bundled entries are read-only |
-| `/settings` | SettingsPage | Cluster connectivity (seed brokers, TLS, SASL) + Prometheus scrape targets + Benchmark Behavior (pool retention) |
+| `/settings` | SettingsPage | Cluster connectivity (seed brokers, TLS, SASL) + Prometheus scrape targets |
 | `/cluster` | ClusterPage | k8s cluster status, worker health, pod restart; Worker Pools table with idle countdown and Release button |
 | `/timeline` | TimelinePage | SVG Gantt chart of all runs; zoom/scroll with 1-hour default window; bars colored by phase |
 
@@ -685,12 +663,13 @@ No new library dependency — pure SVG with `clipPath` to clip bars at view boun
 `image_hash`. Falls back to `image_ref` (the full image tag string) if the digest
 format is absent. Displayed as a small subtitle under each pod name in the table.
 
-**Cluster page Worker Pools table shows a live idle countdown.** `GET /api/worker-pools`
-returns all non-deleted pools. Ready concurrent pools with a `warm_until` value display
-a live M:SS countdown in the "Warm For" column (amber, turns red when expiring). The
-ticker runs only when warm pools are present. Default pool never shows a countdown. A
-**Release** button immediately tears down the StatefulSet and Service; disabled on
-`in_use` pools.
+**Cluster page Worker Pools table shows all non-deleted pools.** `GET /api/worker-pools`
+returns all non-deleted pools. Columns: Pool name, StatefulSet, Replicas, Status,
+Claimed By (run link), scale controls (input + Scale button), Delete button.
+The Delete button is only enabled when a pool is in `ready` state and is not the
+default pool. The Scale button works when a pool is `ready` (not `in_use`,
+`provisioning`, or `tearing_down`). A **Create Worker Pool** form above the table
+accepts a name and replica count and calls `POST /api/worker-pools`.
 
 **Status badges in `RunDetailPage` reflect live run sub-phases.** While
 `run.status === 'running'`, a finer-grained `displayStatus` is derived from live
