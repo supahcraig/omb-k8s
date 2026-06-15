@@ -305,7 +305,11 @@ export default function ClusterPage() {
     }
   }
 
-  useEffect(() => { fetchPods() }, [])
+  useEffect(() => {
+    fetchPods()
+    const id = setInterval(fetchPods, 30_000)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     if (logs !== null) logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
