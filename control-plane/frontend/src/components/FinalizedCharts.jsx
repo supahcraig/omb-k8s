@@ -229,11 +229,7 @@ export default function FinalizedCharts({ results }) {
         </div>
       </div>
 
-<<<<<<< feat/concurrent-workloads
       {/* ── Latency distribution — histograms + nines table side by side ── */}
-=======
-      {/* ── Latency distribution — histograms + nines table ── */}
->>>>>>> main
       <SectionHeading>Latency distribution — histograms <OmbBadge /></SectionHeading>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 12, alignItems: 'stretch' }}>
         <div className="card" style={{ padding: '0 0 4px' }}>

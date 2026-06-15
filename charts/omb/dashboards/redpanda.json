@@ -1,14 +1,4 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_PROMETHEUS",
-      "label": "Prometheus",
-      "description": "",
-      "type": "datasource",
-      "pluginId": "prometheus",
-      "pluginName": "Prometheus"
-    }
-  ],
   "__elements": {},
   "__requires": [
     {
@@ -130,7 +120,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -195,7 +185,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "count  by (app) (redpanda_application_uptime_seconds_total{redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}) OR on() vector(0)",
@@ -209,7 +199,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -246,7 +236,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -301,7 +291,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -321,7 +311,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -381,7 +371,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "sum(redpanda_cluster_topics) by ([[aggr_criteria]])",
@@ -397,7 +387,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -458,7 +448,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -476,7 +466,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -532,7 +522,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -547,7 +537,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "sum(rate(redpanda_raft_leadership_changes{redpanda_cloud_data_cluster_name=\"[[data_cluster]]\"}[5m] offset 1d)) by (cluster)",
@@ -564,7 +554,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -616,7 +606,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "sum (redpanda_kafka_under_replicated_replicas{redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}) > 0 OR on() vector(0)  ",
@@ -633,7 +623,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -693,7 +683,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -711,7 +701,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -768,7 +758,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -789,7 +779,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -853,7 +843,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -928,7 +918,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -983,7 +973,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -1003,7 +993,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -1058,7 +1048,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "avg(deriv(redpanda_cpu_busy_seconds_total[$__rate_interval]))",
@@ -1080,7 +1070,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "Shows the number of clients actively connected. A sudden, extreme change in this metric may indicate problems with connection.",
       "editable": true,
@@ -1206,7 +1196,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -1222,7 +1212,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "sum(redpanda_rpc_active_connections{instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"} offset 1d) by (redpanda_cloud_data_cluster_name)",
@@ -1270,7 +1260,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -1422,7 +1412,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": false,
           "expr": "redpanda_application_build{redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"} * on (instance, exported_instance) group_left redpanda_application_uptime_seconds_total{instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}",
@@ -1484,7 +1474,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -1554,7 +1544,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "max(redpanda_storage_disk_free_space_alert)",
@@ -1569,7 +1559,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "Measured within Redpanda",
       "fieldConfig": {
@@ -1669,7 +1659,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -1685,7 +1675,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.99, sum(rate(redpanda_kafka_handler_latency_seconds_bucket{handler=\"produce\",exported_instance=~\"[[exported_node]]\",instance=~\"[[node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m] offset 1d)) by (le, cluster))",
@@ -1698,7 +1688,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -1715,7 +1705,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.95, sum(rate(redpanda_kafka_handler_latency_seconds_bucket{handler=\"produce\",exported_instance=~\"[[exported_node]]\",instance=~\"[[node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m] offset 1d)) by (le, cluster))",
@@ -1732,7 +1722,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -1835,7 +1825,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "sum(rate(redpanda_io_queue_total_write_ops{instance=~\"[[node]]\", exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=\"[[data_cluster]]\"}[5m])) by ([[aggr_criteria]])",
@@ -1850,7 +1840,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "sum(rate(redpanda_io_queue_total_write_ops{instance=~\"[[node]]\", exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=\"[[data_cluster]]\"}[5m] offset 1d)) by (cluster)",
@@ -1871,7 +1861,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "editable": true,
       "error": false,
@@ -1978,7 +1968,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "sum(rate(redpanda_kafka_request_bytes_total{instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_request=\"produce\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m])) by ([[aggr_criteria]])",
@@ -2028,7 +2018,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "Measured within Redpanda",
       "fieldConfig": {
@@ -2128,7 +2118,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -2144,7 +2134,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.99, sum(rate(redpanda_kafka_handler_latency_seconds_bucket{handler=\"fetch\",instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m] offset 1d)) by (le, cluster))",
@@ -2157,7 +2147,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -2174,7 +2164,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.95, sum(rate(redpanda_kafka_handler_latency_seconds_bucket{handler=\"fetch\",instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m] offset 1d)) by (le, cluster))",
@@ -2191,7 +2181,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -2294,7 +2284,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -2310,7 +2300,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "sum(rate(redpanda_io_queue_total_read_ops{instance=~\"[[node]]\", exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=\"[[data_cluster]]\"}[5m] offset 1d)) by (cluster)",
@@ -2331,7 +2321,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "editable": true,
       "error": false,
@@ -2438,7 +2428,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "sum(rate(redpanda_kafka_request_bytes_total{instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_request=\"consume\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[30s])) by ([[aggr_criteria]])",
@@ -2514,7 +2504,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "Free memory plus the memory occupied by the batch cache. This is how much memory Redpanda can allocate if needed after reclaim.",
       "fieldConfig": {
@@ -2574,7 +2564,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -2594,7 +2584,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "The lowest available memory over the lifetime of the node (the closest the node has been to out-of-memory).",
       "fieldConfig": {
@@ -2654,7 +2644,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -2702,7 +2692,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "Measured within Redpanda",
       "fieldConfig": {
@@ -2802,7 +2792,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.95, sum(rate(redpanda_kafka_handler_latency_seconds_bucket{handler=\"produce\",instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m])) by (le, [[aggr_criteria]]))",
@@ -2816,7 +2806,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.95, sum(rate(redpanda_kafka_handler_latency_seconds_bucket{handler=\"produce\",instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m] offset 1d)) by (le, cluster))",
@@ -2833,7 +2823,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "Measured within Redpanda",
       "fieldConfig": {
@@ -2930,7 +2920,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.99, sum(rate(redpanda_kafka_handler_latency_seconds_bucket{handler=\"produce\",instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m])) by (le, [[aggr_criteria]]))",
@@ -2944,7 +2934,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.99, sum(rate(redpanda_kafka_handler_latency_seconds_bucket{handler=\"produce\",instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m] offset 1d)) by (le, cluster))",
@@ -2961,7 +2951,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "Measured within Redpanda",
       "fieldConfig": {
@@ -3058,7 +3048,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.95, sum(rate(redpanda_kafka_handler_latency_seconds_bucket{handler=\"fetch\",instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m])) by (le, [[aggr_criteria]]))",
@@ -3072,7 +3062,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.95, sum(rate(redpanda_kafka_handler_latency_seconds_bucket{handler=\"fetch\",instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m] offset 1d)) by (le, cluster))",
@@ -3089,7 +3079,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "Measured within Redpanda",
       "fieldConfig": {
@@ -3186,7 +3176,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.99, sum(rate(redpanda_kafka_handler_latency_seconds_bucket{handler=\"fetch\",instance=~\"$node\",instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m])) by (le, [[aggr_criteria]]))",
@@ -3200,7 +3190,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.99, sum(rate(redpanda_kafka_handler_latency_seconds_bucket{handler=\"fetch\",instance=~\"$node\",instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m] offset 1d)) by (le, cluster))",
@@ -3277,7 +3267,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "editable": true,
       "error": false,
@@ -3380,7 +3370,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.95, sum(rate(redpanda_rpc_request_latency_seconds_bucket{redpanda_server=\"internal\",instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m])) by (le, [[aggr_criteria]]))",
@@ -3412,7 +3402,7 @@
       "yaxes": [
         {
           "$$hashKey": "object:411",
-          "format": "µs",
+          "format": "\u00b5s",
           "logBase": 1,
           "min": 0,
           "show": true
@@ -3436,7 +3426,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "editable": true,
       "error": false,
@@ -3539,7 +3529,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "histogram_quantile(0.99, sum(rate(redpanda_rpc_request_latency_seconds_bucket{redpanda_server=\"internal\",instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m])) by (le, [[aggr_criteria]]))",
@@ -3571,7 +3561,7 @@
       "yaxes": [
         {
           "$$hashKey": "object:500",
-          "format": "µs",
+          "format": "\u00b5s",
           "logBase": 1,
           "min": 0,
           "show": true
@@ -3595,7 +3585,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "editable": true,
       "error": false,
@@ -3698,7 +3688,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "sum(rate(redpanda_kafka_request_bytes_total{redpanda_request=\"consume\", instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[5m])) by ([[aggr_criteria]])",
@@ -3752,7 +3742,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "editable": true,
       "error": false,
@@ -3855,7 +3845,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "sum(rate(redpanda_kafka_request_bytes_total{instance=~\"[[node]]\",exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\",redpanda_request=\"produce\",redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[30s])) by ([[aggr_criteria]])",
@@ -3905,7 +3895,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -3987,7 +3977,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -4006,7 +3996,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "\n",
       "fieldConfig": {
@@ -4060,7 +4050,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -4123,7 +4113,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -4218,7 +4208,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -4234,7 +4224,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "avg by([[aggr_criteria]]) (deriv(redpanda_cpu_busy_seconds_total{instance=~\"[[node]]\", exported_instance=~\"[[exported_node]]\",shard=~\"[[node_shard]]\", redpanda_cloud_data_cluster_name=~\"[[data_cluster]]\"}[$__rate_interval] offset 1d))",
@@ -4251,7 +4241,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -4422,7 +4412,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -4437,7 +4427,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "exemplar": true,
           "expr": "sum(rate(redpanda_raft_leadership_changes{redpanda_cloud_data_cluster_name=\"[[data_cluster]]\"}[5m] offset 1d)) by (cluster)",
@@ -4454,7 +4444,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus"
       },
       "description": "Available storage for Redpanda clusters",
       "fieldConfig": {
@@ -4539,7 +4529,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -4584,7 +4574,7 @@
         "current": {},
         "datasource": {
           "type": "prometheus",
-          "uid": "${DS_PROMETHEUS}"
+          "uid": "prometheus"
         },
         "definition": "",
         "hide": 0,
@@ -4613,7 +4603,7 @@
         "current": {},
         "datasource": {
           "type": "prometheus",
-          "uid": "${DS_PROMETHEUS}"
+          "uid": "prometheus"
         },
         "definition": "label_values(exported_instance)",
         "hide": 0,
@@ -4642,7 +4632,7 @@
         "current": {},
         "datasource": {
           "type": "prometheus",
-          "uid": "${DS_PROMETHEUS}"
+          "uid": "prometheus"
         },
         "definition": "",
         "hide": 0,
@@ -4717,7 +4707,7 @@
         "current": {},
         "datasource": {
           "type": "prometheus",
-          "uid": "${DS_PROMETHEUS}"
+          "uid": "prometheus"
         },
         "definition": "label_values(redpanda_cloud_data_cluster_name)",
         "hide": 0,
@@ -4742,7 +4732,7 @@
       {
         "datasource": {
           "type": "prometheus",
-          "uid": "${DS_PROMETHEUS}"
+          "uid": "prometheus"
         },
         "filters": [],
         "hide": 0,
@@ -4787,4 +4777,3 @@
   "version": 1,
   "weekStart": ""
 }
-
