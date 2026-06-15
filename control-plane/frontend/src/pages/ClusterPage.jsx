@@ -436,7 +436,7 @@ export default function ClusterPage() {
         </table>
       </div>
 
-      {!poolsLoading && (
+      {pools !== null && (
         <>
           <WorkerPoolsTable
             pools={pools}
