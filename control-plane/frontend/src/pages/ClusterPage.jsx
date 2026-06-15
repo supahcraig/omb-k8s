@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { listPods, getPodLogs, restartPod, listWorkerPools, createWorkerPool, scaleWorkerPool, releaseWorkerPool } from '../api.js'
+import { listPods, getPodLogs, restartPod, createWorkerPool, scaleWorkerPool, releaseWorkerPool } from '../api.js'
+import { useWorker } from '../context/WorkerContext.jsx'
 
 const GROUPS = [
   { label: 'Control Plane',  match: n => n.startsWith('omb-control-plane') },
@@ -236,29 +237,16 @@ export default function ClusterPage() {
   const [logsError, setLogsError]           = useState(null)
   const logEndRef = useRef(null)
 
-  const [pools, setPools]             = useState([])
-  const [poolsLoading, setPoolsLoading] = useState(false)
+  const { pools, refresh: refreshPools } = useWorker()
   const [releasingPool, setReleasingPool] = useState(null)
   const [scalingPool, setScalingPool]   = useState(null)
   const [creatingPool, setCreatingPool] = useState(false)
-
-  async function fetchPools() {
-    setPoolsLoading(true)
-    try {
-      const data = await listWorkerPools()
-      setPools(data)
-    } catch (_) {
-      // pools section is optional; don't error the whole page
-    } finally {
-      setPoolsLoading(false)
-    }
-  }
 
   async function handleCreatePool(name, replicas) {
     setCreatingPool(true)
     try {
       await createWorkerPool(name, replicas)
-      await fetchPools()
+      await refreshPools()
     } finally {
       setCreatingPool(false)
     }
@@ -268,7 +256,7 @@ export default function ClusterPage() {
     setScalingPool(poolId)
     try {
       await scaleWorkerPool(poolId, replicas)
-      await fetchPools()
+      await refreshPools()
     } catch (err) {
       alert(`Failed to scale pool: ${err.message}`)
     } finally {
@@ -281,7 +269,7 @@ export default function ClusterPage() {
     setReleasingPool(poolId)
     try {
       await releaseWorkerPool(poolId)
-      await fetchPools()
+      await refreshPools()
     } catch (err) {
       alert(`Failed to delete pool: ${err.message}`)
     } finally {
@@ -317,7 +305,7 @@ export default function ClusterPage() {
     }
   }
 
-  useEffect(() => { fetchPods(); fetchPools() }, [])
+  useEffect(() => { fetchPods() }, [])
 
   useEffect(() => {
     if (logs !== null) logEndRef.current?.scrollIntoView({ behavior: 'smooth' })

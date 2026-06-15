@@ -67,6 +67,9 @@ export default function Layout({ children }) {
         )}
 
         <div className="nav-bottom">
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-muted)', paddingBottom: 6 }}>
+            Worker Pools
+          </div>
           <WorkerScalingBar />
         </div>
       </nav>
