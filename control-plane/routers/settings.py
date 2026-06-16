@@ -306,6 +306,7 @@ async def test_connection(db: AsyncSession = Depends(get_db)) -> dict:
         return {"success": False, "message": "bootstrap_servers is not configured."}
 
     tls_enabled: bool = cluster_stored.get("tls_enabled", False)
+    tls_skip_verify: bool = cluster_stored.get("tls_skip_verify", False)
     sasl_enabled: bool = cluster_stored.get("sasl_enabled", False)
     sasl_mechanism: Optional[str] = cluster_stored.get("sasl_mechanism")
     sasl_username: Optional[str] = cluster_stored.get("sasl_username")
@@ -319,6 +320,9 @@ async def test_connection(db: AsyncSession = Depends(get_db)) -> dict:
     if tls_enabled:
         import ssl  # noqa: PLC0415
         ssl_ctx = ssl.create_default_context()
+        if tls_skip_verify:
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
         producer_kwargs["ssl_context"] = ssl_ctx
         producer_kwargs["security_protocol"] = "SASL_SSL" if sasl_enabled else "SSL"
     elif sasl_enabled:

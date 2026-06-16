@@ -98,6 +98,7 @@ function ClusterTab({ initial, onChange }) {
 
   const [brokers, setBrokers] = useState(initBrokers)
   const [tlsEnabled, setTlsEnabled] = useState(initial?.tls_enabled ?? false)
+  const [tlsSkipVerify, setTlsSkipVerify] = useState(initial?.tls_skip_verify ?? false)
   const [saslEnabled, setSaslEnabled] = useState(initial?.sasl_enabled ?? false)
   const [saslMechanism, setSaslMechanism] = useState(initial?.sasl_mechanism || 'SCRAM-SHA-256')
   const [username, setUsername] = useState(initial?.sasl_username || '')
@@ -116,6 +117,7 @@ function ClusterTab({ initial, onChange }) {
       mode: 'self-hosted',
       bootstrap_servers: brokers.join(','),
       tls_enabled: tlsEnabled,
+      tls_skip_verify: tlsSkipVerify,
       sasl_enabled: saslEnabled,
       sasl_mechanism: saslEnabled ? saslMechanism : null,
       sasl_username: saslEnabled ? username : null,
@@ -167,6 +169,11 @@ function ClusterTab({ initial, onChange }) {
       </div>
 
       <Toggle checked={tlsEnabled} onChange={setTlsEnabled} label="TLS" />
+      {tlsEnabled && (
+        <div className="mt-8 ml-16">
+          <Toggle checked={tlsSkipVerify} onChange={setTlsSkipVerify} label="Skip TLS verification (self-signed certs)" />
+        </div>
+      )}
       <div className="mt-12">
         <Toggle checked={saslEnabled} onChange={setSaslEnabled} label="SASL" />
       </div>

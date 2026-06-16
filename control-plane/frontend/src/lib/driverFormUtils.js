@@ -88,6 +88,9 @@ export function buildCommonConfigFromCluster(cluster) {
   const rows = [{ key: 'bootstrap.servers', value: cluster.bootstrap_servers }]
   const protocol = deriveProtocol(cluster)
   if (protocol) rows.push({ key: 'security.protocol', value: protocol })
+  if (cluster.tls_enabled && cluster.tls_skip_verify) {
+    rows.push({ key: 'ssl.endpoint.identification.algorithm', value: '' })
+  }
   if (cluster.sasl_enabled && cluster.sasl_mechanism) {
     rows.push({ key: 'sasl.mechanism', value: cluster.sasl_mechanism })
     const loginModule = cluster.sasl_mechanism === 'PLAIN'

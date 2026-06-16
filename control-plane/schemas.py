@@ -211,6 +211,7 @@ class ClusterConfig(BaseModel):
     mode: str  # "byoc" | "self-hosted"
     bootstrap_servers: str
     tls_enabled: bool = False
+    tls_skip_verify: bool = False
     sasl_enabled: bool = False
     sasl_mechanism: Optional[str] = None   # SCRAM-SHA-256 | SCRAM-SHA-512 | PLAIN
     sasl_username: Optional[str] = None
