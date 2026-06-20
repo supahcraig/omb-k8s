@@ -307,6 +307,7 @@ async def test_connection(db: AsyncSession = Depends(get_db)) -> dict:
 
     tls_enabled: bool = cluster_stored.get("tls_enabled", False)
     tls_skip_verify: bool = cluster_stored.get("tls_skip_verify", False)
+    tls_ca_cert: Optional[str] = cluster_stored.get("tls_ca_cert")
     sasl_enabled: bool = cluster_stored.get("sasl_enabled", False)
     sasl_mechanism: Optional[str] = cluster_stored.get("sasl_mechanism")
     sasl_username: Optional[str] = cluster_stored.get("sasl_username")
@@ -320,7 +321,9 @@ async def test_connection(db: AsyncSession = Depends(get_db)) -> dict:
     if tls_enabled:
         import ssl  # noqa: PLC0415
         ssl_ctx = ssl.create_default_context()
-        if tls_skip_verify:
+        if tls_ca_cert:
+            ssl_ctx.load_verify_locations(cadata=tls_ca_cert)
+        elif tls_skip_verify:
             ssl_ctx.check_hostname = False
             ssl_ctx.verify_mode = ssl.CERT_NONE
         producer_kwargs["ssl_context"] = ssl_ctx
