@@ -56,7 +56,7 @@ output "terraform_operator_ip" {
 output "helm_install_command" {
   description = "Ready-to-run helm install command with all AWS-specific values pre-filled"
   value       = <<-EOT
-    helm install omb charts/omb -n omb \
+    helm install omb charts/omb -n omb --create-namespace \
       -f charts/omb/values-aws.yaml \
       --set "controlPlane.allowedCIDRs[0]=${chomp(data.http.my_ip.response_body)}/32" \
       --set clusterAutoscaler.clusterName=${local.cluster_name} \
