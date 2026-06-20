@@ -323,7 +323,7 @@ async def test_connection(db: AsyncSession = Depends(get_db)) -> dict:
         ssl_ctx = ssl.create_default_context()
         if tls_ca_cert:
             ssl_ctx.load_verify_locations(cadata=tls_ca_cert)
-        elif tls_skip_verify:
+        if tls_skip_verify:
             ssl_ctx.check_hostname = False
             ssl_ctx.verify_mode = ssl.CERT_NONE
         producer_kwargs["ssl_context"] = ssl_ctx
