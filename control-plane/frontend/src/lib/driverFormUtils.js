@@ -92,7 +92,8 @@ export function buildCommonConfigFromCluster(cluster) {
     if (cluster.tls_ca_cert) {
       rows.push({ key: 'ssl.truststore.type', value: 'PEM' })
       rows.push({ key: 'ssl.truststore.certificates', value: cluster.tls_ca_cert })
-    } else if (cluster.tls_skip_verify) {
+    }
+    if (cluster.tls_skip_verify) {
       rows.push({ key: 'ssl.endpoint.identification.algorithm', value: '' })
     }
   }

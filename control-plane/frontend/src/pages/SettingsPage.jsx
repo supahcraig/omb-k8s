@@ -174,20 +174,18 @@ function ClusterTab({ initial, onChange }) {
       {tlsEnabled && (
         <div className="mt-8 ml-16">
           <Toggle checked={tlsSkipVerify} onChange={setTlsSkipVerify} label="Skip TLS verification (self-signed certs)" />
-          {!tlsSkipVerify && (
-            <div className="form-group mt-8">
-              <label className="form-label">CA Certificate (PEM)</label>
-              <textarea
-                className="form-input"
-                rows={6}
-                placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
-                value={tlsCaCert}
-                onChange={e => setTlsCaCert(e.target.value)}
-                style={{ fontFamily: 'monospace', fontSize: '12px' }}
-              />
-              <span className="form-hint">Paste the CA cert PEM. Leave blank to use system trust store.</span>
-            </div>
-          )}
+          <div className="form-group mt-8">
+            <label className="form-label">CA Certificate (PEM)</label>
+            <textarea
+              className="form-input"
+              rows={6}
+              placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+              value={tlsCaCert}
+              onChange={e => setTlsCaCert(e.target.value)}
+              style={{ fontFamily: 'monospace', fontSize: '12px' }}
+            />
+            <span className="form-hint">Paste the CA cert PEM. Leave blank to use system trust store.</span>
+          </div>
         </div>
       )}
       <div className="mt-12">
