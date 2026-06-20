@@ -99,6 +99,7 @@ function ClusterTab({ initial, onChange }) {
   const [brokers, setBrokers] = useState(initBrokers)
   const [tlsEnabled, setTlsEnabled] = useState(initial?.tls_enabled ?? false)
   const [tlsSkipVerify, setTlsSkipVerify] = useState(initial?.tls_skip_verify ?? false)
+  const [tlsCaCert, setTlsCaCert] = useState(initial?.tls_ca_cert || '')
   const [saslEnabled, setSaslEnabled] = useState(initial?.sasl_enabled ?? false)
   const [saslMechanism, setSaslMechanism] = useState(initial?.sasl_mechanism || 'SCRAM-SHA-256')
   const [username, setUsername] = useState(initial?.sasl_username || '')
@@ -118,6 +119,7 @@ function ClusterTab({ initial, onChange }) {
       bootstrap_servers: brokers.join(','),
       tls_enabled: tlsEnabled,
       tls_skip_verify: tlsSkipVerify,
+      tls_ca_cert: tlsEnabled && tlsCaCert.trim() ? tlsCaCert.trim() : null,
       sasl_enabled: saslEnabled,
       sasl_mechanism: saslEnabled ? saslMechanism : null,
       sasl_username: saslEnabled ? username : null,
@@ -172,6 +174,20 @@ function ClusterTab({ initial, onChange }) {
       {tlsEnabled && (
         <div className="mt-8 ml-16">
           <Toggle checked={tlsSkipVerify} onChange={setTlsSkipVerify} label="Skip TLS verification (self-signed certs)" />
+          {!tlsSkipVerify && (
+            <div className="form-group mt-8">
+              <label className="form-label">CA Certificate (PEM)</label>
+              <textarea
+                className="form-input"
+                rows={6}
+                placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                value={tlsCaCert}
+                onChange={e => setTlsCaCert(e.target.value)}
+                style={{ fontFamily: 'monospace', fontSize: '12px' }}
+              />
+              <span className="form-hint">Paste the CA cert PEM. Leave blank to use system trust store.</span>
+            </div>
+          )}
         </div>
       )}
       <div className="mt-12">

@@ -212,6 +212,7 @@ class ClusterConfig(BaseModel):
     bootstrap_servers: str
     tls_enabled: bool = False
     tls_skip_verify: bool = False
+    tls_ca_cert: Optional[str] = None
     sasl_enabled: bool = False
     sasl_mechanism: Optional[str] = None   # SCRAM-SHA-256 | SCRAM-SHA-512 | PLAIN
     sasl_username: Optional[str] = None
