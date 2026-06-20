@@ -43,13 +43,6 @@ clusterAutoscaler:
 driverJob:
   enabled: false
 
-# Local-path-provisioner for Redpanda nodes with NVMe instance store.
-# Creates a StorageClass named "local-path" backed by /mnt/nvme on each node.
-# Enable when deploying the Redpanda node pool (terraform/aws/eks.tf redpanda group).
-localPathProvisioner:
-  enabled: false
-  storagePath: /mnt/nvme
-  storageClassName: local-path
 
 # kube-prometheus-stack subchart values
 kube-prometheus-stack:
@@ -131,10 +124,7 @@ kube-prometheus-stack:
         operator: Equal
         value: benchmark
         effect: NoSchedule
-      - key: dedicated
-        operator: Equal
-        value: redpanda
-        effect: NoSchedule
+
     resources:
       requests:
         cpu: 10m
