@@ -173,7 +173,8 @@ resource "aws_launch_template" "redpanda" {
     # ── Install redpanda apt package ─────────────────────────────────────────
     # Provides: rpk redpanda tune (host-level tuner), redpanda-tuner systemd service
     curl -1sLf 'https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/cfg/setup/bash.deb.sh' | bash
-    apt install -y redpanda
+    apt-get update
+    apt-get install -y redpanda
 
     # ── Host-level kernel tuning ─────────────────────────────────────────────
     # Must run on the EC2 host before pods are scheduled.
