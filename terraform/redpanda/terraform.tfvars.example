@@ -1,0 +1,15 @@
+region             = "us-east-1"
+availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+
+# Must not overlap with your OMB cluster VPC (default 10.0.0.0/16)
+vpc_cidr = "10.1.0.0/16"
+
+# Once your OMB cluster is up, you can lock this down to its VPC CIDR.
+# Leave wide open for now — you won't know the OMB CIDR until it's deployed.
+# allowed_cidr_blocks = ["10.0.0.0/16", "203.0.113.42/32"]
+allowed_cidr_blocks = ["0.0.0.0/0"]
+
+tags = {
+  project     = "redpanda-benchmark"
+  environment = "dev"
+}
