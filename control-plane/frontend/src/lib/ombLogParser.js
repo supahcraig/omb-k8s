@@ -50,6 +50,9 @@ export function parseLiveMetric(line, sampleIndex) {
     e2eP50:     delayP50Match  ? usToMs(delayP50Match[1])  : null,
     e2eP99:     delayP99Match  ? usToMs(delayP99Match[1])  : null,
     e2eP999:    delayP999Match ? usToMs(delayP999Match[1]) : null,
+    delayP50:   delayP50Match  ? usToMs(delayP50Match[1])  : null,
+    delayP99:   delayP99Match  ? usToMs(delayP99Match[1])  : null,
+    delayP999:  delayP999Match ? usToMs(delayP999Match[1]) : null,
   };
 }
 

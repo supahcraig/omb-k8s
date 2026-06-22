@@ -18,6 +18,9 @@ const C = {
   e2eP50:   '#6ee7b7',
   e2eP99:   '#fcd34d',
   e2eP999:  '#fb923c',
+  delayP50:  '#6ee7b7',
+  delayP99:  '#f59e0b',
+  delayP999: '#fcd34d',
   bytesIn:       '#38bdf8',
   bytesOut:      '#7dd3fc',
   records:       '#a78bfa',
@@ -150,6 +153,7 @@ export default function RunCharts({
   expectedMBSec       = 0,
   expectedConsMsgSec  = 0,
   expectedConsMBSec   = 0,
+  finalizedDelayPoints = [],
 }) {
   const [, setTick] = useState(0)
   useEffect(() => {
@@ -168,6 +172,12 @@ export default function RunCharts({
   );
   const promPoints  = promToChartData(promSamples);
   const hasLatency      = chartPoints.some(p => p.pubP99 != null || p.pubP50 != null);
+
+  // Pub delay: prefer live data during run; fall back to finalized timeseries post-run
+  const delayChartPoints = chartPoints.some(p => p.delayP99 != null)
+    ? chartPoints
+    : finalizedDelayPoints
+  const hasDelay = delayChartPoints.some(p => p.delayP99 != null)
   const hasBrokerMetrics = promPoints.some(p => p.bytesInMBSec != null || p.bytesOutMBSec != null);
   const hasWorkerMetrics = promPoints.some(p => p.workerCpuPct != null || p.workerMemMiB != null);
   const maxThrottle      = promPoints.reduce((max, p) => Math.max(max, p.workerThrottlePct ?? 0), 0);
@@ -392,6 +402,26 @@ export default function RunCharts({
         </ChartCard>
       </div>
 
+
+      {/* Row 2: Pub Delay Latency */}
+      {hasDelay && (
+        <div className="charts-row">
+          <ChartCard title="Pub Delay Latency (ms)" badge="omb" info="Time between when a message was scheduled to send and when it actually sent. Spikes indicate producers are saturated and cannot keep up with the target publish rate.">
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={delayChartPoints} syncId="run">
+                <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
+                <XAxis dataKey="t" stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} ticks={xTicks} tickFormatter={ombXFmt} />
+                <YAxis stroke={C.axis} tick={{ fill: C.axis, fontSize: 10 }} width={55} domain={[0, 'auto']} />
+                <Tooltip contentStyle={{ background: '#171c28', border: '1px solid #2a3045', color: '#e8edf8', fontSize: 11 }} labelFormatter={v => fmtTimeLabel(ombTimeBase, v)} formatter={(v, name) => [v != null ? `${v.toFixed(2)} ms` : '—', name]} />
+                <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
+                <Line type="monotone" dataKey="delayP50"  name="P50"  stroke={C.delayP50}  dot={false} strokeWidth={1.5} />
+                <Line type="monotone" dataKey="delayP99"  name="P99"  stroke={C.delayP99}  dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="delayP999" name="P999" stroke={C.delayP999} dot={false} strokeWidth={1.5} strokeDasharray="4 2" />
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </div>
+      )}
 
       {/* Row 3: Broker Prometheus (only if broker metrics available) */}
       {hasBrokerMetrics && (

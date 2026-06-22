@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { getRun, cancelRun, getPrometheusSamples, getSweepRuns, getSweep, getWorkerResources, getRunResults, getConcurrentRuns } from '../api.js'
 import RunCharts from '../components/RunCharts.jsx'
@@ -468,6 +468,17 @@ export default function RunDetailPage() {
   const liveConsumeRate   = liveAvg('consMsgSec')
   const liveConsumeMBSec  = liveAvg('consMBSec')
 
+  const finalizedDelayPoints = useMemo(() => {
+    const ts = hdrResults?.timeSeries
+    if (!ts?.publishDelayLatencyP99?.length) return []
+    return ts.publishDelayLatencyP99.map((p99, i) => ({
+      t:        i,
+      delayP50:  ts.publishDelayLatencyP50?.[i]  ?? null,
+      delayP99:  p99,
+      delayP999: ts.publishDelayLatencyP999?.[i] ?? null,
+    }))
+  }, [hdrResults])
+
   // Build a short label from sweep_params JSON, stripping Properties field prefixes
   function sweepParamLabel(sr) {
     try {
@@ -643,6 +654,7 @@ export default function RunDetailPage() {
             expectedMBSec={expectedMBSec}
             expectedConsMsgSec={expectedConsMsgSec}
             expectedConsMBSec={expectedConsMBSec}
+            finalizedDelayPoints={finalizedDelayPoints}
           />
           </div>
         </>
@@ -667,6 +679,7 @@ export default function RunDetailPage() {
           expectedMBSec={expectedMBSec}
           expectedConsMsgSec={expectedConsMsgSec}
           expectedConsMBSec={expectedConsMBSec}
+          finalizedDelayPoints={finalizedDelayPoints}
         />
       )}
 

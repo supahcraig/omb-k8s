@@ -23,6 +23,9 @@ def _make_result_file(path: str, extra: dict = None):
         "endToEndLatency50pct": [3.5, 3.6],
         "endToEndLatency99pct": [9.1, 9.2],
         "endToEndLatency999pct": [18.0, 18.1],
+        "publishDelayLatency50pct": [0.1, 0.2],
+        "publishDelayLatency99pct": [1.1, 1.2],
+        "publishDelayLatency999pct": [2.5, 2.6],
         "aggregatedPublishLatencyAvg": 3.5,
         "aggregatedPublishLatency50pct": 3.3,
         "aggregatedPublishLatency75pct": 4.1,
@@ -128,6 +131,24 @@ def test_parse_hdr_results_timeseries_includes_p50():
         assert "endToEndLatencyP50" in ts
         assert ts["publishLatencyP50"]  == [3.0, 3.1]
         assert ts["endToEndLatencyP50"] == [3.5, 3.6]
+    finally:
+        os.unlink(path)
+
+
+def test_parse_hdr_results_timeseries_includes_pub_delay():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        path = f.name
+    try:
+        _make_result_file(path)
+        result = parse_hdr_results_from_file(path)
+        assert result is not None
+        ts = result["timeSeries"]
+        assert "publishDelayLatencyP50"  in ts
+        assert "publishDelayLatencyP99"  in ts
+        assert "publishDelayLatencyP999" in ts
+        assert ts["publishDelayLatencyP50"]  == [0.1, 0.2]
+        assert ts["publishDelayLatencyP99"]  == [1.1, 1.2]
+        assert ts["publishDelayLatencyP999"] == [2.5, 2.6]
     finally:
         os.unlink(path)
 
