@@ -131,6 +131,15 @@ Open **Settings → Cluster Connectivity** after deployment. Enter one or more
 broker addresses, then enable TLS and SASL as required by the target cluster.
 Redpanda Cloud always requires both. Click **Save**.
 
+**Provisioning a self-hosted Redpanda target on AWS:**
+`terraform/redpanda/` is a standalone Terraform module that provisions a 3-broker
+Redpanda cluster on EKS (r8gd.8xlarge Graviton4 nodes, NVMe instance store, TLS
+enabled). Deploy it before OMB, then use its `cluster_info` output for broker IPs,
+CA cert, and Prometheus scrape endpoints. VPC peer it to the OMB cluster using the
+outputs from `terraform/redpanda/` as inputs to the peering module. See the
+[redpanda-k8s-cluster repo](https://github.com/supahcraig/redpanda-k8s-cluster) for
+the full deployment guide including the node replacement runbook.
+
 ## Scaling Workers
 
 Workers are a StatefulSet. Scale them non-destructively through the UI or with
