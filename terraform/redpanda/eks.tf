@@ -179,7 +179,7 @@ resource "aws_launch_template" "redpanda" {
     # ── Host-level kernel tuning ─────────────────────────────────────────────
     # Must run on the EC2 host before pods are scheduled.
     # Sets: aio_events, swappiness, transparent_hugepages, cpu governor, disk I/O scheduler,
-    #       IRQ affinity.
+    #       IRQ affinity, and — critically — RLIMIT_NOFILE for all processes including containerd.
     # Expected non-fatal failures on EKS: net (ENA), disk_write_cache (AWS only), fstrim (no dbus)
     rpk redpanda mode production
     rpk redpanda tune all || true
@@ -187,38 +187,6 @@ resource "aws_launch_template" "redpanda" {
     # Enable tuner service so tuning re-runs on every subsequent boot
     systemctl enable redpanda-tuner
     systemctl start redpanda-tuner || true
-
-    # ── LVM volume group for csi-driver-lvm ─────────────────────────────────
-    # EC2 NVMe device enumeration order is non-deterministic across launches:
-    # the instance store may be nvme0n1 on one boot and nvme1n1 on another.
-    # csi-driver-lvm uses a fixed devicePattern and fails if the VG doesn't
-    # exist on the expected device. Initialize the VG here by finding the
-    # largest NVMe device (instance store is 1.7T; root EBS is 20G).
-    apt-get install -y lvm2
-    INSTANCE_STORE=""
-    for dev in $(ls /dev/nvme*n1 2>/dev/null | sort); do
-      size=$(lsblk -bnd -o SIZE "$dev" 2>/dev/null || echo 0)
-      if [ "$size" -gt "500000000000" ]; then
-        INSTANCE_STORE="$dev"
-        break
-      fi
-    done
-    if [ -n "$INSTANCE_STORE" ]; then
-      pvcreate "$INSTANCE_STORE"
-      vgcreate csi-lvm "$INSTANCE_STORE"
-    fi
-
-    # ── containerd RLIMIT_NOFILE override ────────────────────────────────────
-    # rpk redpanda tune all does NOT fix containerd's file descriptor limit.
-    # Without this override, all containers on this node inherit the Ubuntu
-    # default soft limit of 1024, which causes:
-    #   InvalidPartitionsException: Can not increase partition count due to FD limit
-    # This must be set before bootstrap.sh starts containerd.
-    mkdir -p /etc/systemd/system/containerd.service.d
-    echo -e '[Service]\nLimitNOFILE=1048576' > /etc/systemd/system/containerd.service.d/ulimits.conf
-    systemctl daemon-reload
-    # Restart containerd if already running (EKS AMI pre-starts it)
-    systemctl restart containerd || true
 
     # ── Register with EKS ────────────────────────────────────────────────────
     # --register-with-taints applies the taint at kubelet registration so pods
