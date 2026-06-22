@@ -133,6 +133,17 @@ export default function RunDetailPage() {
   const [configOpen, setConfigOpen] = useState(false)
   const wsRef = useRef(null)
   const logEndRef = useRef(null)
+
+  const finalizedDelayPoints = useMemo(() => {
+    const ts = hdrResults?.timeSeries
+    if (!ts?.publishDelayLatencyP99?.length) return []
+    return ts.publishDelayLatencyP99.map((p99, i) => ({
+      t:        i,
+      delayP50:  ts.publishDelayLatencyP50?.[i]  ?? null,
+      delayP99:  p99,
+      delayP999: ts.publishDelayLatencyP999?.[i] ?? null,
+    }))
+  }, [hdrResults])
   const liveMatchedRef = useRef(false)
   const wsHasDataRef = useRef(false)
   const sweepRunsRef = useRef([])
@@ -467,17 +478,6 @@ export default function RunDetailPage() {
   const livePublishMBSec  = liveAvg('pubMBSec')
   const liveConsumeRate   = liveAvg('consMsgSec')
   const liveConsumeMBSec  = liveAvg('consMBSec')
-
-  const finalizedDelayPoints = useMemo(() => {
-    const ts = hdrResults?.timeSeries
-    if (!ts?.publishDelayLatencyP99?.length) return []
-    return ts.publishDelayLatencyP99.map((p99, i) => ({
-      t:        i,
-      delayP50:  ts.publishDelayLatencyP50?.[i]  ?? null,
-      delayP99:  p99,
-      delayP999: ts.publishDelayLatencyP999?.[i] ?? null,
-    }))
-  }, [hdrResults])
 
   // Build a short label from sweep_params JSON, stripping Properties field prefixes
   function sweepParamLabel(sr) {
