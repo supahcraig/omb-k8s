@@ -316,6 +316,80 @@ async def launch_run(
 
 
 # ---------------------------------------------------------------------------
+# Topic cleanup
+# ---------------------------------------------------------------------------
+
+async def _delete_run_topics(run_id: int) -> None:
+    """Delete all Kafka topics created for run_id (prefix omb-r{run_id})."""
+    try:
+        from aiokafka.admin import AIOKafkaAdminClient  # noqa: PLC0415
+    except ImportError:
+        logger.debug("_delete_run_topics: aiokafka not available, skipping")
+        return
+
+    from database import AsyncSessionLocal as _Session  # noqa: PLC0415
+    from models import Setting  # noqa: PLC0415
+
+    async with _Session() as db:
+        row = await db.get(Setting, "cluster")
+    if row is None:
+        return
+    import json as _json  # noqa: PLC0415
+    cluster = _json.loads(row.value)
+
+    bootstrap = cluster.get("bootstrap_servers", "").strip()
+    if not bootstrap:
+        return
+
+    kwargs: dict = {"bootstrap_servers": bootstrap}
+
+    tls_enabled = cluster.get("tls_enabled", False)
+    tls_skip_verify = cluster.get("tls_skip_verify", False)
+    tls_ca_cert = cluster.get("tls_ca_cert")
+    sasl_enabled = cluster.get("sasl_enabled", False)
+    sasl_mechanism = cluster.get("sasl_mechanism")
+    sasl_username = cluster.get("sasl_username")
+    sasl_password = cluster.get("sasl_password")
+
+    if tls_enabled:
+        import ssl  # noqa: PLC0415
+        ssl_ctx = ssl.create_default_context()
+        if tls_ca_cert:
+            ssl_ctx.load_verify_locations(cadata=tls_ca_cert)
+        if tls_skip_verify:
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+        kwargs["ssl_context"] = ssl_ctx
+        kwargs["security_protocol"] = "SASL_SSL" if sasl_enabled else "SSL"
+    elif sasl_enabled:
+        kwargs["security_protocol"] = "SASL_PLAINTEXT"
+
+    if sasl_enabled and sasl_mechanism and sasl_username and sasl_password:
+        kwargs["sasl_mechanism"] = sasl_mechanism
+        kwargs["sasl_plain_username"] = sasl_username
+        kwargs["sasl_plain_password"] = sasl_password
+
+    prefix = f"omb-r{run_id}"
+    admin = AIOKafkaAdminClient(**kwargs)
+    try:
+        await asyncio.wait_for(admin.start(), timeout=10.0)
+        all_topics = await admin.list_topics()
+        to_delete = [t for t in all_topics if t.startswith(prefix)]
+        if to_delete:
+            await admin.delete_topics(to_delete, timeout_ms=15000)
+            logger.info("_delete_run_topics: deleted %d topic(s) for run %d", len(to_delete), run_id)
+        else:
+            logger.debug("_delete_run_topics: no topics found for run %d", run_id)
+    except Exception as exc:
+        logger.warning("_delete_run_topics: failed for run %d: %s", run_id, exc)
+    finally:
+        try:
+            await admin.close()
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
 # Background task
 # ---------------------------------------------------------------------------
 
@@ -407,6 +481,16 @@ async def _finish_run(run_id: int) -> None:
             return
 
     logger.info("_finish_run: run %d finished — status=%s", run_id, run.status)
+
+    # Delete topics when the driver had reset: true (OMB created them fresh).
+    import yaml as _yaml  # noqa: PLC0415
+    driver_yaml = run.driver_config or ""
+    try:
+        reset_flag = _yaml.safe_load(driver_yaml).get("reset", False)
+    except Exception:
+        reset_flag = False
+    if reset_flag:
+        asyncio.create_task(_delete_run_topics(run_id))
 
     # Release the pool back to ready so another run can claim it.
     if pool_id:
