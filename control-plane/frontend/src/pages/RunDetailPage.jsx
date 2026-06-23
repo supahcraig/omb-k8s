@@ -139,9 +139,9 @@ export default function RunDetailPage() {
     if (!ts?.publishDelayLatencyP99?.length) return []
     return ts.publishDelayLatencyP99.map((p99, i) => ({
       t:        i,
-      delayP50:  ts.publishDelayLatencyP50?.[i]  ?? null,
-      delayP99:  p99,
-      delayP999: ts.publishDelayLatencyP999?.[i] ?? null,
+      delayP50:  ts.publishDelayLatencyP50?.[i]  != null ? ts.publishDelayLatencyP50[i]  / 1000 : null,
+      delayP99:  p99 / 1000,
+      delayP999: ts.publishDelayLatencyP999?.[i] != null ? ts.publishDelayLatencyP999[i] / 1000 : null,
     }))
   }, [hdrResults])
   const liveMatchedRef = useRef(false)
