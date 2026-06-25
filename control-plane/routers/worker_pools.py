@@ -83,8 +83,8 @@ async def create_worker_pool(body: PoolCreate):
     Returns immediately with status='provisioning'; background task waits for
     all replicas to become ready and transitions to 'ready'.
     """
-    if body.replicas < 1 or body.replicas > 20:
-        raise HTTPException(status_code=400, detail="replicas must be between 1 and 20")
+    if body.replicas < 1 or body.replicas > 40:
+        raise HTTPException(status_code=400, detail="replicas must be between 1 and 40")
 
     pool = await create_pool(body.name, body.replicas, settings.omb_namespace)
     return _pool_row(pool)
@@ -93,8 +93,8 @@ async def create_worker_pool(body: PoolCreate):
 @router.patch("/{pool_id}/scale", status_code=200)
 async def scale_worker_pool(pool_id: str, body: PoolScale):
     """Scale a pool's StatefulSet to a new replica count."""
-    if body.replicas < 1 or body.replicas > 20:
-        raise HTTPException(status_code=400, detail="replicas must be between 1 and 20")
+    if body.replicas < 1 or body.replicas > 40:
+        raise HTTPException(status_code=400, detail="replicas must be between 1 and 40")
 
     async with AsyncSessionLocal() as db:
         pool = await db.get(WorkerPool, pool_id)

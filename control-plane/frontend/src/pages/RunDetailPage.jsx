@@ -621,8 +621,8 @@ export default function RunDetailPage() {
               <MetricCard value={fmt(m.publish_rate_avg * messageSize / 1_048_576, 2)} unit="MB/s" expected={expectedMBSec > 0 ? expectedMBSec : undefined} />
             </TileColumn>
             <TileColumn label="Avg Consume Rate" badge="omb">
-              <MetricCard value={fmt(m.consume_rate_avg)} unit="msg/s" expected={expectedMsgSec > 0 ? expectedMsgSec : undefined} />
-              <MetricCard value={fmt(m.consume_rate_avg * messageSize / 1_048_576, 2)} unit="MB/s" expected={expectedMBSec > 0 ? expectedMBSec : undefined} />
+              <MetricCard value={fmt(m.consume_rate_avg)} unit="msg/s" expected={expectedConsMsgSec > 0 ? expectedConsMsgSec : undefined} />
+              <MetricCard value={fmt(m.consume_rate_avg * messageSize / 1_048_576, 2)} unit="MB/s" expected={expectedConsMBSec > 0 ? expectedConsMBSec : undefined} />
             </TileColumn>
           </div>
 

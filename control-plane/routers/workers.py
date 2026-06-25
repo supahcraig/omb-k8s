@@ -20,7 +20,7 @@ router = APIRouter()
 
 _STATEFULSET_NAME = "omb-worker"
 _MIN_REPLICAS = 1
-_MAX_REPLICAS = 20
+_MAX_REPLICAS = 40
 
 
 class ScaleRequest(BaseModel):
@@ -81,7 +81,7 @@ async def scale_workers(body: ScaleRequest) -> dict:
     """
     Scale the omb-worker StatefulSet.
 
-    Request body: ``{"replicas": int}``  (1–20 inclusive)
+    Request body: ``{"replicas": int}``  (1–40 inclusive)
     Response:     ``{"desired": int}``
     """
     from kubernetes import client as k8s_client
