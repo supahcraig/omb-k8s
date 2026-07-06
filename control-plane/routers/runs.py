@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select, outerjoin
@@ -14,7 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from config import settings
 from database import AsyncSessionLocal, get_db
-from models import Metrics, Run, Sweep
+from models import Metrics, Run, Sweep, WorkerPool
 from schemas import RunListItem, RunOut, RunStatus
 from services.k8s_resources import read_worker_resources
 from services.omb_runner import runner
@@ -324,6 +325,52 @@ async def launch_run(
 
 
 # ---------------------------------------------------------------------------
+# Worker cleanup
+# ---------------------------------------------------------------------------
+
+async def _stop_all_workers(pool_id: str) -> None:
+    """
+    POST /stop-all to every worker in the pool, best-effort.
+
+    Called from _finish_run BEFORE run topics are deleted. The OMB driver is
+    supposed to stop worker clients during its shutdown, but it routinely
+    crashes partway through — leaving consumers alive. If the topic is then
+    deleted underneath them, thousands of clients spin on
+    UNKNOWN_TOPIC_OR_PARTITION and the worker never recovers without a pod
+    restart. Stopping clients while the topic still exists avoids the wedge.
+
+    Failures are logged, not raised — the pre-run probe (_probe_workers)
+    restarts any worker that stays unhealthy.
+    """
+    async with AsyncSessionLocal() as db:
+        pool = await db.get(WorkerPool, pool_id)
+    if pool is None:
+        return
+
+    async def _stop_one(idx: int) -> None:
+        url = (
+            f"http://{pool.statefulset_name}-{idx}.{pool.service_name}"
+            f".{settings.omb_namespace}.svc.cluster.local:{settings.omb_worker_port}/stop-all"
+        )
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(url)
+            if resp.status_code != 200:
+                logger.warning(
+                    "_stop_all_workers: %s-%d returned HTTP %d",
+                    pool.statefulset_name, idx, resp.status_code,
+                )
+        except Exception as exc:
+            logger.warning(
+                "_stop_all_workers: %s-%d unreachable: %s",
+                pool.statefulset_name, idx, exc,
+            )
+
+    await asyncio.gather(*[_stop_one(i) for i in range(pool.replicas)])
+    logger.info("_stop_all_workers: swept %d worker(s) in pool %s", pool.replicas, pool_id)
+
+
+# ---------------------------------------------------------------------------
 # Topic cleanup
 # ---------------------------------------------------------------------------
 
@@ -489,6 +536,12 @@ async def _finish_run(run_id: int) -> None:
             return
 
     logger.info("_finish_run: run %d finished — status=%s", run_id, run.status)
+
+    # Stop worker clients FIRST — before topics are deleted — so consumers
+    # orphaned by a driver shutdown crash close cleanly instead of spinning
+    # forever on a deleted topic (see _stop_all_workers).
+    if pool_id:
+        await _stop_all_workers(pool_id)
 
     # Delete topics when the driver had reset: true (OMB created them fresh).
     import yaml as _yaml  # noqa: PLC0415

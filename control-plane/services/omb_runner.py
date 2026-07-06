@@ -296,7 +296,35 @@ class OmbRunner:
             return last_err
 
         results = await asyncio.gather(*[_probe_one(i) for i in range(pool.replicas)])
-        errors = [r for r in results if r is not None]
+        stuck = [i for i, err in enumerate(results) if err is not None]
+        if not stuck:
+            return
+
+        # A worker that is still failing after the whole retry window is
+        # hard-wedged, not slow: when the driver crashes during its own
+        # shutdown (it routinely does), consumers are never stopped, the run
+        # topic gets deleted underneath them, and thousands of clients spin on
+        # UNKNOWN_TOPIC_OR_PARTITION forever — /stop-all 500s indefinitely.
+        # Restarting the pod is the only reliable recovery, so do it here
+        # instead of failing the run and asking the SE to do it by hand.
+        load_incluster_once()
+        core_api = k8s_client.CoreV1Api()
+        for idx in stuck:
+            pod_name = f"{pool.statefulset_name}-{idx}"
+            logger.warning(
+                "_probe_workers: %s still unhealthy after %ds of retries — restarting pod",
+                pod_name, int(_PROBE_ATTEMPTS * _PROBE_BACKOFF_SECONDS),
+            )
+            try:
+                await run_sync(core_api.delete_namespaced_pod, pod_name, namespace)
+            except Exception as exc:
+                logger.error("_probe_workers: failed to delete %s: %s", pod_name, exc)
+
+        # Let the StatefulSet respawn the pods, then re-probe just those
+        # workers (the retry loop inside _probe_one rides out pod startup).
+        await asyncio.sleep(10)
+        retried = await asyncio.gather(*[_probe_one(i) for i in stuck])
+        errors = [r for r in retried if r is not None]
         if errors:
             raise RuntimeError("; ".join(errors))
 
