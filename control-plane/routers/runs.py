@@ -292,7 +292,15 @@ async def launch_run(
     and surface the error as appropriate (HTTP 503 vs sweep continue).
     """
     pool = await claim_pool(pool_id, run_id)
-    await runner.start(run_id, driver_content, workload_content, pool)
+    try:
+        await runner.start(run_id, driver_content, workload_content, pool)
+    except Exception:
+        # start() claims nothing durable but the pool is already claimed above.
+        # If the worker readiness probe (or Job creation) fails, release the pool
+        # so it doesn't leak as 'in_use' and block every subsequent run — this is
+        # what cascaded a whole sweep to failure after one bad run.
+        await release_pool(pool_id)
+        raise
     prom_url = (
         f"http://omb-kube-prometheus-stack-prometheus"
         f".{settings.omb_namespace}.svc.cluster.local:9090"

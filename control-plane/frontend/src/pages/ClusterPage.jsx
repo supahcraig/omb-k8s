@@ -109,11 +109,11 @@ function WorkerPoolsTable({ pools, onRelease, releasing, onScale, scaling }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <input
                       type="number"
-                      min={1} max={20}
+                      min={1} max={40}
                       value={scaleVal}
                       onChange={e => setScaleValues(prev => ({
                         ...prev,
-                        [pool.id]: Math.max(1, Math.min(20, Number(e.target.value) || 1)),
+                        [pool.id]: Math.max(1, Math.min(40, Number(e.target.value) || 1)),
                       }))}
                       disabled={!canScale || scaling === pool.id}
                       style={{
@@ -200,9 +200,9 @@ function CreatePoolForm({ onCreate, creating }) {
             <input
               type="number"
               className="form-input"
-              min={1} max={20}
+              min={1} max={40}
               value={newReplicas}
-              onChange={e => setNewReplicas(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+              onChange={e => setNewReplicas(Math.max(1, Math.min(40, Number(e.target.value) || 1)))}
               disabled={creating}
             />
           </div>
