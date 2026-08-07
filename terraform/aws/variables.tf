@@ -38,6 +38,12 @@ variable "target_security_group_id" {
   default     = ""
 }
 
+variable "redpanda_node_count" {
+  description = "Number of r8gd.8xlarge Redpanda broker nodes to run in-cluster"
+  type        = number
+  default     = 3
+}
+
 variable "tags" {
   description = "Tags applied to all resources"
   type        = map(string)
