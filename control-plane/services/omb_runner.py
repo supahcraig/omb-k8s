@@ -28,6 +28,13 @@ from services.worker_pool_manager import build_workers_arg
 
 logger = logging.getLogger(__name__)
 
+# Worker readiness probe (/stop-all): a worker still tearing down a previous run
+# (closing consumer groups) returns 500 transiently. Retry with backoff so a slow
+# teardown doesn't fail the run — or cascade through the rest of a sweep. ~2 min
+# ceiling; idle workers return 200 on the first attempt so this adds no delay.
+_PROBE_ATTEMPTS = 24
+_PROBE_BACKOFF_SECONDS = 5.0
+
 
 async def _record_phase_ts(
     run_id: int,
@@ -268,23 +275,56 @@ class OmbRunner:
             def _sync_post() -> int:
                 with httpx.Client(timeout=3.0) as client:
                     return client.post(url).status_code
-            try:
-                status = await asyncio.to_thread(_sync_post)
-                if status != 200:
-                    return (
+            last_err: Optional[str] = None
+            for attempt in range(_PROBE_ATTEMPTS):
+                try:
+                    status = await asyncio.to_thread(_sync_post)
+                    if status == 200:
+                        return None
+                    last_err = (
                         f"{pool.statefulset_name}-{idx} is not ready (HTTP {status}) — "
                         "it may be stuck from a previous cancelled run. "
                         "Go to the Cluster tab and restart it before running."
                     )
-            except Exception as exc:
-                return (
-                    f"{pool.statefulset_name}-{idx} is unreachable ({exc}) — "
-                    "verify the worker pod is Running in the Cluster tab."
-                )
-            return None
+                except Exception as exc:
+                    last_err = (
+                        f"{pool.statefulset_name}-{idx} is unreachable ({exc}) — "
+                        "verify the worker pod is Running in the Cluster tab."
+                    )
+                if attempt < _PROBE_ATTEMPTS - 1:
+                    await asyncio.sleep(_PROBE_BACKOFF_SECONDS)
+            return last_err
 
         results = await asyncio.gather(*[_probe_one(i) for i in range(pool.replicas)])
-        errors = [r for r in results if r is not None]
+        stuck = [i for i, err in enumerate(results) if err is not None]
+        if not stuck:
+            return
+
+        # A worker that is still failing after the whole retry window is
+        # hard-wedged, not slow: when the driver crashes during its own
+        # shutdown (it routinely does), consumers are never stopped, the run
+        # topic gets deleted underneath them, and thousands of clients spin on
+        # UNKNOWN_TOPIC_OR_PARTITION forever — /stop-all 500s indefinitely.
+        # Restarting the pod is the only reliable recovery, so do it here
+        # instead of failing the run and asking the SE to do it by hand.
+        load_incluster_once()
+        core_api = k8s_client.CoreV1Api()
+        for idx in stuck:
+            pod_name = f"{pool.statefulset_name}-{idx}"
+            logger.warning(
+                "_probe_workers: %s still unhealthy after %ds of retries — restarting pod",
+                pod_name, int(_PROBE_ATTEMPTS * _PROBE_BACKOFF_SECONDS),
+            )
+            try:
+                await run_sync(core_api.delete_namespaced_pod, pod_name, namespace)
+            except Exception as exc:
+                logger.error("_probe_workers: failed to delete %s: %s", pod_name, exc)
+
+        # Let the StatefulSet respawn the pods, then re-probe just those
+        # workers (the retry loop inside _probe_one rides out pod startup).
+        await asyncio.sleep(10)
+        retried = await asyncio.gather(*[_probe_one(i) for i in stuck])
+        errors = [r for r in retried if r is not None]
         if errors:
             raise RuntimeError("; ".join(errors))
 
