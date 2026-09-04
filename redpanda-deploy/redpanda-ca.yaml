@@ -1,0 +1,48 @@
+# Bring-your-own root CA for Redpanda's TLS, managed by cert-manager.
+#
+# Why own it instead of the chart default: this root is stable and known before
+# the brokers exist, so it can be distributed to OMB up front and survives any
+# Redpanda redeploy. The Redpanda CR references the `redpanda-ca` Issuer below
+# (tls.certs.default.issuerRef); the chart mints broker leaf certs signed by it.
+#
+# All namespaced to `redpanda` so the Issuer's CA secret lives beside the CR
+# (avoids the ClusterIssuer requirement that the CA secret sit in cert-manager's
+# namespace).
+---
+# 1. Bootstrap self-signed issuer — only used to sign the root CA below.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: redpanda-selfsigned
+  namespace: redpanda
+spec:
+  selfSigned: {}
+---
+# 2. The root CA certificate (isCA), stored in secret redpanda-root-ca.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: redpanda-root-ca
+  namespace: redpanda
+spec:
+  isCA: true
+  commonName: redpanda-root-ca
+  secretName: redpanda-root-ca
+  duration: 43800h    # 5 years
+  renewBefore: 720h   # 30 days
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: redpanda-selfsigned
+    kind: Issuer
+---
+# 3. CA issuer that signs Redpanda's broker/listener certs from the root above.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: redpanda-ca
+  namespace: redpanda
+spec:
+  ca:
+    secretName: redpanda-root-ca
