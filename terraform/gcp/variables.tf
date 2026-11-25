@@ -13,6 +13,12 @@ variable "zone" {
   type        = string
 }
 
+variable "worker_zone" {
+  description = "Zone for the benchmark-worker nodes, in the same region. Defaults to zone. Set it to the brokers' zone when that differs from the cluster's."
+  type        = string
+  default     = null
+}
+
 variable "cluster_name" {
   description = "Name of the GKE cluster and related resources. Leave empty to auto-generate as omb-<random-pet>."
   type        = string
