@@ -171,7 +171,15 @@ def _build_scrape_yaml(stored: Optional[dict]) -> str:
         targets = [t.strip() for t in targets_str.split(",") if t.strip()]
         if not targets:
             return ""
-        lines = ["- job_name: redpanda", "  static_configs:", "    - targets:"]
+        # /public_metrics, not the default /metrics: the internal endpoint is
+        # ~10x the series per broker and OOMs Prometheus on larger clusters.
+        # The bundled Grafana dashboard only uses the public redpanda_* metrics.
+        lines = [
+            "- job_name: redpanda",
+            "  metrics_path: /public_metrics",
+            "  static_configs:",
+            "    - targets:",
+        ]
         lines += [f"        - {t}" for t in targets]
         return "\n".join(lines) + "\n"
 
