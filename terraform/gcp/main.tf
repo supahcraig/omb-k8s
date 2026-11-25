@@ -77,7 +77,7 @@ resource "google_container_node_pool" "benchmark_workers" {
 
   autoscaling {
     min_node_count = 0
-    max_node_count = 20
+    max_node_count = var.worker_max_nodes
   }
 
   node_config {
