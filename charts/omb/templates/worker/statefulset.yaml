@@ -1,3 +1,12 @@
+{{- /*
+Worker count is scaled at runtime from the UI. Keep the live replica count on
+`helm upgrade`; worker.replicas only sets the size of a fresh install.
+*/ -}}
+{{- $replicas := .Values.worker.replicas -}}
+{{- $existing := lookup "apps/v1" "StatefulSet" .Release.Namespace "omb-worker" -}}
+{{- if and $existing $existing.spec (hasKey $existing.spec "replicas") -}}
+{{- $replicas = $existing.spec.replicas -}}
+{{- end }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -6,7 +15,7 @@ metadata:
     app: omb-worker
 spec:
   serviceName: omb-worker
-  replicas: {{ .Values.worker.replicas }}
+  replicas: {{ $replicas }}
   podManagementPolicy: Parallel
   selector:
     matchLabels:
