@@ -60,6 +60,11 @@ resource "aws_launch_template" "control_plane" {
     aws_eks_cluster.main.vpc_config[0].cluster_security_group_id,
   ]
 
+  # Tag the LAUNCH TEMPLATE ITSELF, not just instances. On 2026-07-10 the
+  # cloud-nuke reaper deleted every untagged LT and ASG in the account,
+  # terminating all node groups (tag_specifications only covers instances).
+  tags = var.tags
+
   tag_specifications {
     resource_type = "instance"
     tags = merge(var.tags, {
@@ -120,6 +125,10 @@ resource "aws_launch_template" "benchmark_workers" {
     aws_security_group.omb_workers.id,
   ]
 
+  # See control_plane LT: the LT resource itself must be tagged or the
+  # cloud-nuke reaper deletes it (2026-07-10 incident).
+  tags = var.tags
+
   tag_specifications {
     resource_type = "instance"
     tags = merge(var.tags, {
@@ -144,9 +153,12 @@ resource "aws_eks_node_group" "benchmark_workers" {
   }
 
   scaling_config {
-    desired_size = 2
+    desired_size = 6
     min_size     = 0
-    max_size     = 20
+    # One OMB worker per m5.4xlarge node (workers request 15 CPU ≈ a full node),
+    # so max_size is the effective worker-count ceiling. 40 matches the
+    # control-plane API cap (_MAX_REPLICAS).
+    max_size     = 40
   }
 
   update_config {
@@ -180,3 +192,45 @@ resource "aws_eks_node_group" "benchmark_workers" {
   }
 }
 
+
+# ── ASG tag propagation (cloud-nuke protection) ───────────────────────────────
+# EKS managed node groups create their ASGs themselves; node-group tags do NOT
+# propagate to the ASG. The 2026-07-10 reaper incident deleted every untagged
+# ASG in the account (AutoScalingGroupNotFound on all node groups), so each
+# NG's ASG must be tagged explicitly.
+
+resource "aws_autoscaling_group_tag" "control_plane" {
+  for_each = var.tags
+
+  autoscaling_group_name = aws_eks_node_group.control_plane.resources[0].autoscaling_groups[0].name
+
+  tag {
+    key                 = each.key
+    value               = each.value
+    propagate_at_launch = true
+  }
+}
+
+resource "aws_autoscaling_group_tag" "benchmark_workers" {
+  for_each = var.tags
+
+  autoscaling_group_name = aws_eks_node_group.benchmark_workers.resources[0].autoscaling_groups[0].name
+
+  tag {
+    key                 = each.key
+    value               = each.value
+    propagate_at_launch = true
+  }
+}
+
+resource "aws_autoscaling_group_tag" "redpanda" {
+  for_each = var.tags
+
+  autoscaling_group_name = aws_eks_node_group.redpanda.resources[0].autoscaling_groups[0].name
+
+  tag {
+    key                 = each.key
+    value               = each.value
+    propagate_at_launch = true
+  }
+}

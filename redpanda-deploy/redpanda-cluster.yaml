@@ -1,0 +1,64 @@
+# In-cluster Redpanda cluster, deployed by the Redpanda operator.
+#
+# Pinned to the dedicated r8gd.8xlarge node pool (terraform/aws/redpanda.tf):
+#   nodeSelector node-pool=redpanda + toleration for the redpanda-tuned taint.
+# Storage is local NVMe via the local-path StorageClass (see local-path-storage).
+# TLS is on by default (cert-manager issues a self-signed CA); SASL SCRAM-SHA-256
+# superuser credentials come from the pre-created `redpanda-users` Secret so no
+# password is committed here (see redpanda-deploy/README.md).
+apiVersion: cluster.redpanda.com/v1alpha2
+kind: Redpanda
+metadata:
+  name: redpanda
+  namespace: redpanda
+spec:
+  clusterSpec:
+    statefulset:
+      replicas: 3
+      # Land brokers only on the tainted r8gd pool, one per node (chart's default
+      # hostname podAntiAffinity spreads them across the 3 nodes).
+      nodeSelector:
+        node-pool: redpanda
+      tolerations:
+        - key: redpanda-tuned
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+    resources:
+      cpu:
+        # --smp 15 for this cluster (Seastar shards). r8gd.8xlarge = 32 vCPU;
+        # this leaves ample cores for the OS, daemonsets, and page-cache work.
+        cores: 15
+      memory:
+        container:
+          # r8gd.8xlarge nominal 256GiB, but node allocatable is ~244GiB (firmware
+          # + kubelet reserve ~12GiB). Use 236Gi (~97% of allocatable, small
+          # headroom for daemonsets + eviction threshold). Chart gives ~80% to the
+          # Redpanda process (--memory ~189Gi), rest to page cache within cgroup.
+          max: 236Gi
+    storage:
+      persistentVolume:
+        enabled: true
+        size: 1500Gi        # ~1.9 TB NVMe per node, leave slack
+        storageClass: local-path
+    auth:
+      sasl:
+        enabled: true
+        mechanism: SCRAM-SHA-256
+        # Superuser(s) supplied out-of-band via this Secret (keys = usernames,
+        # values = "<password>:<mechanism>"). Created at deploy time.
+        secretRef: redpanda-users
+        users: []
+    tls:
+      enabled: true
+      certs:
+        default:
+          caEnabled: true
+          # Sign broker/listener certs with our own cert-manager root CA
+          # (redpanda-deploy/redpanda-ca.yaml) so the trust root is stable and
+          # can be distributed to OMB independently of this cluster's lifecycle.
+          issuerRef:
+            name: redpanda-ca
+            kind: Issuer
+          # Ensure internal svc DNS names (what OMB connects to) are in the SANs.
+          applyInternalDNSNames: true

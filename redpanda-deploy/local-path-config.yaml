@@ -1,0 +1,47 @@
+# Override for the upstream local-path-provisioner ConfigMap.
+# Apply AFTER the base manifest (rancher/local-path-provisioner) then restart the
+# provisioner Deployment so it re-reads this config.
+#
+# Two changes vs upstream defaults:
+#   1. nodePathMap points at /mnt/redpanda/local-path-provisioner — the XFS mount
+#      on the r8gd local NVMe (formatted in terraform/aws/redpanda.tf user-data).
+#   2. helperPod.yaml carries a toleration for redpanda-tuned=true:NoSchedule so
+#      the provisioner's mkdir/rm helper pods can run on the tainted Redpanda nodes.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: local-path-config
+  namespace: local-path-storage
+data:
+  config.json: |-
+    {
+      "nodePathMap":[
+        {
+          "node":"DEFAULT_PATH_FOR_NON_LISTED_NODES",
+          "paths":["/mnt/redpanda/local-path-provisioner"]
+        }
+      ]
+    }
+  setup: |-
+    #!/bin/sh
+    set -eu
+    mkdir -m 0777 -p "$VOL_DIR"
+  teardown: |-
+    #!/bin/sh
+    set -eu
+    rm -rf "$VOL_DIR"
+  helperPod.yaml: |-
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: helper-pod
+    spec:
+      tolerations:
+        - key: redpanda-tuned
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      containers:
+        - name: helper-pod
+          image: busybox
+          imagePullPolicy: IfNotPresent

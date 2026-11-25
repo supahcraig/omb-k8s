@@ -43,6 +43,16 @@ output "region" {
   value       = var.region
 }
 
+output "redpanda_security_group_id" {
+  description = "Security group ID for the in-cluster Redpanda brokers"
+  value       = aws_security_group.redpanda.id
+}
+
+output "redpanda_node_group_name" {
+  description = "EKS managed node group name for the in-cluster Redpanda brokers"
+  value       = aws_eks_node_group.redpanda.node_group_name
+}
+
 output "kubeconfig_command" {
   description = "Run this command to configure kubectl after apply"
   value       = "aws eks update-kubeconfig --region ${var.region} --name ${local.cluster_name}"
