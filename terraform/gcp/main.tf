@@ -30,9 +30,9 @@ resource "google_container_cluster" "main" {
 # Runs: control-plane, Prometheus, Grafana, driver Jobs.
 
 resource "google_container_node_pool" "control_plane" {
-  name       = "${local.cluster_name}-control-plane"
-  location   = var.zone
-  cluster    = google_container_cluster.main.name
+  name     = "control-plane"
+  location = var.zone
+  cluster  = google_container_cluster.main.name
 
   node_count = 2
 
@@ -65,15 +65,19 @@ resource "google_container_node_pool" "control_plane" {
 # Tainted dedicated=benchmark:NoSchedule — toleration must use NoSchedule (camelCase).
 
 resource "google_container_node_pool" "benchmark_workers" {
-  name     = "${local.cluster_name}-benchmark-workers"
+  name     = "benchmark-workers"
   location = var.zone
   cluster  = google_container_cluster.main.name
+
+  # The workers can sit in a different zone of the region from the cluster, to
+  # be next to the brokers they load and avoid cross-zone traffic charges.
+  node_locations = [coalesce(var.worker_zone, var.zone)]
 
   initial_node_count = 2
 
   autoscaling {
     min_node_count = 0
-    max_node_count = 20
+    max_node_count = var.worker_max_nodes
   }
 
   node_config {

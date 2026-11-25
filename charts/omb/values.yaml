@@ -60,9 +60,10 @@ kube-prometheus-stack:
         requests:
           cpu: 200m
           memory: 512Mi
+        # 1Gi OOM-kills Prometheus once it scrapes a multi-broker Redpanda cluster.
         limits:
           cpu: 500m
-          memory: 1Gi
+          memory: 4Gi
       retention: 7d
   grafana:
     nodeSelector:
